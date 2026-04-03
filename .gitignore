@@ -28,3 +28,6 @@ frontend/openapi.json
 
 # Docker volumes
 backend/data/
+
+# Large sample ZIP files
+docs/samples/**/*.zip
