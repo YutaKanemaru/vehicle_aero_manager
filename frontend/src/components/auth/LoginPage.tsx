@@ -49,6 +49,8 @@ export function LoginPage() {
         username: values.username,
         password: values.password,
       });
+      // me() を呼ぶ前にトークンを localStorage に保存する
+      localStorage.setItem("vam_token", access_token);
       const user = await authApi.me();
       setAuth(access_token, user);
     } catch (e) {

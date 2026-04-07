@@ -1,14 +1,17 @@
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
+# backend/ ディレクトリの絶対パス（どこから起動しても同じDBを参照）
+_BACKEND_DIR = Path(__file__).parent.parent
+
 
 class Settings(BaseSettings):
     # Application
     app_name: str = "VAM"
     debug: bool = True
 
-    # Database
-    database_url: str = "sqlite:///./vam.db"
+    # Database — 絶対パスをデフォルト値にする
+    database_url: str = f"sqlite:///{_BACKEND_DIR / 'data' / 'vam.db'}"
 
     # JWT
     secret_key: str = "CHANGE-ME-IN-PRODUCTION"

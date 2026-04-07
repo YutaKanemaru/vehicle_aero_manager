@@ -9,6 +9,14 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 - **Efficiency**: Streamline the CFD workflow from setup to post-processing
 - **Collaboration**: Enable asynchronous cross-domain teamwork (CAE, design, management)
 
+**Key features:**
+- **Template setup**: Apply Ultrafluid settings via templates; swap geometry while keeping the same naming convention
+- **Check setup**: Verify Ultrafluid settings with 3D visualization; diff settings between base and new
+- **Case management**: Manage all simulation-related data (input STL, setup, results, post-processed data) in one place
+- **Automation**: Once a template is configured, setup through post-processing is automated — adapts to geometry changes (vehicle size, wheel axis, porous media direction, etc.)
+- **Post-processing**: GUI session for detailed analysis + lightweight viewer for automated image/movie generation and comparison
+- **Data management**: Cross-domain data lifecycle from Pre (CAD/scan) → Solve (XML/results) → Post (tables/images/reports/GSP)
+
 **Target solver**: Ultrafluid — a commercial LBM CFD solver driven by XML configuration files.
 
 **Development context**: 1-person team, Python-focused, incremental delivery. Do not over-engineer. Prioritize working software over architectural perfection.
@@ -36,11 +44,14 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | Package manager | uv | Never use pip directly |
 | Deploy | Docker Compose | |
 
-### Scale-trigger technologies — DO NOT introduce in Phase 1–2
+### Scale-trigger technologies
 
+**DO NOT introduce in Phase 1–2:**
 - PostgreSQL, MinIO, Keycloak, Celery, Redis, Kubernetes, Helm
-- Three.js / React Three Fiber (Phase 2+)
-- VTK / PyVista (Phase 3+)
+
+**Introduce when implementation requires it** (no fixed phase restriction):
+- Three.js / React Three Fiber — for 3D check-setup visualization and post-processing viewer
+- VTK / PyVista — for server-side geometry and result processing
 
 ---
 
@@ -51,10 +62,10 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | Step | Description | Status |
 |---|---|---|
 | Step 1 (W1-2) | FastAPI + React + Docker Compose + SQLite + JWT auth | ✅ Complete |
-| Step 2 (W3-5) | Ultrafluid Pydantic schema — XML ↔ Pydantic round-trip | 🔄 **Current target** |
-| Step 3 (W6-8) | Template CRUD with versioning (Aero/GHN) | ⬜ Not started |
-| Step 4 (W9-12) | Geometry upload + STL analysis + Compute engine | ⬜ Not started |
-| Step 5 (W13-16) | XML generation + Configuration management + Diff view | ⬜ Not started |
+| Step 2 (W3-5) | Ultrafluid Pydantic schema — XML ↔ Pydantic round-trip | ✅ Complete |
+| Step 3 (W6-8) | Template CRUD with versioning (Aero/GHN) | 🔄 **Current target** |
+| Step 4 (W9-12) | Geometry upload + STL analysis + Compute engine + Kinematics | ⬜ Not started |
+| Step 5 (W13-16) | XML generation + Configuration management + Diff view + Porous coefficients UI | ⬜ Not started |
 
 **When generating code, focus on the current step. Do not implement features from future steps.**
 
@@ -166,7 +177,13 @@ Rules:
 ### Environment & Configuration
 
 - All settings use `VAM_` prefix in env vars (defined in `app/config.py` via `pydantic-settings`)
-- SQLite DB path: `/app/data/vam.db` in Docker
+- SQLite DB path: always use an **absolute path** derived from `__file__` to avoid working-directory issues:
+  ```python
+  # app/config.py
+  _BACKEND_DIR = Path(__file__).parent.parent
+  database_url: str = f"sqlite:///{_BACKEND_DIR / 'data' / 'vam.db'}"
+  ```
+- `app/database.py` auto-creates the `data/` directory on startup (do not rely on Docker volumes for this)
 - Upload directory: `/app/data/uploads`
 - Results directory: `/app/data/results`
 - Add new settings to `app/config.py` `Settings` class, never hardcode values
@@ -177,6 +194,71 @@ Rules:
 - Never call `Base.metadata.create_all()` in application code (only allowed in test setup)
 - Generate migrations: `uv run alembic revision --autogenerate -m "description"`
 - Apply migrations: `uv run alembic upgrade head`
+
+---
+
+## Auth & User Management
+
+### Role Hierarchy
+
+| Role | Level | Capabilities |
+|---|---|---|
+| `superadmin` | Highest | All actions + role assignment; created via `create_superadmin.py` |
+| `admin` | Elevated | View user list, delete non-superadmin users |
+| `engineer` | Default | Normal app access, self-delete only |
+| `viewer` | Lowest | Read-only access |
+
+- `is_admin` property returns `True` for both `admin` and `superadmin`
+- `is_superadmin` property returns `True` only for `superadmin`
+
+### Auth Endpoints (`app/api/v1/auth.py`)
+
+| Method | Path | Auth Required | Description |
+|---|---|---|---|
+| `POST` | `/api/v1/auth/register` | None | User registration |
+| `POST` | `/api/v1/auth/login` | None | Login → returns JWT |
+| `GET` | `/api/v1/auth/me` | Login | Get own profile |
+| `DELETE` | `/api/v1/auth/me` | Login | Delete own account |
+| `GET` | `/api/v1/auth/users` | `admin+` | List all users |
+| `DELETE` | `/api/v1/auth/users/{id}` | `admin+` | Delete user (cannot delete superadmin) |
+| `PATCH` | `/api/v1/auth/users/{id}/role` | `superadmin` | Change user role |
+
+### Auth Dependencies (`app/auth/deps.py`)
+
+```python
+get_current_user    # any authenticated user
+get_admin_user      # admin or superadmin only (403 otherwise)
+get_superadmin_user # superadmin only (403 otherwise)
+```
+
+### Schemas (`app/schemas/auth.py`)
+
+```python
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    email: str
+    username: str
+    role: str
+    is_active: bool
+    is_admin: bool
+    is_superadmin: bool
+
+class UpdateRoleRequest(BaseModel):
+    role: Literal["superadmin", "admin", "engineer", "viewer"]
+```
+
+### Creating the First Superadmin
+
+```bash
+# Run from the backend/ directory
+uv run python create_superadmin.py
+
+# Override defaults via env vars
+VAM_SUPERADMIN_EMAIL=my@email.com VAM_SUPERADMIN_PASSWORD=secret uv run python create_superadmin.py
+```
+
+Default credentials: `superadmin` / `changeme123`. The script is idempotent — skips if superadmin already exists.
 
 ---
 
@@ -235,7 +317,7 @@ src/components/
 
 ---
 
-## Ultrafluid XML Schema (Step 2 — Current Target)
+## Ultrafluid XML Schema (Step 2 — Complete)
 
 ### Root Pydantic Model
 
@@ -251,7 +333,6 @@ class UfxSolverDeck(BaseModel):
     output: Output                  # general, moment_reference_system, aero_coefficients,
                                     # section_cut, probe_file, partial_surface, partial_volume,
                                     # monitoring_surface
-    model_data: ModelData           # GUI metadata — does NOT affect solver, only HyperMesh CFD
 ```
 
 ### Known XML Structure (derived from sample files)
@@ -328,17 +409,6 @@ The root element is `<uFX_solver_deck>`. Key sub-structures:
     <partial_surface><partial_surface_instance>[]
     <partial_volume><partial_volume_instance>[]
     <monitoring_surface/>
-  <model_data>                    # HyperMesh CFD GUI metadata only — NOT used by solver
-    <simulation>                  # moving_ground, rotating_wheels bools
-    <tunnel>                      # boundary_layer_suction, xpos
-    <wheels><wheel_instance>[]    # Aero only
-    <belts>                       # Aero only — list of belt part names
-    <porous><porous_instance>[]   # inlet/outlet/wall name strings
-    <sectioncuts>                 # GHN only
-    <partial_volumes>
-    <turbulences>
-    <acoustics/>
-    <rotating/>
 ```
 
 ### Aero vs GHN Differences
@@ -351,8 +421,6 @@ The root element is `<uFX_solver_deck>`. Key sub-structures:
 | `sources.turbulence` | present (tg_ground, tg_body) | absent |
 | `output.section_cut` | absent | present (high-freq transient) |
 | `simulation.wall_modeling.transitional_bl_detection` | absent | present |
-| `model_data.wheels` | defined | absent |
-| `model_data.belts` | defined | absent |
 
 ### Known Enum Values (from official docs & sample files)
 
@@ -479,6 +547,14 @@ The Compute Engine derives `Computed` fields from STL geometry. Key calculations
 | `sources.porous.porous_axis` | PCA on porous media vertices → face normal direction | `trimesh` + `numpy` |
 | `boundary_conditions.wall` (rotating) | Linked to wheel center/axis/rpm | derived from above |
 
+**Additional Compute Engine calculations (Step 4):**
+
+| Output | Method |
+|---|---|
+| Kinematics (ride height) | Apply user-specified ride height adjustment to geometry |
+| Coordinate system conversion | Adjust post-processing settings to new coordinate system after kinematics adjustment |
+| Porous media coefficients | Apply user-input resistance values to matched porous parts |
+
 **Implementation rules for Compute Engine:**
 - Use `trimesh` + `numpy` only — already in `pyproject.toml`
 - Do NOT use `numpy-stl` or `scikit-learn` (used in concept_vam prototype but not in this stack)
@@ -515,7 +591,7 @@ uv add <package-name>
 
 ## Prohibited Patterns
 
-1. **Do not introduce Phase 2+ technologies** (Three.js, VTK, Celery, Redis, PostgreSQL, MinIO, Keycloak) until their scale trigger is reached.
+1. **Do not introduce scale-trigger backend technologies** (Celery, Redis, PostgreSQL, MinIO, Keycloak) until their scale trigger is reached.
 2. **Do not write business logic in API routers** — all logic belongs in `app/services/`.
 3. **Do not bypass `schema.d.ts`** — never write manual API type definitions in the frontend.
 4. **Do not use `Base.metadata.create_all()`** in application code — use Alembic exclusively.
@@ -523,3 +599,53 @@ uv add <package-name>
 6. **Do not use `pip install`** — always use `uv add`.
 7. **Do not skip ahead to future steps** — implement features in the order defined in the Implementation Phases.
 8. **Do not use `class Config` in Pydantic models** — use `model_config = ConfigDict(...)`.
+
+---
+
+## Phase 2+ Roadmap
+
+The following features are planned for future phases. They are documented here for context but **must not be implemented during Phase 1**.
+
+### Case Management
+
+All datasets related to a simulation case are managed by the application: input STL, simulation setup, check-setup results, solver results, and post-processed data. This enables:
+- Easier comparison between cases and table data extraction
+- Job launch script integration with schedulers (PBS, Slurm) for automated file transfer to/from compute nodes
+- Manual file transfer is also supported as a fallback
+
+### Post-Processing
+
+**Two modes of post-processing are planned:**
+
+1. **GUI post-processing** (Three.js / React Three Fiber)
+   - 3D result datasets loaded in a GUI session for detailed analysis
+   - Data coarsening to handle multiple full datasets efficiently
+   - Robust multi-dataset comparison
+   - Simulation info inherited from Ultrafluid log files
+   - Photo-realistic rendering (low priority)
+
+2. **Lightweight post-processing with viewer**
+   - Predefined post-process settings (values, positions, views, legend, GSP settings)
+   - Automated image/movie generation from Ultrafluid output
+   - Image viewer with view/position sync and overlay mode for case comparison
+   - GSP dataset viewer (probe results, area-weighted power spectrum) — eliminates need for Excel
+
+**Note**: A lightweight post-processing viewer prototype already exists and can be provided when needed.
+
+### Post-Processing Template
+
+Separate from the simulation template — defines post-processing settings (visualization parameters, section cut positions, legend ranges, view angles, etc.).
+
+### Data Management System
+
+Cross-domain data lifecycle management throughout the CFD process:
+- **Pre**: CAD data from structural section, scan data from design team
+- **Solve**: Ultrafluid setting files, Ultrafluid results (.case/h3d)
+- **Post**: Result tables, images/movies via viewer, report generation, GSP data
+
+### Job Scheduler Integration
+
+Integration with HPC job schedulers (PBS, Slurm) to:
+- Submit solver jobs from the application
+- Automate file transfer between local storage and compute nodes
+- Track job status and retrieve results

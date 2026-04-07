@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel, EmailStr
 
 
@@ -13,6 +14,8 @@ class UserResponse(BaseModel):
     username: str
     role: str
     is_active: bool
+    is_admin: bool
+    is_superadmin: bool
 
     model_config = {"from_attributes": True}
 
@@ -25,3 +28,7 @@ class Token(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class UpdateRoleRequest(BaseModel):
+    role: Literal["superadmin", "admin", "engineer", "viewer"]

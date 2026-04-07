@@ -33,3 +33,23 @@ def get_current_user(
             detail="User not found",
         )
     return user
+
+
+def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """admin または superadmin のみ許可。"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+        )
+    return current_user
+
+
+def get_superadmin_user(current_user: User = Depends(get_current_user)) -> User:
+    """superadmin のみ許可。"""
+    if not current_user.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superadmin privileges required",
+        )
+    return current_user
