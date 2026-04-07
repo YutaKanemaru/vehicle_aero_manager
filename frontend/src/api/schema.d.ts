@@ -49,10 +49,146 @@ export interface paths {
         get: operations["read_current_user_api_v1_auth_me_get"];
         put?: never;
         post?: never;
+        /**
+         * Delete Me
+         * @description 自分自身のアカウントを削除する。
+         */
+        delete: operations["delete_me_api_v1_auth_me_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Users
+         * @description 全ユーザー一覧を返す（admin のみ）。
+         */
+        get: operations["list_users_api_v1_auth_users_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete User
+         * @description 指定したユーザーを削除する（admin のみ）。superadmin は削除不可。
+         */
+        delete: operations["delete_user_api_v1_auth_users__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/users/{user_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update User Role
+         * @description ユーザーのロールを変更する（superadmin のみ）。
+         */
+        patch: operations["update_user_role_api_v1_auth_users__user_id__role_patch"];
+        trace?: never;
+    };
+    "/api/v1/templates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates */
+        get: operations["list_templates_api_v1_templates__get"];
+        put?: never;
+        /** Create Template */
+        post: operations["create_template_api_v1_templates__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Template */
+        get: operations["get_template_api_v1_templates__template_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Template */
+        delete: operations["delete_template_api_v1_templates__template_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Template */
+        patch: operations["update_template_api_v1_templates__template_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/templates/{template_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Versions */
+        get: operations["list_versions_api_v1_templates__template_id__versions_get"];
+        put?: never;
+        /** Create Version */
+        post: operations["create_version_api_v1_templates__template_id__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates/{template_id}/versions/{version_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Activate Version */
+        patch: operations["activate_version_api_v1_templates__template_id__versions__version_id__activate_patch"];
         trace?: never;
     };
     "/health": {
@@ -76,6 +212,84 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** BeltOption */
+        BeltOption: {
+            /**
+             * Opt Belt System
+             * @default true
+             */
+            opt_belt_system: boolean;
+            /**
+             * Num Belts
+             * @default 5
+             */
+            num_belts: number;
+            /**
+             * Include Wheel Belt Forces
+             * @default true
+             */
+            include_wheel_belt_forces: boolean;
+            /**
+             * Wheel Belt Location Auto
+             * @default true
+             */
+            wheel_belt_location_auto: boolean;
+        };
+        /** BoundaryConditionInput */
+        BoundaryConditionInput: {
+            /** Belts */
+            belts?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Boundary Layer Suction Xpos
+             * @default -1.1
+             */
+            boundary_layer_suction_xpos: number;
+        };
+        /** BoundaryConditionOption */
+        BoundaryConditionOption: {
+            ground?: components["schemas"]["GroundOption"];
+            belt?: components["schemas"]["BeltOption"];
+            turbulence_generator?: components["schemas"]["TurbulenceGeneratorOption"];
+        };
+        /** BoxRefinement */
+        BoxRefinement: {
+            /** Level */
+            level: number;
+            /** Box */
+            box: number[];
+        };
+        /** CustomRefinement */
+        CustomRefinement: {
+            /** Level */
+            level: number;
+            /** Parts */
+            parts: string[];
+        };
+        /** GroundOption */
+        GroundOption: {
+            /**
+             * Moving Ground
+             * @default true
+             */
+            moving_ground: boolean;
+            /**
+             * No Slip Static Ground Patch
+             * @default true
+             */
+            no_slip_static_ground_patch: boolean;
+            /**
+             * Ground Zmin Auto
+             * @default true
+             */
+            ground_zmin_auto: boolean;
+            /**
+             * Boundary Layer Suction Position From Belt Xmin
+             * @default true
+             */
+            boundary_layer_suction_position_from_belt_xmin: boolean;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -88,6 +302,281 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MeshingOption */
+        MeshingOption: {
+            /**
+             * Triangle Splitting
+             * @default true
+             */
+            triangle_splitting: boolean;
+            /**
+             * Domain Bounding Box Relative
+             * @default true
+             */
+            domain_bounding_box_relative: boolean;
+            /**
+             * Box Offset Relative
+             * @default true
+             */
+            box_offset_relative: boolean;
+            /**
+             * Box Refinement Porous
+             * @default true
+             */
+            box_refinement_porous: boolean;
+        };
+        /** MeshingSetup */
+        MeshingSetup: {
+            /** Box Refinement */
+            box_refinement?: {
+                [key: string]: components["schemas"]["BoxRefinement"];
+            };
+            /** Part Box Refinement */
+            part_box_refinement?: {
+                [key: string]: components["schemas"]["BoxRefinement"];
+            };
+            /** Offset Refinement */
+            offset_refinement?: {
+                [key: string]: components["schemas"]["OffsetRefinement"];
+            };
+            /** Custom Refinement */
+            custom_refinement?: {
+                [key: string]: components["schemas"]["CustomRefinement"];
+            };
+        };
+        /** OffsetRefinement */
+        OffsetRefinement: {
+            /** Level */
+            level: number;
+            /** Normal Distance */
+            normal_distance: number;
+            /** Parts */
+            parts?: string[];
+        };
+        /** Setup */
+        "Setup-Input": {
+            /**
+             * Domain Bounding Box
+             * @default [
+             *       -5,
+             *       15,
+             *       -12,
+             *       12,
+             *       0,
+             *       20
+             *     ]
+             */
+            domain_bounding_box: number[];
+            meshing?: components["schemas"]["MeshingSetup"];
+            boundary_condition_input?: components["schemas"]["BoundaryConditionInput"];
+        };
+        /** Setup */
+        "Setup-Output": {
+            /**
+             * Domain Bounding Box
+             * @default [
+             *       -5,
+             *       15,
+             *       -12,
+             *       12,
+             *       0,
+             *       20
+             *     ]
+             */
+            domain_bounding_box: number[];
+            meshing?: components["schemas"]["MeshingSetup"];
+            boundary_condition_input?: components["schemas"]["BoundaryConditionInput"];
+        };
+        /** SetupOption */
+        "SetupOption-Input": {
+            simulation?: components["schemas"]["SimulationOption"];
+            meshing?: components["schemas"]["MeshingOption"];
+            boundary_condition?: components["schemas"]["BoundaryConditionOption"];
+        };
+        /** SetupOption */
+        "SetupOption-Output": {
+            simulation?: components["schemas"]["SimulationOption"];
+            meshing?: components["schemas"]["MeshingOption"];
+            boundary_condition?: components["schemas"]["BoundaryConditionOption"];
+        };
+        /** SimulationOption */
+        SimulationOption: {
+            /**
+             * Temperature Degree
+             * @default true
+             */
+            temperature_degree: boolean;
+            /**
+             * Simulation Time With Fp
+             * @default false
+             */
+            simulation_time_with_FP: boolean;
+        };
+        /** SimulationParameter */
+        SimulationParameter: {
+            /**
+             * Inflow Velocity
+             * @default 38.88
+             */
+            inflow_velocity: number;
+            /**
+             * Density
+             * @default 1.2041
+             */
+            density: number;
+            /**
+             * Dynamic Viscosity
+             * @default 0.000018194
+             */
+            dynamic_viscosity: number;
+            /**
+             * Temperature
+             * @default 20
+             */
+            temperature: number;
+            /**
+             * Specific Gas Constant
+             * @default 287.05
+             */
+            specific_gas_constant: number;
+            /**
+             * Mach Factor
+             * @default 2
+             */
+            mach_factor: number;
+            /**
+             * Num Ramp Up Iter
+             * @default 200
+             */
+            num_ramp_up_iter: number;
+            /**
+             * Finest Resolution Size
+             * @default 0.0015
+             */
+            finest_resolution_size: number;
+            /**
+             * Number Of Resolution
+             * @default 7
+             */
+            number_of_resolution: number;
+            /**
+             * Simulation Time
+             * @default 2
+             */
+            simulation_time: number;
+            /**
+             * Simulation Time Fp
+             * @default 30
+             */
+            simulation_time_FP: number;
+        };
+        /** TargetNames */
+        TargetNames: {
+            /** Wheel */
+            wheel?: string[];
+            /** Rim */
+            rim?: string[];
+            /** Porous */
+            porous?: string[];
+            /** Car Bounding Box */
+            car_bounding_box?: string[];
+            /** Baffle */
+            baffle?: string[];
+            /** Triangle Splitting */
+            triangle_splitting?: string[];
+        };
+        /** TemplateCreate */
+        TemplateCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Sim Type
+             * @enum {string}
+             */
+            sim_type: "aero" | "ghn";
+            settings: components["schemas"]["TemplateSettings-Input"];
+            /** Comment */
+            comment?: string | null;
+        };
+        /** TemplateResponse */
+        TemplateResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Sim Type */
+            sim_type: string;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            active_version?: components["schemas"]["TemplateVersionResponse"] | null;
+            /**
+             * Version Count
+             * @default 0
+             */
+            version_count: number;
+        };
+        /** TemplateSettings */
+        "TemplateSettings-Input": {
+            setup_option?: components["schemas"]["SetupOption-Input"];
+            simulation_parameter?: components["schemas"]["SimulationParameter"];
+            setup?: components["schemas"]["Setup-Input"];
+            target_names?: components["schemas"]["TargetNames"];
+        };
+        /** TemplateSettings */
+        "TemplateSettings-Output": {
+            setup_option?: components["schemas"]["SetupOption-Output"];
+            simulation_parameter?: components["schemas"]["SimulationParameter"];
+            setup?: components["schemas"]["Setup-Output"];
+            target_names?: components["schemas"]["TargetNames"];
+        };
+        /** TemplateUpdate */
+        TemplateUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+        };
+        /** TemplateVersionCreate */
+        TemplateVersionCreate: {
+            settings: components["schemas"]["TemplateSettings-Input"];
+            /** Comment */
+            comment?: string | null;
+        };
+        /** TemplateVersionResponse */
+        TemplateVersionResponse: {
+            /** Id */
+            id: string;
+            /** Template Id */
+            template_id: string;
+            /** Version Number */
+            version_number: number;
+            settings: components["schemas"]["TemplateSettings-Output"];
+            /** Is Active */
+            is_active: boolean;
+            /** Comment */
+            comment: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** Token */
         Token: {
             /** Access Token */
@@ -97,6 +586,27 @@ export interface components {
              * @default bearer
              */
             token_type: string;
+        };
+        /** TurbulenceGeneratorOption */
+        TurbulenceGeneratorOption: {
+            /**
+             * Activate Body Tg
+             * @default true
+             */
+            activate_body_tg: boolean;
+            /**
+             * Activate Ground Tg
+             * @default true
+             */
+            activate_ground_tg: boolean;
+        };
+        /** UpdateRoleRequest */
+        UpdateRoleRequest: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "superadmin" | "admin" | "engineer" | "viewer";
         };
         /** UserCreate */
         UserCreate: {
@@ -122,6 +632,10 @@ export interface components {
             role: string;
             /** Is Active */
             is_active: boolean;
+            /** Is Admin */
+            is_admin: boolean;
+            /** Is Superadmin */
+            is_superadmin: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -227,6 +741,354 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+        };
+    };
+    delete_me_api_v1_auth_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_users_api_v1_auth_users_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"][];
+                };
+            };
+        };
+    };
+    delete_user_api_v1_auth_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_user_role_api_v1_auth_users__user_id__role_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_templates_api_v1_templates__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateResponse"][];
+                };
+            };
+        };
+    };
+    create_template_api_v1_templates__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_template_api_v1_templates__template_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_template_api_v1_templates__template_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_template_api_v1_templates__template_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_versions_api_v1_templates__template_id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateVersionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_version_api_v1_templates__template_id__versions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_version_api_v1_templates__template_id__versions__version_id__activate_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

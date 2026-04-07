@@ -8,6 +8,7 @@ from alembic import context
 from app.config import settings
 from app.database import Base
 from app.models.user import User  # noqa: F401 - register model with Base
+from app.models.template import Template, TemplateVersion  # noqa: F401
 
 config = context.config
 

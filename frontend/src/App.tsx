@@ -4,15 +4,12 @@ import { LoadingOverlay } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { LoginPage } from "./components/auth/LoginPage";
 import { AppLayout } from "./components/layout/AppShell";
+import { TemplateList } from "./components/templates/TemplateList";
 import { useAuthStore } from "./stores/auth";
 import { authApi } from "./api/auth";
 
 function DashboardPlaceholder() {
   return <div>Dashboard - Coming soon</div>;
-}
-
-function TemplatesPlaceholder() {
-  return <div>Templates - Coming in Step 3</div>;
 }
 
 function ConfigurationsPlaceholder() {
@@ -24,7 +21,7 @@ function AuthenticatedApp() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<DashboardPlaceholder />} />
-        <Route path="/templates" element={<TemplatesPlaceholder />} />
+        <Route path="/templates" element={<TemplateList />} />
         <Route path="/configurations" element={<ConfigurationsPlaceholder />} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />

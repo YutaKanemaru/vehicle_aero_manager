@@ -1,0 +1,118 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.auth.deps import get_current_user
+from app.models.user import User
+from app.schemas.template import (
+    TemplateCreate,
+    TemplateUpdate,
+    TemplateResponse,
+    TemplateVersionCreate,
+    TemplateVersionResponse,
+)
+from app.services import template_service
+
+router = APIRouter()
+
+
+def _build_response(template) -> TemplateResponse:
+    """Attach active_version and version_count to the response."""
+    active = next((v for v in template.versions if v.is_active), None)
+    return TemplateResponse(
+        id=template.id,
+        name=template.name,
+        description=template.description,
+        sim_type=template.sim_type,
+        created_by=template.created_by,
+        created_at=template.created_at,
+        updated_at=template.updated_at,
+        active_version=TemplateVersionResponse.model_validate(active) if active else None,
+        version_count=len(template.versions),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Templates
+# ---------------------------------------------------------------------------
+
+@router.get("/", response_model=list[TemplateResponse])
+def list_templates(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    templates = template_service.list_templates(db)
+    return [_build_response(t) for t in templates]
+
+
+@router.post("/", response_model=TemplateResponse, status_code=201)
+def create_template(
+    data: TemplateCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    template = template_service.create_template(db, data, current_user)
+    return _build_response(template)
+
+
+@router.get("/{template_id}", response_model=TemplateResponse)
+def get_template(
+    template_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    template = template_service.get_template(db, template_id)
+    return _build_response(template)
+
+
+@router.patch("/{template_id}", response_model=TemplateResponse)
+def update_template(
+    template_id: str,
+    data: TemplateUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    template = template_service.update_template(db, template_id, data, current_user)
+    return _build_response(template)
+
+
+@router.delete("/{template_id}", status_code=204)
+def delete_template(
+    template_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    template_service.delete_template(db, template_id, current_user)
+
+
+# ---------------------------------------------------------------------------
+# Versions
+# ---------------------------------------------------------------------------
+
+@router.get("/{template_id}/versions", response_model=list[TemplateVersionResponse])
+def list_versions(
+    template_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return template_service.list_versions(db, template_id)
+
+
+@router.post("/{template_id}/versions", response_model=TemplateVersionResponse, status_code=201)
+def create_version(
+    template_id: str,
+    data: TemplateVersionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return template_service.create_version(db, template_id, data, current_user)
+
+
+@router.patch("/{template_id}/versions/{version_id}/activate", response_model=TemplateVersionResponse)
+def activate_version(
+    template_id: str,
+    version_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return template_service.activate_version(db, template_id, version_id, current_user)

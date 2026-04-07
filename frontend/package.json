@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate-api": "cd ../backend && uv run python -c \"import json; from app.main import app; from fastapi.openapi.utils import get_openapi; json.dump(get_openapi(title=app.title, version=app.version, description=app.description, routes=app.routes), open('../frontend/openapi.json','w'), indent=2)\" && openapi-typescript openapi.json -o src/api/schema.d.ts"
+    "generate-api": "cd ../backend && uv run python -c \"import json; from app.main import app; from fastapi.openapi.utils import get_openapi; json.dump(get_openapi(title=app.title, version=app.version, description=app.description, routes=app.routes), open('openapi.json','w'), indent=2)\" && npx openapi-typescript openapi.json -o ../frontend/src/api/schema.d.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
