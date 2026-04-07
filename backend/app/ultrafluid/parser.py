@@ -35,15 +35,6 @@ from .schema import (
     Material,
     Meshing,
     MeshingGeneral,
-    ModelData,
-    ModelDataPartialVolumeInstance,
-    ModelDataPorousInstance,
-    ModelDataSectionCutInstance,
-    ModelDataSimulation,
-    ModelDataTunnel,
-    ModelDataTurbulenceInstance,
-    ModelDataWheelInstance,
-    ModelDataWheels,
     MomentReferenceSystem,
     OffsetInstance,
     Output,
@@ -733,111 +724,6 @@ def _parse_output(el: etree._Element) -> Output:
 
 
 # ---------------------------------------------------------------------------
-# <model_data>
-# ---------------------------------------------------------------------------
-
-def _parse_model_data(el: etree._Element) -> ModelData:
-    comment_el = el.find("comment")
-    comment = comment_el.text.strip() if comment_el is not None and comment_el.text else None
-
-    sim_el = el.find("simulation")
-    md_simulation = ModelDataSimulation(
-        moving_ground=_bool(sim_el, "moving_ground"),
-        rotating_wheels=_bool(sim_el, "rotating_wheels"),
-    )
-
-    tunnel_el = el.find("tunnel")
-    md_tunnel = ModelDataTunnel(
-        boundary_layer_suction=_bool(tunnel_el, "boundary_layer_suction"),
-        boundary_layer_suction_xpos=_float(tunnel_el, "boundary_layer_suction_xpos"),
-    )
-
-    # wheels
-    wheel_instances = []
-    wheels_el = el.find("wheels")
-    if wheels_el is not None:
-        for inst_el in wheels_el.findall("wheel_instance"):
-            # mesh_type may appear multiple times — take first
-            mesh_type_els = inst_el.findall("mesh_type")
-            mesh_type_val = mesh_type_els[0].text.strip() if mesh_type_els else ""
-            parts_el = inst_el.find("parts")
-            wheel_instances.append(ModelDataWheelInstance(
-                name=_text(inst_el, "name"),
-                type=_text(inst_el, "type"),
-                mesh_type=mesh_type_val,
-                parts=_names(parts_el) if parts_el is not None else [],
-                refinement_level=_int(inst_el, "refinement_level"),
-                diameter=_float(inst_el, "diameter"),
-            ))
-
-    md_wheels = ModelDataWheels(wheel_instances=wheel_instances)
-
-    # porous
-    porous_list = []
-    porous_el = el.find("porous")
-    if porous_el is not None:
-        for inst_el in porous_el.findall("porous_instance"):
-            porous_list.append(ModelDataPorousInstance(
-                name=_text(inst_el, "name"),
-                inlet=_text(inst_el, "inlet"),
-                outlet=_text(inst_el, "outlet"),
-                wall=_text(inst_el, "wall"),
-            ))
-
-    # partial_volumes
-    pv_list = []
-    pvols_el = el.find("partial_volumes")
-    if pvols_el is not None:
-        for inst_el in pvols_el.findall("partial_volume_instance"):
-            parts_el = inst_el.find("parts")
-            pv_list.append(ModelDataPartialVolumeInstance(
-                name=_text(inst_el, "name"),
-                parts=_names(parts_el) if parts_el is not None else [],
-            ))
-
-    # turbulences
-    turb_list = []
-    turbs_el = el.find("turbulences")
-    if turbs_el is not None:
-        for inst_el in turbs_el.findall("turbulence_instance"):
-            parts_el = inst_el.find("parts")
-            turb_list.append(ModelDataTurbulenceInstance(
-                name=_text(inst_el, "name"),
-                show_mesh=_bool(inst_el, "showMesh"),
-                eddy_scale_length_user_defined=_bool(inst_el, "eddyScaleLengthUserDefined"),
-                plane_offset_user_defined=_bool(inst_el, "planeOffsetUserDefined"),
-                eddies_user_defined=_bool(inst_el, "eddiesUserDefined"),
-                parts=_names(parts_el) if parts_el is not None else [],
-            ))
-
-    # sectioncuts (GHN only)
-    sc_list = []
-    sectioncuts_el = el.find("sectioncuts")
-    if sectioncuts_el is not None:
-        for inst_el in sectioncuts_el.findall("sectioncut_instance"):
-            sc_list.append(ModelDataSectionCutInstance(
-                name=_text(inst_el, "name"),
-                plane_type=_text(inst_el, "plane_type"),
-            ))
-
-    # belts (Aero only)
-    belts_el = el.find("belts")
-    belts = _names(belts_el) if belts_el is not None else []
-
-    return ModelData(
-        comment=comment,
-        simulation=md_simulation,
-        tunnel=md_tunnel,
-        wheels=md_wheels,
-        porous=porous_list,
-        partial_volumes=pv_list,
-        turbulences=turb_list,
-        sectioncuts=sc_list,
-        belts=belts,
-    )
-
-
-# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -868,5 +754,4 @@ def parse_ufx(source: Union[str, Path, io.IOBase, bytes]) -> UfxSolverDeck:
         boundary_conditions=_parse_boundary_conditions(root.find("boundary_conditions")),
         sources=_parse_sources(root.find("sources")),
         output=_parse_output(root.find("output")),
-        model_data=_parse_model_data(root.find("model_data")),
     )

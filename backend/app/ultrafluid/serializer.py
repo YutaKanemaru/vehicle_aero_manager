@@ -29,15 +29,6 @@ from .schema import (
     Material,
     Meshing,
     MeshingGeneral,
-    ModelData,
-    ModelDataPartialVolumeInstance,
-    ModelDataPorousInstance,
-    ModelDataSectionCutInstance,
-    ModelDataSimulation,
-    ModelDataTunnel,
-    ModelDataTurbulenceInstance,
-    ModelDataWheelInstance,
-    ModelDataWheels,
     MomentReferenceSystem,
     OffsetInstance,
     Output,
@@ -620,98 +611,6 @@ def _ser_output(parent: etree._Element, o: Output) -> None:
 
 
 # ---------------------------------------------------------------------------
-# <model_data>
-# ---------------------------------------------------------------------------
-
-def _ser_model_data(parent: etree._Element, md: ModelData) -> None:
-    el = etree.SubElement(parent, "model_data")
-
-    if md.comment:
-        _sub_str(el, "comment", md.comment)
-
-    sim = etree.SubElement(el, "simulation")
-    _sub_bool(sim, "moving_ground", md.simulation.moving_ground)
-    _sub_bool(sim, "rotating_wheels", md.simulation.rotating_wheels)
-
-    tun = etree.SubElement(el, "tunnel")
-    _sub_bool(tun, "boundary_layer_suction", md.tunnel.boundary_layer_suction)
-    _sub_float(tun, "boundary_layer_suction_xpos", md.tunnel.boundary_layer_suction_xpos)
-
-    if md.wheels and md.wheels.wheel_instances:
-        wheels_el = etree.SubElement(el, "wheels")
-        for inst in md.wheels.wheel_instances:
-            inst_el = etree.SubElement(wheels_el, "wheel_instance")
-            _sub_str(inst_el, "name", inst.name)
-            _sub_str(inst_el, "type", inst.type)
-            _sub_str(inst_el, "mesh_type", inst.mesh_type)
-            parts_el = etree.SubElement(inst_el, "parts")
-            for p in inst.parts:
-                _sub_str(parts_el, "name", p)
-            _sub_int(inst_el, "refinement_level", inst.refinement_level)
-            _sub_float(inst_el, "diameter", inst.diameter)
-    else:
-        etree.SubElement(el, "wheels")
-
-    if md.belts:
-        belts_el = etree.SubElement(el, "belts")
-        for name in md.belts:
-            _sub_str(belts_el, "name", name)
-    else:
-        etree.SubElement(el, "belts")
-
-    if md.porous:
-        porous_el = etree.SubElement(el, "porous")
-        for inst in md.porous:
-            inst_el = etree.SubElement(porous_el, "porous_instance")
-            _sub_str(inst_el, "name", inst.name)
-            _sub_str(inst_el, "inlet", inst.inlet)
-            _sub_str(inst_el, "outlet", inst.outlet)
-            _sub_str(inst_el, "wall", inst.wall)
-    else:
-        etree.SubElement(el, "porous")
-
-    if md.sectioncuts:
-        sc_el = etree.SubElement(el, "sectioncuts")
-        for inst in md.sectioncuts:
-            inst_el = etree.SubElement(sc_el, "sectioncut_instance")
-            _sub_str(inst_el, "name", inst.name)
-            _sub_str(inst_el, "plane_type", inst.plane_type)
-    else:
-        etree.SubElement(el, "sectioncuts")
-
-    if md.partial_volumes:
-        pv_el = etree.SubElement(el, "partial_volumes")
-        for inst in md.partial_volumes:
-            inst_el = etree.SubElement(pv_el, "partial_volume_instance")
-            _sub_str(inst_el, "name", inst.name)
-            if inst.parts:
-                parts_el = etree.SubElement(inst_el, "parts")
-                for p in inst.parts:
-                    _sub_str(parts_el, "name", p)
-    else:
-        etree.SubElement(el, "partial_volumes")
-
-    if md.turbulences:
-        turbs_el = etree.SubElement(el, "turbulences")
-        for inst in md.turbulences:
-            inst_el = etree.SubElement(turbs_el, "turbulence_instance")
-            _sub_str(inst_el, "name", inst.name)
-            _sub_bool(inst_el, "showMesh", inst.show_mesh)
-            _sub_bool(inst_el, "eddyScaleLengthUserDefined", inst.eddy_scale_length_user_defined)
-            _sub_bool(inst_el, "planeOffsetUserDefined", inst.plane_offset_user_defined)
-            _sub_bool(inst_el, "eddiesUserDefined", inst.eddies_user_defined)
-            if inst.parts:
-                parts_el = etree.SubElement(inst_el, "parts")
-                for p in inst.parts:
-                    _sub_str(parts_el, "name", p)
-    else:
-        etree.SubElement(el, "turbulences")
-
-    etree.SubElement(el, "acoustics")
-    etree.SubElement(el, "rotating")
-
-
-# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -734,7 +633,6 @@ def serialize_ufx(deck: UfxSolverDeck, *, pretty_print: bool = True) -> bytes:
     _ser_boundary_conditions(root, deck.boundary_conditions)
     _ser_sources(root, deck.sources)
     _ser_output(root, deck.output)
-    _ser_model_data(root, deck.model_data)
 
     return etree.tostring(
         root,

@@ -527,71 +527,6 @@ class Output(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# <model_data>  (GUI metadata — does NOT affect solver)
-# ---------------------------------------------------------------------------
-
-class ModelDataSimulation(BaseModel):
-    moving_ground: bool
-    rotating_wheels: bool
-
-
-class ModelDataTunnel(BaseModel):
-    boundary_layer_suction: bool
-    boundary_layer_suction_xpos: float
-
-
-class ModelDataWheelInstance(BaseModel):
-    name: str
-    type: str
-    mesh_type: str
-    parts: List[str] = Field(default_factory=list)
-    refinement_level: int
-    diameter: float
-
-
-class ModelDataWheels(BaseModel):
-    wheel_instances: List[ModelDataWheelInstance] = Field(default_factory=list)
-
-
-class ModelDataPorousInstance(BaseModel):
-    name: str
-    inlet: str
-    outlet: str
-    wall: str
-
-
-class ModelDataPartialVolumeInstance(BaseModel):
-    name: str
-    parts: List[str] = Field(default_factory=list)
-
-
-class ModelDataTurbulenceInstance(BaseModel):
-    name: str
-    show_mesh: bool
-    eddy_scale_length_user_defined: bool
-    plane_offset_user_defined: bool
-    eddies_user_defined: bool
-    parts: List[str] = Field(default_factory=list)
-
-
-class ModelDataSectionCutInstance(BaseModel):
-    name: str
-    plane_type: str
-
-
-class ModelData(BaseModel):
-    comment: Optional[str] = None
-    simulation: ModelDataSimulation
-    tunnel: ModelDataTunnel
-    wheels: ModelDataWheels = Field(default_factory=ModelDataWheels)
-    porous: List[ModelDataPorousInstance] = Field(default_factory=list)
-    partial_volumes: List[ModelDataPartialVolumeInstance] = Field(default_factory=list)
-    turbulences: List[ModelDataTurbulenceInstance] = Field(default_factory=list)
-    sectioncuts: List[ModelDataSectionCutInstance] = Field(default_factory=list)  # GHN only
-    belts: List[str] = Field(default_factory=list)          # Aero only
-
-
-# ---------------------------------------------------------------------------
 # Root model
 # ---------------------------------------------------------------------------
 
@@ -603,4 +538,3 @@ class UfxSolverDeck(BaseModel):
     boundary_conditions: BoundaryConditions
     sources: Sources
     output: Output
-    model_data: ModelData

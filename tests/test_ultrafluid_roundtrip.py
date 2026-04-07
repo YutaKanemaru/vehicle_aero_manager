@@ -107,10 +107,6 @@ class TestAeroRoundTrip:
         deck1, deck2 = _roundtrip(AERO_XML)
         assert deck1.output == deck2.output
 
-    def test_roundtrip_model_data(self):
-        deck1, deck2 = _roundtrip(AERO_XML)
-        assert deck1.model_data == deck2.model_data
-
     def test_serialized_xml_is_valid(self):
         deck = parse_ufx(AERO_XML)
         xml_bytes = serialize_ufx(deck)
@@ -163,10 +159,6 @@ class TestGHNRoundTrip:
     def test_roundtrip_section_cut(self):
         deck1, deck2 = _roundtrip(GHN_XML)
         assert deck1.output.section_cut == deck2.output.section_cut
-
-    def test_roundtrip_model_data(self):
-        deck1, deck2 = _roundtrip(GHN_XML)
-        assert deck1.model_data == deck2.model_data
 
     def test_serialized_xml_is_valid(self):
         deck = parse_ufx(GHN_XML)
