@@ -10,6 +10,7 @@ import { useJobsStore, type JobStatus } from "../stores/jobs";
 export function useJobsPoller() {
   const jobs = useJobsStore((s) => s.jobs);
   const updateJob = useJobsStore((s) => s.updateJob);
+  const removeJob = useJobsStore((s) => s.removeJob);
 
   // Only poll when there are pending/analyzing jobs (uploading is handled by XHR callbacks)
   const hasActive = jobs.some(
@@ -25,11 +26,24 @@ export function useJobsPoller() {
     try {
       const geometries = await geometriesApi.list();
       const gMap = new Map(geometries.map((g) => [g.id, g]));
+
+      // pending/analyzing → ステータス更新、または削除済みなら除去
       for (const job of activeJobs) {
         const g = gMap.get(job.id);
         if (g) {
           updateJob(g.id, g.status as JobStatus, g.error_message);
+        } else {
+          // ジオメトリが削除済み → jobs からも削除
+          removeJob(job.id);
         }
+      }
+
+      // ready/error ジョブも削除済みジオメトリなら除去（永続化されたゴミを掃除）
+      const staleJobs = jobs.filter(
+        (j) => (j.status === "ready" || j.status === "error") && !gMap.has(j.id)
+      );
+      for (const job of staleJobs) {
+        removeJob(job.id);
       }
     } catch {
       // ポーリングエラーは無視（サイレント）
