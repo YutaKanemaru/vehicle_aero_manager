@@ -8,12 +8,14 @@ import {
   Text,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconTemplate, IconSettings, IconLogout } from "@tabler/icons-react";
+import { IconTemplate, IconSettings, IconLogout, IconBox, IconStack2 } from "@tabler/icons-react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../stores/auth";
 
 const navItems = [
   { label: "Templates", path: "/templates", icon: IconTemplate },
+  { label: "Geometries", path: "/geometries", icon: IconBox },
+  { label: "Assemblies", path: "/assemblies", icon: IconStack2 },
   { label: "Configurations", path: "/configurations", icon: IconSettings },
 ];
 

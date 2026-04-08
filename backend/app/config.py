@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24  # 24 hours
 
-    # Storage
-    upload_dir: Path = Path("./uploads")
-    result_dir: Path = Path("./results")
+    # Storage — 絶対パスで固定（起動ディレクトリ依存を防ぐ）
+    upload_dir: Path = _BACKEND_DIR / "data" / "uploads"
+    result_dir: Path = _BACKEND_DIR / "data" / "results"
 
     # CORS
     cors_origins: list[str] = ["http://localhost:5173"]  # Vite dev server

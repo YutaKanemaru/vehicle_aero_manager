@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { LoginPage } from "./components/auth/LoginPage";
 import { AppLayout } from "./components/layout/AppShell";
 import { TemplateList } from "./components/templates/TemplateList";
+import { GeometryList } from "./components/geometries/GeometryList";
+import { AssemblyList } from "./components/assemblies/AssemblyList";
 import { useAuthStore } from "./stores/auth";
 import { authApi } from "./api/auth";
 
@@ -22,6 +24,8 @@ function AuthenticatedApp() {
       <Route element={<AppLayout />}>
         <Route path="/" element={<DashboardPlaceholder />} />
         <Route path="/templates" element={<TemplateList />} />
+        <Route path="/geometries" element={<GeometryList />} />
+        <Route path="/assemblies" element={<AssemblyList />} />
         <Route path="/configurations" element={<ConfigurationsPlaceholder />} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />

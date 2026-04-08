@@ -211,6 +211,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/geometries/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Geometries */
+        get: operations["list_geometries_api_v1_geometries__get"];
+        put?: never;
+        /**
+         * Upload Geometry
+         * @description STL ファイルをアップロードする。解析はバックグラウンドで自動実行。
+         */
+        post: operations["upload_geometry_api_v1_geometries__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geometries/{geometry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Geometry */
+        get: operations["get_geometry_api_v1_geometries__geometry_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Geometry */
+        delete: operations["delete_geometry_api_v1_geometries__geometry_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Geometry */
+        patch: operations["update_geometry_api_v1_geometries__geometry_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/assemblies/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Assemblies */
+        get: operations["list_assemblies_api_v1_assemblies__get"];
+        put?: never;
+        /** Create Assembly */
+        post: operations["create_assembly_api_v1_assemblies__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assemblies/{assembly_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Assembly */
+        get: operations["get_assembly_api_v1_assemblies__assembly_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Assembly */
+        delete: operations["delete_assembly_api_v1_assemblies__assembly_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Assembly */
+        patch: operations["update_assembly_api_v1_assemblies__assembly_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/assemblies/{assembly_id}/geometries/{geometry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Geometry */
+        post: operations["add_geometry_api_v1_assemblies__assembly_id__geometries__geometry_id__post"];
+        /** Remove Geometry */
+        delete: operations["remove_geometry_api_v1_assemblies__assembly_id__geometries__geometry_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -232,6 +327,69 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnalysisResult */
+        AnalysisResult: {
+            /** Parts */
+            parts: string[];
+            /** Vehicle Bbox */
+            vehicle_bbox: {
+                [key: string]: number;
+            };
+            /** Vehicle Dimensions */
+            vehicle_dimensions: {
+                [key: string]: number;
+            };
+            /** Part Info */
+            part_info: {
+                [key: string]: components["schemas"]["PartInfo"];
+            };
+        };
+        /** AssemblyCreate */
+        AssemblyCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Template Id */
+            template_id?: string | null;
+        };
+        /** AssemblyResponse */
+        AssemblyResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Template Id */
+            template_id: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Geometries
+             * @default []
+             */
+            geometries: components["schemas"]["GeometryResponse"][];
+        };
+        /** AssemblyUpdate */
+        AssemblyUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Template Id */
+            template_id?: string | null;
+        };
         /** BeltOption */
         BeltOption: {
             /**
@@ -254,6 +412,15 @@ export interface components {
              * @default true
              */
             wheel_belt_location_auto: boolean;
+        };
+        /** Body_upload_geometry_api_v1_geometries__post */
+        Body_upload_geometry_api_v1_geometries__post: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** File */
+            file: string;
         };
         /** BoundaryConditionInput */
         BoundaryConditionInput: {
@@ -286,6 +453,43 @@ export interface components {
             level: number;
             /** Parts */
             parts: string[];
+        };
+        /** GeometryResponse */
+        GeometryResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Original Filename */
+            original_filename: string;
+            /** File Size */
+            file_size: number;
+            /** Status */
+            status: string;
+            analysis_result?: components["schemas"]["AnalysisResult"] | null;
+            /** Error Message */
+            error_message: string | null;
+            /** Uploaded By */
+            uploaded_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** GeometryUpdate */
+        GeometryUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
         };
         /** GroundOption */
         GroundOption: {
@@ -372,6 +576,19 @@ export interface components {
             normal_distance: number;
             /** Parts */
             parts?: string[];
+        };
+        /** PartInfo */
+        PartInfo: {
+            /** Centroid */
+            centroid: number[];
+            /** Bbox */
+            bbox: {
+                [key: string]: number;
+            };
+            /** Vertex Count */
+            vertex_count: number;
+            /** Face Count */
+            face_count: number;
         };
         /** Setup */
         "Setup-Input": {
@@ -1144,6 +1361,366 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_geometries_api_v1_geometries__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeometryResponse"][];
+                };
+            };
+        };
+    };
+    upload_geometry_api_v1_geometries__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_geometry_api_v1_geometries__post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeometryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_geometry_api_v1_geometries__geometry_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                geometry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeometryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_geometry_api_v1_geometries__geometry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                geometry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_geometry_api_v1_geometries__geometry_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                geometry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeometryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeometryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_assemblies_api_v1_assemblies__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssemblyResponse"][];
+                };
+            };
+        };
+    };
+    create_assembly_api_v1_assemblies__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssemblyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssemblyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_assembly_api_v1_assemblies__assembly_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assembly_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssemblyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_assembly_api_v1_assemblies__assembly_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assembly_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_assembly_api_v1_assemblies__assembly_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assembly_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssemblyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssemblyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_geometry_api_v1_assemblies__assembly_id__geometries__geometry_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assembly_id: string;
+                geometry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssemblyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_geometry_api_v1_assemblies__assembly_id__geometries__geometry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assembly_id: string;
+                geometry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssemblyResponse"];
                 };
             };
             /** @description Validation Error */
