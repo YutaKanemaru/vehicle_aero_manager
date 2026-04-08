@@ -11,7 +11,8 @@ import { useForm } from "@mantine/form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useRef } from "react";
-import { geometriesApi } from "../../api/geometries";
+import { geometriesApi, type GeometryResponse } from "../../api/geometries";
+import { useJobsStore } from "../../stores/jobs";
 
 interface Props {
   opened: boolean;
@@ -21,6 +22,7 @@ interface Props {
 export function GeometryUploadModal({ opened, onClose }: Props) {
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
+  const addJob = useJobsStore((s) => s.addJob);
 
   const form = useForm({
     initialValues: { name: "", description: "" },
@@ -32,7 +34,8 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
   const mutation = useMutation({
     mutationFn: ({ name, description, file }: { name: string; description: string; file: File }) =>
       geometriesApi.upload(name, description || null, file),
-    onSuccess: () => {
+    onSuccess: (data: GeometryResponse) => {
+      addJob(data.id, data.name, "stl_analysis");
       queryClient.invalidateQueries({ queryKey: ["geometries"] });
       notifications.show({ message: "Upload started — analysis running in background", color: "green" });
       form.reset();

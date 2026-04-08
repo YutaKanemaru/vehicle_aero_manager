@@ -6,11 +6,16 @@ import {
   NavLink,
   Button,
   Text,
+  ActionIcon,
+  Indicator,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconTemplate, IconSettings, IconLogout, IconBox, IconStack2 } from "@tabler/icons-react";
+import { IconTemplate, IconSettings, IconLogout, IconBox, IconStack2, IconActivity } from "@tabler/icons-react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../stores/auth";
+import { useJobsStore, selectActiveCount } from "../../stores/jobs";
+import { useJobsPoller } from "../../hooks/useJobsPoller";
+import { JobsDrawer } from "./JobsDrawer";
 
 const navItems = [
   { label: "Templates", path: "/templates", icon: IconTemplate },
@@ -21,9 +26,13 @@ const navItems = [
 
 export function AppLayout() {
   const [opened, { toggle }] = useDisclosure();
+  const [jobsOpen, { open: openJobs, close: closeJobs }] = useDisclosure();
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const activeCount = useJobsStore(selectActiveCount);
+
+  useJobsPoller();
 
   return (
     <MantineAppShell
@@ -41,6 +50,22 @@ export function AppLayout() {
             <Text size="sm" c="dimmed">
               {user?.username}
             </Text>
+            <Indicator
+              label={activeCount > 0 ? activeCount : undefined}
+              size={16}
+              disabled={activeCount === 0}
+              color="blue"
+              processing={activeCount > 0}
+            >
+              <ActionIcon
+                variant="subtle"
+                size="md"
+                onClick={openJobs}
+                title="Background Jobs"
+              >
+                <IconActivity size={18} />
+              </ActionIcon>
+            </Indicator>
             <Button
               variant="subtle"
               size="xs"
@@ -68,6 +93,8 @@ export function AppLayout() {
       <MantineAppShell.Main>
         <Outlet />
       </MantineAppShell.Main>
+
+      <JobsDrawer opened={jobsOpen} onClose={closeJobs} />
     </MantineAppShell>
   );
 }
