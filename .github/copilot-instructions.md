@@ -64,8 +64,8 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | Step 1 (W1-2) | FastAPI + React + Docker Compose + SQLite + JWT auth | ✅ Complete |
 | Step 2 (W3-5) | Ultrafluid Pydantic schema — XML ↔ Pydantic round-trip | ✅ Complete |
 | Step 3 (W6-8) | Template CRUD with versioning (Aero/GHN) | ✅ Complete |
-| Step 4 (W9-12) | Geometry upload + STL analysis + Compute engine + Kinematics | 🔄 **Current target** |
-| Step 5 (W13-16) | XML generation + Configuration management + Diff view + Porous coefficients UI | ⬜ Not started |
+| Step 4 (W9-12) | Geometry upload + STL analysis + Compute engine + Kinematics | ✅ Complete |
+| Step 5 (W13-16) | XML generation + Configuration management + Diff view + Porous coefficients UI | 🔄 **Current target** |
 
 **When generating code, focus on the current step. Do not implement features from future steps.**
 
@@ -597,6 +597,97 @@ Based on prototype implementation in concept_vam, a Template's `settings` JSON f
 ```
 
 **Key principle**: `setup_option` (bool flags) and `simulation_parameter` (physical values) are Fixed and stored in the Template. `setup` contains geometry-relative sizing rules. `target_names` maps solver concepts to part naming conventions.
+
+---
+
+## Step 4: Geometry Upload + STL Analysis + Assembly — Implementation Details (Complete)
+
+### Data Model (2-layer hierarchy)
+
+| Model | Purpose |
+|---|---|
+| `Geometry` | Single STL file entity — stores file path, status, and analysis results |
+| `GeometryAssembly` | Named collection of Geometries — optionally linked to a Template |
+| `assembly_geometry_link` | Many-to-many association table |
+
+**Part swap workflow**: change which `Geometry` objects are members of a `GeometryAssembly`.
+
+### Backend
+
+**Models** (`app/models/geometry.py`)
+- `Geometry`: `id`, `name`, `description`, `file_path` (relative to `upload_dir`), `original_filename`, `file_size`, `status` (`pending`/`analyzing`/`ready`/`error`), `analysis_result` (JSON string), `error_message`, `uploaded_by` (FK→users), `created_at`, `updated_at`
+- `GeometryAssembly`: `id`, `name`, `description`, `template_id` (nullable FK→templates), `created_by`, `created_at`, `updated_at`; `geometries` many-to-many relationship
+- `assembly_geometry_link`: association table (`assembly_id`, `geometry_id`)
+
+**Schemas** (`app/schemas/geometry.py`)
+- `PartInfo`: `centroid [x,y,z]`, `bbox dict`, `vertex_count`, `face_count`
+- `AnalysisResult`: `parts`, `vehicle_bbox`, `vehicle_dimensions`, `part_info dict`
+- `GeometryResponse`: full response including parsed `analysis_result`
+- `AssemblyCreate`, `AssemblyUpdate`, `AssemblyResponse` (includes `geometries: list[GeometryResponse]`)
+- `@field_validator("analysis_result", mode="before")` parses JSON string from DB automatically
+
+**Compute Engine** (`app/services/compute_engine.py`)
+- `analyze_stl(file_path: Path) -> dict`: `trimesh.load(str(path), force="scene")` → processes each solid in `Scene.geometry`
+- Extracts per-part: centroid, bbox (x/y/z min/max), vertex_count, face_count
+- Computes vehicle bbox (union of all parts) and dimensions (length, width, height)
+- Returns JSON-serializable dict matching `AnalysisResult` schema
+- Multi-solid ASCII STL fully supported via `force="scene"`
+
+**Service** (`app/services/geometry_service.py`)
+- `upload_geometry()`: saves file to `upload_dir/geometries/{id}/{filename}`, stores relative path, triggers `BackgroundTasks`
+- `run_analysis()`: background task — `pending` → `analyzing` → `ready`/`error`
+- `delete_geometry()`: removes DB row + `shutil.rmtree` on file directory
+- All CRUD for both `Geometry` and `GeometryAssembly`
+- `add_geometry_to_assembly`, `remove_geometry_from_assembly`
+- Permission check: `resource.created_by == current_user.id OR current_user.is_admin`
+
+**API Endpoints**
+
+`app/api/v1/geometries.py` (`/api/v1/geometries/`):
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/geometries/` | List all geometries |
+| `POST` | `/geometries/` | Upload STL (multipart form) — triggers background analysis |
+| `GET` | `/geometries/{id}` | Get geometry with analysis result |
+| `PATCH` | `/geometries/{id}` | Update name/description |
+| `DELETE` | `/geometries/{id}` | Delete + file cleanup |
+
+`app/api/v1/assemblies.py` (`/api/v1/assemblies/`):
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/assemblies/` | List all assemblies |
+| `POST` | `/assemblies/` | Create assembly |
+| `GET` | `/assemblies/{id}` | Get assembly with geometries (selectinload) |
+| `PATCH` | `/assemblies/{id}` | Update name/description/template_id |
+| `DELETE` | `/assemblies/{id}` | Delete assembly |
+| `POST` | `/assemblies/{id}/geometries/{gid}` | Add geometry to assembly |
+| `DELETE` | `/assemblies/{id}/geometries/{gid}` | Remove geometry from assembly |
+
+**Migration**: `alembic/versions/f46197300d43_add_geometry_and_assembly_tables.py`
+
+### Frontend
+
+**API layer** (`src/api/geometries.ts`)
+- `geometriesApi.list()`, `.get(id)`, `.upload(name, description, file)` (raw `fetch()` for multipart), `.delete(id)`
+- `assembliesApi.list()`, `.get(id)`, `.create(data)`, `.update(id, data)`, `.delete(id)`, `.addGeometry(assemblyId, geometryId)`, `.removeGeometry(assemblyId, geometryId)`
+
+**Components** (`src/components/geometries/`, `src/components/assemblies/`)
+
+| File | Description |
+|---|---|
+| `GeometryList.tsx` | Table with Name, File, Size, Status badge, Parts count; click row to expand analysis details (bbox, dimensions, parts table); auto-refreshes every 3s when any item is `pending`/`analyzing` |
+| `GeometryUploadModal.tsx` | Upload form: name, description, STL file input; shows background analysis notice after success |
+| `AssemblyList.tsx` | Table with Name, Description, Template link badge, Geometry count; row action: manage geometries (opens drawer) |
+| `AssemblyCreateModal.tsx` | Create assembly with optional template link (dropdown from templates list) |
+| `AssemblyGeometriesDrawer.tsx` | Right-side drawer: shows current geometries (with remove button), lists available `ready` geometries to add (multi-checkbox select) |
+
+**Navigation**: `AppShell.tsx` nav includes `Geometries` (IconBox) and `Assemblies` (IconStack2).
+
+### Implementation Notes
+- Upload endpoint uses `Form()` + `File()` FastAPI dependencies — NOT JSON body
+- Frontend upload uses raw `fetch()` with `FormData` (the JSON `client` wrapper cannot handle multipart)
+- Status polling: `refetchInterval` returns `3000` when any geometry is `pending`/`analyzing`, `false` otherwise
+- Kinematics (ride height adjustment) deferred — correct-posture STL is assumed for now
 
 ---
 
