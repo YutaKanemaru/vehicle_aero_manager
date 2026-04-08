@@ -507,7 +507,7 @@ export function GeometryList() {
         </Group>
       </Group>
 
-      {geometries.length === 0 && !isLoading ? (
+      {geometries.length === 0 && folders.length === 0 && !isLoading ? (
         <Text c="dimmed" ta="center" py="xl">
           No geometries yet. Upload an STL file to get started.
         </Text>
