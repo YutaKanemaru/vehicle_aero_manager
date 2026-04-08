@@ -28,6 +28,7 @@ class GeometryResponse(BaseModel):
     id: str
     name: str
     description: str | None
+    folder_id: str | None
     original_filename: str
     file_size: int
     status: str
@@ -48,6 +49,31 @@ class GeometryResponse(BaseModel):
 class GeometryUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    # folder_id: None は「フォルダから外す」を意味する。model_fields_set で判定。
+    folder_id: str | None = None
+
+
+# ─── GeometryFolder ─────────────────────────────────────────────────────
+
+class GeometryFolderCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class GeometryFolderUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class GeometryFolderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    description: str | None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
 
 
 # ─── GeometryAssembly ────────────────────────────────────────────────────────

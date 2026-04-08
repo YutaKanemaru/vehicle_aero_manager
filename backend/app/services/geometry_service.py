@@ -11,9 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
-from app.models.geometry import Geometry, GeometryAssembly
+from app.models.geometry import Geometry, GeometryAssembly, GeometryFolder
 from app.models.user import User
-from app.schemas.geometry import AssemblyCreate, AssemblyUpdate, GeometryUpdate
+from app.schemas.geometry import AssemblyCreate, AssemblyUpdate, GeometryFolderCreate, GeometryFolderUpdate, GeometryUpdate
 from app.services.compute_engine import analyze_stl_to_json
 
 
@@ -42,6 +42,13 @@ def _assembly_or_404(db: Session, assembly_id: str) -> GeometryAssembly:
     return a
 
 
+def _folder_or_404(db: Session, folder_id: str) -> GeometryFolder:
+    f = db.get(GeometryFolder, folder_id)
+    if not f:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    return f
+
+
 def _geometry_upload_dir(geometry_id: str) -> Path:
     d = settings.upload_dir / "geometries" / geometry_id
     d.mkdir(parents=True, exist_ok=True)
@@ -68,10 +75,12 @@ def upload_geometry(
     description: str | None,
     file: UploadFile,
     current_user: User,
+    folder_id: str | None = None,
 ) -> Geometry:
     geometry = Geometry(
         name=name,
         description=description,
+        folder_id=folder_id,
         file_path="",           # 後で更新
         original_filename=file.filename or "unknown.stl",
         file_size=0,            # 後で更新
@@ -134,6 +143,11 @@ def update_geometry(
         geometry.name = data.name
     if data.description is not None:
         geometry.description = data.description
+    # folder_id は明示的に指定された場合のみ更新（None でフォルダから外す）
+    if "folder_id" in data.model_fields_set:
+        if data.folder_id is not None:
+            _folder_or_404(db, data.folder_id)  # 存在確認
+        geometry.folder_id = data.folder_id
     db.commit()
     db.refresh(geometry)
     return geometry
@@ -153,6 +167,54 @@ def delete_geometry(db: Session, geometry_id: str, current_user: User) -> None:
         pass  # ファイルが消えていても DB からは削除する
 
     db.delete(geometry)
+    db.commit()
+
+
+# ─── GeometryFolder CRUD ────────────────────────────────────────────────
+
+def list_folders(db: Session) -> list[GeometryFolder]:
+    return list(
+        db.scalars(
+            select(GeometryFolder).order_by(GeometryFolder.created_at.desc())
+        ).all()
+    )
+
+
+def create_folder(
+    db: Session, data: GeometryFolderCreate, current_user: User
+) -> GeometryFolder:
+    folder = GeometryFolder(
+        name=data.name,
+        description=data.description,
+        created_by=current_user.id,
+    )
+    db.add(folder)
+    db.commit()
+    db.refresh(folder)
+    return folder
+
+
+def update_folder(
+    db: Session, folder_id: str, data: GeometryFolderUpdate, current_user: User
+) -> GeometryFolder:
+    folder = _folder_or_404(db, folder_id)
+    _check_owner_or_admin(folder.created_by, current_user)
+    if data.name is not None:
+        folder.name = data.name
+    if data.description is not None:
+        folder.description = data.description
+    db.commit()
+    db.refresh(folder)
+    return folder
+
+
+def delete_folder(db: Session, folder_id: str, current_user: User) -> None:
+    folder = _folder_or_404(db, folder_id)
+    _check_owner_or_admin(folder.created_by, current_user)
+    # フォルダ内の Geometry は folder_id を null にリセット（未分類に移動）
+    for g in folder.geometries:
+        g.folder_id = None
+    db.delete(folder)
     db.commit()
 
 

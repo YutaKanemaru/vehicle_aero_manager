@@ -211,6 +211,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/geometries/folders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Folders */
+        get: operations["list_folders_api_v1_geometries_folders__get"];
+        put?: never;
+        /** Create Folder */
+        post: operations["create_folder_api_v1_geometries_folders__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geometries/folders/{folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Folder */
+        delete: operations["delete_folder_api_v1_geometries_folders__folder_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Folder */
+        patch: operations["update_folder_api_v1_geometries_folders__folder_id__patch"];
+        trace?: never;
+    };
     "/api/v1/geometries/": {
         parameters: {
             query?: never;
@@ -419,6 +455,8 @@ export interface components {
             name: string;
             /** Description */
             description?: string | null;
+            /** Folder Id */
+            folder_id?: string | null;
             /** File */
             file: string;
         };
@@ -454,6 +492,41 @@ export interface components {
             /** Parts */
             parts: string[];
         };
+        /** GeometryFolderCreate */
+        GeometryFolderCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+        };
+        /** GeometryFolderResponse */
+        GeometryFolderResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** GeometryFolderUpdate */
+        GeometryFolderUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+        };
         /** GeometryResponse */
         GeometryResponse: {
             /** Id */
@@ -462,6 +535,8 @@ export interface components {
             name: string;
             /** Description */
             description: string | null;
+            /** Folder Id */
+            folder_id: string | null;
             /** Original Filename */
             original_filename: string;
             /** File Size */
@@ -490,6 +565,8 @@ export interface components {
             name?: string | null;
             /** Description */
             description?: string | null;
+            /** Folder Id */
+            folder_id?: string | null;
         };
         /** GroundOption */
         GroundOption: {
@@ -1361,6 +1438,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_folders_api_v1_geometries_folders__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeometryFolderResponse"][];
+                };
+            };
+        };
+    };
+    create_folder_api_v1_geometries_folders__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeometryFolderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeometryFolderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_folder_api_v1_geometries_folders__folder_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_folder_api_v1_geometries_folders__folder_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeometryFolderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeometryFolderResponse"];
                 };
             };
             /** @description Validation Error */

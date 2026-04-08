@@ -14,6 +14,30 @@ assembly_geometry_link = Table(
 )
 
 
+class GeometryFolder(Base):
+    """
+    Geometry を整理するためのフォルダ階層。
+    フォルダ自体はデータを持たず、Geometry を束ねる役割のみ。
+    """
+    __tablename__ = "geometry_folders"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    geometries: Mapped[list["Geometry"]] = relationship(
+        "Geometry", back_populates="folder"
+    )
+
+
 class Geometry(Base):
     """
     アップロードされた STL ファイル 1 件を表す。
@@ -27,6 +51,11 @@ class Geometry(Base):
     )
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # フォルダ（nullable — フォルダなしで管理可能）
+    folder_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("geometry_folders.id"), nullable=True
+    )
 
     # ファイル情報
     file_path: Mapped[str] = mapped_column(String(512))          # upload_dir 相対パス
@@ -48,6 +77,9 @@ class Geometry(Base):
     )
 
     # リレーション
+    folder: Mapped["GeometryFolder | None"] = relationship(
+        "GeometryFolder", back_populates="geometries"
+    )
     assemblies: Mapped[list["GeometryAssembly"]] = relationship(
         "GeometryAssembly",
         secondary=assembly_geometry_link,

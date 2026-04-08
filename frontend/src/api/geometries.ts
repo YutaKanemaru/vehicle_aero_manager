@@ -15,6 +15,31 @@ export type AssemblyCreate =
 export type AssemblyUpdate =
   paths["/api/v1/assemblies/{assembly_id}"]["patch"]["requestBody"]["content"]["application/json"];
 
+export type GeometryFolderResponse =
+  paths["/api/v1/geometries/folders/"]["get"]["responses"]["200"]["content"]["application/json"][number];
+
+export type GeometryFolderCreate =
+  paths["/api/v1/geometries/folders/"]["post"]["requestBody"]["content"]["application/json"];
+
+export type GeometryFolderUpdate =
+  paths["/api/v1/geometries/folders/{folder_id}"]["patch"]["requestBody"]["content"]["application/json"];
+
+// ─── Folder API ───────────────────────────────────────────────────────────────
+
+export const foldersApi = {
+  list: (): Promise<GeometryFolderResponse[]> =>
+    client.get("/geometries/folders/"),
+
+  create: (data: GeometryFolderCreate): Promise<GeometryFolderResponse> =>
+    client.post("/geometries/folders/", data),
+
+  update: (id: string, data: GeometryFolderUpdate): Promise<GeometryFolderResponse> =>
+    client.patch(`/geometries/folders/${id}`, data),
+
+  delete: (id: string): Promise<void> =>
+    client.delete(`/geometries/folders/${id}`),
+};
+
 // ─── Geometry API ────────────────────────────────────────────────────────────
 
 export const geometriesApi = {
@@ -24,29 +49,63 @@ export const geometriesApi = {
   get: (id: string): Promise<GeometryResponse> =>
     client.get(`/geometries/${id}`),
 
-  /** multipart/form-data アップロード */
-  upload: (name: string, description: string | null, file: File): Promise<GeometryResponse> => {
-    const form = new FormData();
-    form.append("name", name);
-    if (description) form.append("description", description);
-    form.append("file", file);
+  /** multipart/form-data アップロード (XHR to track upload progress) */
+  upload: (
+    name: string,
+    description: string | null,
+    folderId: string | null,
+    file: File,
+    onProgress?: (pct: number) => void,
+  ): Promise<GeometryResponse> => {
+    return new Promise((resolve, reject) => {
+      const form = new FormData();
+      form.append("name", name);
+      if (description) form.append("description", description);
+      if (folderId) form.append("folder_id", folderId);
+      form.append("file", file);
 
-    const token = localStorage.getItem("vam_token");
-    return fetch("/api/v1/geometries/", {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: form,
-    }).then(async (res) => {
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `HTTP ${res.status}`);
+      const token = localStorage.getItem("vam_token");
+      const xhr = new XMLHttpRequest();
+
+      if (onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            onProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
       }
-      return res.json();
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            reject(new Error("Invalid JSON response"));
+          }
+        } else {
+          try {
+            const body = JSON.parse(xhr.responseText);
+            reject(new Error(body.detail || `HTTP ${xhr.status}`));
+          } catch {
+            reject(new Error(`HTTP ${xhr.status}`));
+          }
+        }
+      };
+
+      xhr.onerror = () => reject(new Error("Network error"));
+      xhr.onabort = () => reject(new Error("Upload aborted"));
+
+      xhr.open("POST", "/api/v1/geometries/");
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      xhr.send(form);
     });
   },
 
   delete: (id: string): Promise<void> =>
     client.delete(`/geometries/${id}`),
+
+  updateFolder: (id: string, folderId: string | null): Promise<GeometryResponse> =>
+    client.patch(`/geometries/${id}`, { folder_id: folderId }),
 };
 
 // ─── Assembly API ────────────────────────────────────────────────────────────

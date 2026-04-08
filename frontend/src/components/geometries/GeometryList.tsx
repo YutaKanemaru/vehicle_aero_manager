@@ -12,6 +12,14 @@ import {
   SimpleGrid,
   ScrollArea,
   NumberFormatter,
+  Paper,
+  Select,
+  Popover,
+  Modal,
+  TextInput,
+  Textarea as MantineTextarea,
+  Divider,
+  ThemeIcon,
 } from "@mantine/core";
 import {
   IconUpload,
@@ -19,14 +27,26 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconRefresh,
+  IconFolderPlus,
+  IconFolder,
+  IconFolderOpen,
+  IconArrowRight,
 } from "@tabler/icons-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { useDisclosure } from "@mantine/hooks";
-import { geometriesApi, type GeometryResponse } from "../../api/geometries";
+import { useForm } from "@mantine/form";
+import {
+  geometriesApi,
+  foldersApi,
+  type GeometryResponse,
+  type GeometryFolderResponse,
+} from "../../api/geometries";
 import { useAuthStore } from "../../stores/auth";
 import { GeometryUploadModal } from "./GeometryUploadModal";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function statusColor(status: string) {
   if (status === "ready") return "green";
@@ -40,6 +60,8 @@ function formatBytes(bytes: number) {
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
+
+// ─── AnalysisDetails ─────────────────────────────────────────────────────────
 
 function AnalysisDetails({ geometry }: { geometry: GeometryResponse }) {
   const result = geometry.analysis_result;
@@ -66,7 +88,7 @@ function AnalysisDetails({ geometry }: { geometry: GeometryResponse }) {
           <Text size="xs" c="dimmed">Dimensions (L × W × H)</Text>
           {dims && (
             <Text size="xs">
-              {dims.length.toFixed(3)} m × {dims.width.toFixed(3)} m × {dims.height.toFixed(3)} m
+              {dims.length.toFixed(3)} m x {dims.width.toFixed(3)} m x {dims.height.toFixed(3)} m
             </Text>
           )}
         </Box>
@@ -103,8 +125,17 @@ function AnalysisDetails({ geometry }: { geometry: GeometryResponse }) {
   );
 }
 
-function GeometryRow({ geometry, canDelete }: { geometry: GeometryResponse; canDelete: boolean }) {
+// ─── GeometryRow ─────────────────────────────────────────────────────────────
+
+interface GeometryRowProps {
+  geometry: GeometryResponse;
+  canDelete: boolean;
+  folders: GeometryFolderResponse[];
+}
+
+function GeometryRow({ geometry, canDelete, folders }: GeometryRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
@@ -116,9 +147,24 @@ function GeometryRow({ geometry, canDelete }: { geometry: GeometryResponse; canD
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
 
+  const moveMutation = useMutation({
+    mutationFn: (folderId: string | null) => geometriesApi.updateFolder(geometry.id, folderId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["geometries"] });
+      setMoveOpen(false);
+      notifications.show({ message: "Moved", color: "green" });
+    },
+    onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
+  });
+
   const partCount = geometry.analysis_result
     ? Object.keys(geometry.analysis_result.part_info).length
     : null;
+
+  const folderSelectData = [
+    { value: "", label: "— No folder —" },
+    ...folders.map((f) => ({ value: f.id, label: f.name })),
+  ];
 
   return (
     <>
@@ -148,6 +194,30 @@ function GeometryRow({ geometry, canDelete }: { geometry: GeometryResponse; canD
         </Table.Td>
         <Table.Td onClick={(e) => e.stopPropagation()}>
           <Group gap={4} justify="flex-end">
+            <Popover opened={moveOpen} onChange={setMoveOpen} position="bottom-end">
+              <Popover.Target>
+                <Tooltip label="Move to folder">
+                  <ActionIcon
+                    variant="subtle"
+                    size="sm"
+                    onClick={() => setMoveOpen((v) => !v)}
+                  >
+                    <IconArrowRight size={14} />
+                  </ActionIcon>
+                </Tooltip>
+              </Popover.Target>
+              <Popover.Dropdown p="xs" style={{ width: 200 }}>
+                <Text size="xs" c="dimmed" mb={6}>Move to folder</Text>
+                <Select
+                  size="xs"
+                  data={folderSelectData}
+                  value={geometry.folder_id ?? ""}
+                  onChange={(val) => moveMutation.mutate(val || null)}
+                  disabled={moveMutation.isPending}
+                />
+              </Popover.Dropdown>
+            </Popover>
+
             {canDelete && (
               <Tooltip label="Delete">
                 <ActionIcon
@@ -174,7 +244,7 @@ function GeometryRow({ geometry, canDelete }: { geometry: GeometryResponse; canD
                 )}
                 {geometry.status === "ready" && <AnalysisDetails geometry={geometry} />}
                 {(geometry.status === "pending" || geometry.status === "analyzing") && (
-                  <Text size="sm" c="dimmed">Analysis in progress…</Text>
+                  <Text size="sm" c="dimmed">Analysis in progress...</Text>
                 )}
               </Box>
             </Collapse>
@@ -185,11 +255,194 @@ function GeometryRow({ geometry, canDelete }: { geometry: GeometryResponse; canD
   );
 }
 
+// ─── GeometryTable ────────────────────────────────────────────────────────────
+
+function GeometryTable({
+  geometries,
+  canDeleteFn,
+  folders,
+}: {
+  geometries: GeometryResponse[];
+  canDeleteFn: (g: GeometryResponse) => boolean;
+  folders: GeometryFolderResponse[];
+}) {
+  if (geometries.length === 0) {
+    return (
+      <Text size="xs" c="dimmed" py="xs" ta="center">
+        No geometries in this folder.
+      </Text>
+    );
+  }
+  return (
+    <Table highlightOnHover withColumnBorders fz="sm">
+      <Table.Thead>
+        <Table.Tr>
+          <Table.Th>Name</Table.Th>
+          <Table.Th>File</Table.Th>
+          <Table.Th>Size</Table.Th>
+          <Table.Th>Status</Table.Th>
+          <Table.Th>Parts</Table.Th>
+          <Table.Th>Uploaded</Table.Th>
+          <Table.Th />
+        </Table.Tr>
+      </Table.Thead>
+      <Table.Tbody>
+        {geometries.map((g) => (
+          <GeometryRow
+            key={g.id}
+            geometry={g}
+            canDelete={canDeleteFn(g)}
+            folders={folders}
+          />
+        ))}
+      </Table.Tbody>
+    </Table>
+  );
+}
+
+// ─── FolderSection ────────────────────────────────────────────────────────────
+
+interface FolderSectionProps {
+  folder: GeometryFolderResponse | null;
+  geometries: GeometryResponse[];
+  canDeleteFn: (g: GeometryResponse) => boolean;
+  folders: GeometryFolderResponse[];
+  canDeleteFolder: boolean;
+  onDeleteFolder: (id: string) => void;
+}
+
+function FolderSection({
+  folder,
+  geometries,
+  canDeleteFn,
+  folders,
+  canDeleteFolder,
+  onDeleteFolder,
+}: FolderSectionProps) {
+  const [opened, { toggle }] = useDisclosure(true);
+
+  const isUncategorized = folder === null;
+  const name = isUncategorized ? "Uncategorized" : folder.name;
+  const color = isUncategorized ? "gray" : "yellow";
+
+  return (
+    <Paper withBorder p={0} style={{ overflow: "hidden" }}>
+      <Group
+        px="sm"
+        py={8}
+        justify="space-between"
+        style={{
+          cursor: "pointer",
+          backgroundColor: "var(--mantine-color-gray-0)",
+          borderBottom: opened ? "1px solid var(--mantine-color-gray-2)" : "none",
+        }}
+        onClick={toggle}
+      >
+        <Group gap="xs">
+          <ThemeIcon size={20} variant="light" color={color} radius="sm">
+            {opened ? <IconFolderOpen size={12} /> : <IconFolder size={12} />}
+          </ThemeIcon>
+          <Text size="sm" fw={500}>{name}</Text>
+          <Badge size="sm" color={color} variant="light">
+            {geometries.length}
+          </Badge>
+        </Group>
+        <Group gap="xs" onClick={(e) => e.stopPropagation()}>
+          {!isUncategorized && canDeleteFolder && (
+            <Tooltip label="Delete folder (geometries become uncategorized)">
+              <ActionIcon
+                size="sm"
+                color="red"
+                variant="subtle"
+                onClick={() => onDeleteFolder(folder!.id)}
+              >
+                <IconTrash size={12} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          <ActionIcon size="sm" variant="subtle" onClick={toggle}>
+            {opened ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
+          </ActionIcon>
+        </Group>
+      </Group>
+
+      <Collapse in={opened}>
+        <Box px="sm" py={4}>
+          <GeometryTable
+            geometries={geometries}
+            canDeleteFn={canDeleteFn}
+            folders={folders}
+          />
+        </Box>
+      </Collapse>
+    </Paper>
+  );
+}
+
+// ─── FolderCreateModal ────────────────────────────────────────────────────────
+
+interface FolderCreateModalProps {
+  opened: boolean;
+  onClose: () => void;
+}
+
+function FolderCreateModal({ opened, onClose }: FolderCreateModalProps) {
+  const queryClient = useQueryClient();
+  const form = useForm({
+    initialValues: { name: "", description: "" },
+    validate: { name: (v) => (v.trim() ? null : "Name is required") },
+  });
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      foldersApi.create({
+        name: form.values.name.trim(),
+        description: form.values.description || null,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["geometry-folders"] });
+      notifications.show({ message: "Folder created", color: "green" });
+      form.reset();
+      onClose();
+    },
+    onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
+  });
+
+  return (
+    <Modal opened={opened} onClose={onClose} title="New Folder" size="sm">
+      <form onSubmit={form.onSubmit(() => mutation.mutate())}>
+        <Stack>
+          <TextInput label="Folder name" required {...form.getInputProps("name")} />
+          <MantineTextarea
+            label="Description"
+            placeholder="Optional"
+            {...form.getInputProps("description")}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={onClose}>Cancel</Button>
+            <Button type="submit" loading={mutation.isPending}>Create</Button>
+          </Group>
+        </Stack>
+      </form>
+    </Modal>
+  );
+}
+
+// ─── GeometryList ─────────────────────────────────────────────────────────────
+
 export function GeometryList() {
   const user = useAuthStore((s) => s.user);
   const [uploadOpened, { open: openUpload, close: closeUpload }] = useDisclosure(false);
+  const [folderCreateOpened, { open: openFolderCreate, close: closeFolderCreate }] = useDisclosure(false);
 
-  const { data: geometries = [], isLoading, refetch } = useQuery({
+  const queryClient = useQueryClient();
+
+  const { data: folders = [], isLoading: foldersLoading } = useQuery({
+    queryKey: ["geometry-folders"],
+    queryFn: foldersApi.list,
+  });
+
+  const { data: geometries = [], isLoading: geosLoading, refetch } = useQuery({
     queryKey: ["geometries"],
     queryFn: geometriesApi.list,
     refetchInterval: (query) => {
@@ -198,6 +451,38 @@ export function GeometryList() {
       return hasPending ? 3000 : false;
     },
   });
+
+  const deleteFolderMutation = useMutation({
+    mutationFn: (id: string) => foldersApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["geometry-folders"] });
+      queryClient.invalidateQueries({ queryKey: ["geometries"] });
+      notifications.show({ message: "Folder deleted", color: "green" });
+    },
+    onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
+  });
+
+  const isLoading = foldersLoading || geosLoading;
+
+  const canDeleteFn = (g: GeometryResponse) =>
+    !!(user && (user.id === g.uploaded_by || user.is_admin));
+
+  function handleDeleteFolder(id: string) {
+    if (!window.confirm("Delete this folder? Geometries inside will become uncategorized.")) return;
+    deleteFolderMutation.mutate(id);
+  }
+
+  // Group geometries by folder_id
+  const byFolder = new Map<string | null, GeometryResponse[]>();
+  byFolder.set(null, []);
+  for (const f of folders) byFolder.set(f.id, []);
+  for (const g of geometries) {
+    const key = g.folder_id ?? null;
+    if (!byFolder.has(key)) byFolder.set(key, []);
+    byFolder.get(key)!.push(g);
+  }
+
+  const uncategorized = byFolder.get(null) ?? [];
 
   return (
     <Stack>
@@ -209,6 +494,13 @@ export function GeometryList() {
               <IconRefresh size={16} />
             </ActionIcon>
           </Tooltip>
+          <Button
+            variant="default"
+            leftSection={<IconFolderPlus size={16} />}
+            onClick={openFolderCreate}
+          >
+            New Folder
+          </Button>
           <Button leftSection={<IconUpload size={16} />} onClick={openUpload}>
             Upload STL
           </Button>
@@ -216,33 +508,41 @@ export function GeometryList() {
       </Group>
 
       {geometries.length === 0 && !isLoading ? (
-        <Text c="dimmed" ta="center" py="xl">No geometries yet. Upload an STL file to get started.</Text>
+        <Text c="dimmed" ta="center" py="xl">
+          No geometries yet. Upload an STL file to get started.
+        </Text>
       ) : (
-        <Table highlightOnHover withTableBorder withColumnBorders>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Name</Table.Th>
-              <Table.Th>File</Table.Th>
-              <Table.Th>Size</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Parts</Table.Th>
-              <Table.Th>Uploaded</Table.Th>
-              <Table.Th />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {geometries.map((g) => (
-              <GeometryRow
-                key={g.id}
-                geometry={g}
-                canDelete={!!(user && (user.id === g.uploaded_by || user.is_admin))}
+        <Stack gap="sm">
+          {folders.map((folder) => (
+            <FolderSection
+              key={folder.id}
+              folder={folder}
+              geometries={byFolder.get(folder.id) ?? []}
+              canDeleteFn={canDeleteFn}
+              folders={folders}
+              canDeleteFolder={!!(user?.is_admin)}
+              onDeleteFolder={handleDeleteFolder}
+            />
+          ))}
+
+          {uncategorized.length > 0 && (
+            <>
+              {folders.length > 0 && <Divider />}
+              <FolderSection
+                folder={null}
+                geometries={uncategorized}
+                canDeleteFn={canDeleteFn}
+                folders={folders}
+                canDeleteFolder={false}
+                onDeleteFolder={() => {}}
               />
-            ))}
-          </Table.Tbody>
-        </Table>
+            </>
+          )}
+        </Stack>
       )}
 
       <GeometryUploadModal opened={uploadOpened} onClose={closeUpload} />
+      <FolderCreateModal opened={folderCreateOpened} onClose={closeFolderCreate} />
     </Stack>
   );
 }

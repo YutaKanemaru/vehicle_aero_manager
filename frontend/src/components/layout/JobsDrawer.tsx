@@ -17,12 +17,21 @@ import {
   IconLoader,
   IconClock,
   IconTrash,
+  IconUpload,
 } from "@tabler/icons-react";
 import { useJobsStore, type Job } from "../../stores/jobs";
 
 // ─── ステータスごとの設定 ────────────────────────────────────────────────────
 
 const statusConfig = {
+  uploading: {
+    label: "Uploading…",
+    color: "cyan",
+    progressValue: 0, // overridden by uploadProgress at render time
+    animated: false,
+    striped: false,
+    icon: <IconUpload size={14} />,
+  },
   pending: {
     label: "Pending",
     color: "yellow",
@@ -65,6 +74,8 @@ const typeLabel: Record<string, string> = {
 
 function JobRow({ job }: { job: Job }) {
   const cfg = statusConfig[job.status];
+  const progressValue =
+    job.status === "uploading" ? (job.uploadProgress ?? 0) : cfg.progressValue;
 
   return (
     <Box
@@ -92,12 +103,12 @@ function JobRow({ job }: { job: Job }) {
             </ThemeIcon>
           }
         >
-          {cfg.label}
+          {job.status === "uploading" ? `${progressValue}%` : cfg.label}
         </Badge>
       </Group>
 
       <Progress
-        value={cfg.progressValue}
+        value={progressValue}
         color={cfg.color}
         size="sm"
         animated={cfg.animated}
@@ -127,7 +138,7 @@ export function JobsDrawer({ opened, onClose }: Props) {
   // 新しい順に並べる
   const sorted = [...jobs].sort((a, b) => b.addedAt - a.addedAt);
   const activeJobs = sorted.filter(
-    (j) => j.status === "pending" || j.status === "analyzing"
+    (j) => j.status === "uploading" || j.status === "pending" || j.status === "analyzing"
   );
   const doneJobs = sorted.filter(
     (j) => j.status === "ready" || j.status === "error"

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useInterval } from "@mantine/hooks";
 import { geometriesApi } from "../api/geometries";
-import { useJobsStore, selectActiveJobs, type JobStatus } from "../stores/jobs";
+import { useJobsStore, type JobStatus } from "../stores/jobs";
 
 /**
  * AppLayout でマウントし続けることで、アクティブなジョブを 3 秒ごとにポーリングする。
@@ -11,7 +11,10 @@ export function useJobsPoller() {
   const jobs = useJobsStore((s) => s.jobs);
   const updateJob = useJobsStore((s) => s.updateJob);
 
-  const hasActive = selectActiveJobs({ jobs, addJob: () => {}, updateJob: () => {}, clearCompleted: () => {} }).length > 0;
+  // Only poll when there are pending/analyzing jobs (uploading is handled by XHR callbacks)
+  const hasActive = jobs.some(
+    (j) => j.status === "pending" || j.status === "analyzing"
+  );
 
   const interval = useInterval(async () => {
     const activeJobs = jobs.filter(
