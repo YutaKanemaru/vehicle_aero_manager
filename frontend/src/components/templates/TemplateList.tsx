@@ -10,12 +10,13 @@ import {
   Stack,
   Title,
 } from "@mantine/core";
-import { IconPlus, IconTrash, IconVersions } from "@tabler/icons-react";
+import { IconPlus, IconTrash, IconVersions, IconGitFork } from "@tabler/icons-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { templatesApi, type TemplateResponse } from "../../api/templates";
 import { TemplateCreateModal } from "./TemplateCreateModal";
 import { TemplateVersionsDrawer } from "./TemplateVersionsDrawer";
+import { TemplateForkModal } from "./TemplateForkModal";
 import { useAuthStore } from "../../stores/auth";
 
 export function TemplateList() {
@@ -23,6 +24,7 @@ export function TemplateList() {
   const { user } = useAuthStore();
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateResponse | null>(null);
+  const [forkTarget, setForkTarget] = useState<TemplateResponse | null>(null);
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ["templates"],
@@ -59,13 +61,22 @@ export function TemplateList() {
       <Table.Td>
         <Group gap="xs" justify="flex-end">
           <Tooltip label="Versions">
-            <ActionIcon
-              variant="subtle"
-              onClick={() => setSelectedTemplate(t)}
-            >
-              <IconVersions size={16} />
-            </ActionIcon>
-          </Tooltip>
+              <ActionIcon
+                variant="subtle"
+                onClick={() => setSelectedTemplate(t)}
+              >
+                <IconVersions size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Fork">
+              <ActionIcon
+                variant="subtle"
+                color="teal"
+                onClick={() => setForkTarget(t)}
+              >
+                <IconGitFork size={16} />
+              </ActionIcon>
+            </Tooltip>
           {canDelete(t) && (
             <Tooltip label="Delete">
               <ActionIcon
@@ -123,6 +134,14 @@ export function TemplateList() {
         <TemplateVersionsDrawer
           template={selectedTemplate}
           onClose={() => setSelectedTemplate(null)}
+        />
+      )}
+
+      {forkTarget && (
+        <TemplateForkModal
+          opened
+          source={forkTarget}
+          onClose={() => setForkTarget(null)}
         />
       )}
     </Stack>

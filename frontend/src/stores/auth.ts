@@ -5,6 +5,8 @@ interface User {
   email: string;
   username: string;
   role: string;
+  is_admin: boolean;
+  is_superadmin: boolean;
 }
 
 interface AuthState {

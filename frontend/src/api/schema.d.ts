@@ -191,6 +191,26 @@ export interface paths {
         patch: operations["activate_version_api_v1_templates__template_id__versions__version_id__activate_patch"];
         trace?: never;
     };
+    "/api/v1/templates/{template_id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fork Template
+         * @description アクティブバージョンの設定をコピーして新しいテンプレートを作成する。
+         */
+        post: operations["fork_template_api_v1_templates__template_id__fork_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -497,6 +517,15 @@ export interface components {
              */
             sim_type: "aero" | "ghn";
             settings: components["schemas"]["TemplateSettings-Input"];
+            /** Comment */
+            comment?: string | null;
+        };
+        /** TemplateForkRequest */
+        TemplateForkRequest: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
             /** Comment */
             comment?: string | null;
         };
@@ -1080,6 +1109,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fork_template_api_v1_templates__template_id__fork_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateForkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateResponse"];
                 };
             };
             /** @description Validation Error */

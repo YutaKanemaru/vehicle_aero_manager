@@ -10,6 +10,7 @@ from app.schemas.template import (
     TemplateResponse,
     TemplateVersionCreate,
     TemplateVersionResponse,
+    TemplateForkRequest,
 )
 from app.services import template_service
 
@@ -116,3 +117,19 @@ def activate_version(
     current_user: User = Depends(get_current_user),
 ):
     return template_service.activate_version(db, template_id, version_id, current_user)
+
+
+# ---------------------------------------------------------------------------
+# Fork
+# ---------------------------------------------------------------------------
+
+@router.post("/{template_id}/fork", response_model=TemplateResponse, status_code=201)
+def fork_template(
+    template_id: str,
+    data: TemplateForkRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """アクティブバージョンの設定をコピーして新しいテンプレートを作成する。"""
+    template = template_service.fork_template(db, template_id, data, current_user)
+    return _build_response(template)

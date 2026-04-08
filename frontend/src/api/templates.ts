@@ -20,6 +20,9 @@ type TemplateVersionResponse =
 type TemplateVersionCreate =
   paths["/api/v1/templates/{template_id}/versions"]["post"]["requestBody"]["content"]["application/json"];
 
+type TemplateForkRequest =
+  paths["/api/v1/templates/{template_id}/fork"]["post"]["requestBody"]["content"]["application/json"];
+
 // Re-export for consumers
 export type {
   TemplateResponse,
@@ -27,6 +30,7 @@ export type {
   TemplateUpdate,
   TemplateVersionResponse,
   TemplateVersionCreate,
+  TemplateForkRequest,
 };
 
 // ---------------------------------------------------------------------------
@@ -63,4 +67,10 @@ export const templatesApi = {
     versionId: string,
   ): Promise<TemplateVersionResponse> =>
     client.patch(`/templates/${templateId}/versions/${versionId}/activate`, {}),
+
+  fork: (
+    templateId: string,
+    data: TemplateForkRequest,
+  ): Promise<TemplateResponse> =>
+    client.post(`/templates/${templateId}/fork`, data),
 };

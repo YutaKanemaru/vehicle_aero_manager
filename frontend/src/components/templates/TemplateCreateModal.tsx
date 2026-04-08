@@ -156,7 +156,6 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
       onClose={onClose}
       title="New Template"
       size="lg"
-      scrollAreaComponent={Modal.NativeScrollArea}
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack>

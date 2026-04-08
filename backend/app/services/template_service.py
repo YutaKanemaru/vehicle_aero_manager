@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.template import Template, TemplateVersion
 from app.models.user import User
-from app.schemas.template import TemplateCreate, TemplateUpdate, TemplateVersionCreate
+from app.schemas.template import TemplateCreate, TemplateUpdate, TemplateVersionCreate, TemplateForkRequest
 
 
 # ---------------------------------------------------------------------------
@@ -195,3 +195,47 @@ def activate_version(
     db.commit()
     db.refresh(version)
     return version
+
+
+def fork_template(
+    db: Session,
+    source_template_id: str,
+    data: TemplateForkRequest,
+    current_user: User,
+) -> Template:
+    """アクティブバージョンの設定をコピーして新しいテンプレートを作成する。"""
+    source = get_template(db, source_template_id)
+
+    existing = db.scalar(select(Template).where(Template.name == data.name))
+    if existing:
+        raise HTTPException(status_code=409, detail="Template name already exists")
+
+    # アクティブバージョンの settings を引き継ぐ。なければ最新を使う。
+    source_version = next((v for v in source.versions if v.is_active), None)
+    if source_version is None:
+        source_version = max(source.versions, key=lambda v: v.version_number, default=None)
+    if source_version is None:
+        raise HTTPException(status_code=400, detail="Source template has no versions")
+
+    new_template = Template(
+        name=data.name,
+        description=data.description,
+        sim_type=source.sim_type,
+        created_by=current_user.id,
+    )
+    db.add(new_template)
+    db.flush()
+
+    comment = data.comment or f"Forked from '{source.name}' v{source_version.version_number}"
+    new_version = TemplateVersion(
+        template_id=new_template.id,
+        version_number=1,
+        settings=source_version.settings,  # JSON string をそのままコピー
+        is_active=True,
+        comment=comment,
+        created_by=current_user.id,
+    )
+    db.add(new_version)
+    db.commit()
+    db.refresh(new_template)
+    return new_template

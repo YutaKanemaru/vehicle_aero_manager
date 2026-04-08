@@ -22,6 +22,8 @@ export interface UserResponse {
   username: string;
   role: string;
   is_active: boolean;
+  is_admin: boolean;
+  is_superadmin: boolean;
 }
 
 export const authApi = {

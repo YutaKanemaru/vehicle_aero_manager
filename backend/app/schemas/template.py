@@ -28,6 +28,12 @@ class TemplateVersionCreate(BaseModel):
     comment: str | None = None
 
 
+class TemplateForkRequest(BaseModel):
+    name: str
+    description: str | None = None
+    comment: str | None = None  # comment for the v1 of the new template
+
+
 # ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------
