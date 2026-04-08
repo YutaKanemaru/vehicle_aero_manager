@@ -28,9 +28,9 @@ class GeometryFolder(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
+        DateTime, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow
     )
 
     geometries: Mapped[list["Geometry"]] = relationship(
