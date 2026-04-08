@@ -63,8 +63,8 @@ VAM は、自動車エンジニアが車両外部空力（Aero）および車室
 |---|---|---|
 | Step 1（W1-2） | FastAPI + React + Docker Compose + SQLite + JWT 認証 | ✅ 完了 |
 | Step 2（W3-5） | Ultrafluid Pydantic スキーマ — XML ↔ Pydantic ラウンドトリップ | ✅ 完了 |
-| Step 3（W6-8） | テンプレート CRUD + バージョン管理（Aero/GHN） | 🔄 **現在のターゲット** |
-| Step 4（W9-12） | ジオメトリアップロード + STL 解析 + 計算エンジン + キネマティクス | ⬜ 未着手 |
+| Step 3（W6-8） | テンプレート CRUD + バージョン管理（Aero/GHN） | ✅ 完了 |
+| Step 4（W9-12） | ジオメトリアップロード + STL 解析 + 計算エンジン + キネマティクス | 🔄 **現在のターゲット** |
 | Step 5（W13-16） | XML 生成 + Configuration 管理 + Diff ビュー + 多孔質係数 UI | ⬜ 未着手 |
 
 **コードを生成する際は現在の Step に集中すること。将来の Step の機能は実装しないこと。**
@@ -412,6 +412,69 @@ Ultrafluid XML ファイル
 - float 値は指数表記を使用可能：例 `1.8194e-05`
 - 空のオプションセクションはセルフクロージングタグでシリアライズ：`<mrf/>`, `<static/>`
 - サンプルファイル：`docs/samples/aero/AUR_v1.2_EXT_1.99_corrected.xml`（Aero）、`docs/samples/GHN/CX1_v1.2_GHN_cut_plane_volume_corrected.xml`（GHN）
+
+---
+
+## Step 3: テンプレート CRUD — 実装詳細（完了）
+
+### バックエンド
+
+**モデル**（`app/models/template.py`）
+- `Template`: `id`, `name`, `description`, `sim_type`（`"aero"`/`"ghn"`）, `created_by`, `created_at`, `updated_at`
+- `TemplateVersion`: `id`, `template_id`, `version_number`, `settings`（JSON 文字列）, `is_active`, `comment`, `created_by`, `created_at`
+- `Template.versions` → `cascade="all, delete-orphan"`
+
+**スキーマ**（`app/schemas/template.py`、`app/schemas/template_settings.py`）
+- `TemplateSettings`: 4セクションの Pydantic モデル（`setup_option`, `simulation_parameter`, `setup`, `target_names`）
+- `TemplateCreate`, `TemplateUpdate`, `TemplateVersionCreate`, `TemplateForkRequest`（リクエスト）
+- `TemplateResponse`, `TemplateVersionResponse`（レスポンス — `active_version`, `version_count` を含む）
+- `@field_validator("settings", mode="before")` で DB の JSON 文字列を自動パース
+
+**サービス**（`app/services/template_service.py`）
+- `list_templates`, `get_template`, `create_template`, `update_template`, `delete_template`
+- `list_versions`, `create_version`, `activate_version`
+- `fork_template` — アクティブバージョンの設定をコピーして新テンプレートを作成
+- 権限チェック: `template.created_by == current_user.id OR current_user.is_admin`
+- `create_version` / `activate_version`: 新しいアクティブを設定する前に全バージョンを非アクティブ化
+
+**API エンドポイント**（`app/api/v1/templates.py`）
+
+| メソッド | パス | 内容 |
+|---|---|---|
+| `GET` | `/api/v1/templates/` | テンプレート一覧 |
+| `POST` | `/api/v1/templates/` | 作成（v1 を同時作成） |
+| `GET` | `/api/v1/templates/{id}` | アクティブバージョン付きで取得 |
+| `PATCH` | `/api/v1/templates/{id}` | 名前/説明更新 |
+| `DELETE` | `/api/v1/templates/{id}` | 削除（バージョンもカスケード削除） |
+| `GET` | `/api/v1/templates/{id}/versions` | バージョン一覧 |
+| `POST` | `/api/v1/templates/{id}/versions` | 新バージョン作成（自動でアクティブに） |
+| `PATCH` | `/api/v1/templates/{id}/versions/{vid}/activate` | 指定バージョンをアクティブ化 |
+| `POST` | `/api/v1/templates/{id}/fork` | Fork: アクティブバージョンをコピーして新テンプレート作成 |
+
+**マイグレーション**: `alembic/versions/40849f49edd9_add_templates_and_template_versions.py`
+
+### フロントエンド
+
+**API レイヤー**（`src/api/`）
+- `client.ts`: `get`, `post`, `put`, `patch`, `delete` ラッパー；204 No Content 対応；`client`（新）と `api`（後方互換エイリアス）の両方を export
+- `templates.ts`: 全 9 エンドポイントをラップ；全型は `schema.d.ts` から取得（手動定義禁止）
+- `auth.ts` `UserResponse` + `stores/auth.ts` `User`: 両方に `is_admin: boolean` と `is_superadmin: boolean` を含む
+
+**コンポーネント**（`src/components/templates/`）
+
+| ファイル | 内容 |
+|---|---|
+| `TemplateList.tsx` | テーブル表示。各行に Versions / Fork / Delete アイコン |
+| `TemplateCreateModal.tsx` | テンプレート作成用フル設定フォーム |
+| `TemplateVersionsDrawer.tsx` | 右サイド Drawer でバージョン履歴表示。New Version ボタン（オーナー/admin のみ）、各バージョンに 👁 / `</>` アイコン |
+| `TemplateVersionCreateModal.tsx` | アクティブバージョンの設定を引き継いで新バージョンを作成 |
+| `TemplateSettingsViewModal.tsx` | 設定値を無効化フォームで読み取り専用表示 |
+| `TemplateForkModal.tsx` | 新活名・説明・コメントを入力してアクティブバージョンをコピーした新テンプレートを作成 |
+
+**権限モデル（フロントエンド）**
+- Fork ボタン: 全認証ユーザーに表示
+- Delete ボタン: `user.id === template.created_by || user.is_admin` の場合のみ表示
+- New Version / Activate ボタン: `user.id === template.created_by || user.is_admin` の場合のみ表示
 
 ---
 

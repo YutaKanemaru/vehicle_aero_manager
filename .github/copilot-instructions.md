@@ -63,8 +63,8 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 |---|---|---|
 | Step 1 (W1-2) | FastAPI + React + Docker Compose + SQLite + JWT auth | ✅ Complete |
 | Step 2 (W3-5) | Ultrafluid Pydantic schema — XML ↔ Pydantic round-trip | ✅ Complete |
-| Step 3 (W6-8) | Template CRUD with versioning (Aero/GHN) | 🔄 **Current target** |
-| Step 4 (W9-12) | Geometry upload + STL analysis + Compute engine + Kinematics | ⬜ Not started |
+| Step 3 (W6-8) | Template CRUD with versioning (Aero/GHN) | ✅ Complete |
+| Step 4 (W9-12) | Geometry upload + STL analysis + Compute engine + Kinematics | 🔄 **Current target** |
 | Step 5 (W13-16) | XML generation + Configuration management + Diff view + Porous coefficients UI | ⬜ Not started |
 
 **When generating code, focus on the current step. Do not implement features from future steps.**
@@ -303,6 +303,7 @@ Rules:
 - Use `@tabler/icons-react` for icons
 - Minimize custom CSS — prefer Mantine's style props and `sx`/`style` API
 - Forms: use `@mantine/form`'s `useForm` hook
+- **Mantine v8 gotchas**: `Modal.NativeScrollArea` does not exist — omit `scrollAreaComponent` prop entirely. Use `ScrollArea` component directly inside modal content if needed.
 
 ### Component Structure
 
@@ -467,6 +468,69 @@ Ultrafluid XML file
 - Float values may use scientific notation: e.g. `1.8194e-05`
 - Empty optional sections must be serialized as self-closing tags: `<mrf/>`, `<static/>`
 - Sample files reference: `docs/samples/aero/AUR_v1.2_EXT_1.99_corrected.xml` (Aero), `docs/samples/GHN/CX1_v1.2_GHN_cut_plane_volume_corrected.xml` (GHN)
+
+---
+
+## Step 3: Template CRUD — Implementation Details (Complete)
+
+### Backend
+
+**Models** (`app/models/template.py`)
+- `Template`: `id`, `name`, `description`, `sim_type` (`"aero"`/`"ghn"`), `created_by`, `created_at`, `updated_at`
+- `TemplateVersion`: `id`, `template_id`, `version_number`, `settings` (JSON string), `is_active`, `comment`, `created_by`, `created_at`
+- `Template.versions` → `cascade="all, delete-orphan"`
+
+**Schemas** (`app/schemas/template.py`, `app/schemas/template_settings.py`)
+- `TemplateSettings`: 4-section Pydantic model (`setup_option`, `simulation_parameter`, `setup`, `target_names`)
+- `TemplateCreate`, `TemplateUpdate`, `TemplateVersionCreate`, `TemplateForkRequest` (requests)
+- `TemplateResponse`, `TemplateVersionResponse` (responses — include `active_version`, `version_count`)
+- `@field_validator("settings", mode="before")` parses JSON string from DB automatically
+
+**Service** (`app/services/template_service.py`)
+- `list_templates`, `get_template`, `create_template`, `update_template`, `delete_template`
+- `list_versions`, `create_version`, `activate_version`
+- `fork_template` — copies active version settings to a new template
+- Permission check: `template.created_by == current_user.id OR current_user.is_admin`
+- `create_version` / `activate_version`: deactivates all existing versions before setting new active
+
+**API Endpoints** (`app/api/v1/templates.py`)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/templates/` | List all templates |
+| `POST` | `/api/v1/templates/` | Create template (creates v1 simultaneously) |
+| `GET` | `/api/v1/templates/{id}` | Get template with active version |
+| `PATCH` | `/api/v1/templates/{id}` | Update name/description |
+| `DELETE` | `/api/v1/templates/{id}` | Delete template + cascade versions |
+| `GET` | `/api/v1/templates/{id}/versions` | List all versions |
+| `POST` | `/api/v1/templates/{id}/versions` | Create new version (becomes active) |
+| `PATCH` | `/api/v1/templates/{id}/versions/{vid}/activate` | Activate specific version |
+| `POST` | `/api/v1/templates/{id}/fork` | Fork: copy active version to new template |
+
+**Migration**: `alembic/versions/40849f49edd9_add_templates_and_template_versions.py`
+
+### Frontend
+
+**API layer** (`src/api/`)
+- `client.ts`: `get`, `post`, `put`, `patch`, `delete` wrappers; handles 204 No Content; exports `client` (primary) and `api` (backward-compat alias)
+- `templates.ts`: All 9 endpoints wrapped; all types from `schema.d.ts` (never manual)
+- `auth.ts` `UserResponse` + `stores/auth.ts` `User`: both include `is_admin: boolean` and `is_superadmin: boolean`
+
+**Components** (`src/components/templates/`)
+
+| File | Description |
+|---|---|
+| `TemplateList.tsx` | Table view with Versions / Fork / Delete action icons per row |
+| `TemplateCreateModal.tsx` | Full settings form for creating a new template |
+| `TemplateVersionsDrawer.tsx` | Right-side drawer showing version history; contains New Version button (owner/admin only) and per-version 👁 / `</>` icons |
+| `TemplateVersionCreateModal.tsx` | Settings form pre-filled from active version; creates a new version |
+| `TemplateSettingsViewModal.tsx` | Read-only (disabled) settings form for inspecting any version's parameters |
+| `TemplateForkModal.tsx` | Form to fork a template: enter new name, description, comment; copies active version settings |
+
+**Permission model (frontend)**
+- Fork button: visible to all authenticated users
+- Delete button: visible only when `user.id === template.created_by || user.is_admin`
+- New Version / Activate buttons: visible only when `user.id === template.created_by || user.is_admin`
 
 ---
 
