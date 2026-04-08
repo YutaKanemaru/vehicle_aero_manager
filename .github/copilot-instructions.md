@@ -602,27 +602,33 @@ Based on prototype implementation in concept_vam, a Template's `settings` JSON f
 
 ## Step 4: Geometry Upload + STL Analysis + Assembly — Implementation Details (Complete)
 
-### Data Model (2-layer hierarchy)
+### Data Model (3-layer hierarchy)
 
 | Model | Purpose |
 |---|---|
+| `GeometryFolder` | Optional organisational folder for grouping Geometries (e.g. by vehicle type) |
 | `Geometry` | Single STL file entity — stores file path, status, and analysis results |
 | `GeometryAssembly` | Named collection of Geometries — optionally linked to a Template |
 | `assembly_geometry_link` | Many-to-many association table |
 
 **Part swap workflow**: change which `Geometry` objects are members of a `GeometryAssembly`.
+**Folder workflow**: purely organisational — Assemblies are unaffected by folder structure.
 
 ### Backend
 
 **Models** (`app/models/geometry.py`)
-- `Geometry`: `id`, `name`, `description`, `file_path` (relative to `upload_dir`), `original_filename`, `file_size`, `status` (`pending`/`analyzing`/`ready`/`error`), `analysis_result` (JSON string), `error_message`, `uploaded_by` (FK→users), `created_at`, `updated_at`
+- `GeometryFolder`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`; `geometries` one-to-many relationship
+- `Geometry`: `id`, `name`, `description`, `folder_id` (nullable FK→geometry_folders), `file_path` (relative to `upload_dir`), `original_filename`, `file_size`, `status` (`pending`/`analyzing`/`ready`/`error`), `analysis_result` (JSON string), `error_message`, `uploaded_by` (FK→users), `created_at`, `updated_at`
 - `GeometryAssembly`: `id`, `name`, `description`, `template_id` (nullable FK→templates), `created_by`, `created_at`, `updated_at`; `geometries` many-to-many relationship
 - `assembly_geometry_link`: association table (`assembly_id`, `geometry_id`)
+- Class ordering in file: `assembly_geometry_link` → `GeometryFolder` → `Geometry` → `GeometryAssembly`
 
 **Schemas** (`app/schemas/geometry.py`)
 - `PartInfo`: `centroid [x,y,z]`, `bbox dict`, `vertex_count`, `face_count`
 - `AnalysisResult`: `parts`, `vehicle_bbox`, `vehicle_dimensions`, `part_info dict`
-- `GeometryResponse`: full response including parsed `analysis_result`
+- `GeometryResponse`: full response including parsed `analysis_result` and `folder_id: str | None`
+- `GeometryUpdate`: `name`, `description`, `folder_id` — uses `model_fields_set` to distinguish explicit null (remove from folder) from field not sent
+- `GeometryFolderCreate`, `GeometryFolderUpdate`, `GeometryFolderResponse`
 - `AssemblyCreate`, `AssemblyUpdate`, `AssemblyResponse` (includes `geometries: list[GeometryResponse]`)
 - `@field_validator("analysis_result", mode="before")` parses JSON string from DB automatically
 
@@ -634,9 +640,12 @@ Based on prototype implementation in concept_vam, a Template's `settings` JSON f
 - Multi-solid ASCII STL fully supported via `force="scene"`
 
 **Service** (`app/services/geometry_service.py`)
-- `upload_geometry()`: saves file to `upload_dir/geometries/{id}/{filename}`, stores relative path, triggers `BackgroundTasks`
+- `upload_geometry(db, name, description, file, current_user, folder_id=None)`: saves file to `upload_dir/geometries/{id}/{filename}`, stores relative path, triggers `BackgroundTasks`
 - `run_analysis()`: background task — `pending` → `analyzing` → `ready`/`error`
+- `update_geometry()`: uses `model_fields_set` — only updates `folder_id` when field is explicitly in request body
 - `delete_geometry()`: removes DB row + `shutil.rmtree` on file directory
+- `list_folders`, `create_folder`, `update_folder`, `delete_folder` — folder delete sets `geometry.folder_id = None` for all children
+- `_folder_or_404(db, folder_id)` helper validates folder existence
 - All CRUD for both `Geometry` and `GeometryAssembly`
 - `add_geometry_to_assembly`, `remove_geometry_from_assembly`
 - Permission check: `resource.created_by == current_user.id OR current_user.is_admin`
@@ -646,11 +655,17 @@ Based on prototype implementation in concept_vam, a Template's `settings` JSON f
 `app/api/v1/geometries.py` (`/api/v1/geometries/`):
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/geometries/folders/` | List all folders |
+| `POST` | `/geometries/folders/` | Create folder |
+| `PATCH` | `/geometries/folders/{folder_id}` | Update folder |
+| `DELETE` | `/geometries/folders/{folder_id}` | Delete folder (children become uncategorized) |
 | `GET` | `/geometries/` | List all geometries |
-| `POST` | `/geometries/` | Upload STL (multipart form) — triggers background analysis |
+| `POST` | `/geometries/` | Upload STL (multipart/form-data: `name`, `description`, `folder_id`, `file`) — triggers background analysis |
 | `GET` | `/geometries/{id}` | Get geometry with analysis result |
-| `PATCH` | `/geometries/{id}` | Update name/description |
+| `PATCH` | `/geometries/{id}` | Update name/description/folder_id |
 | `DELETE` | `/geometries/{id}` | Delete + file cleanup |
+
+**Route order matters**: folder endpoints MUST be declared before `/{geometry_id}` in the router file to avoid FastAPI routing ambiguity.
 
 `app/api/v1/assemblies.py` (`/api/v1/assemblies/`):
 | Method | Path | Description |
@@ -663,20 +678,25 @@ Based on prototype implementation in concept_vam, a Template's `settings` JSON f
 | `POST` | `/assemblies/{id}/geometries/{gid}` | Add geometry to assembly |
 | `DELETE` | `/assemblies/{id}/geometries/{gid}` | Remove geometry from assembly |
 
-**Migration**: `alembic/versions/f46197300d43_add_geometry_and_assembly_tables.py`
+**Migrations**:
+- `alembic/versions/f46197300d43_add_geometry_and_assembly_tables.py`
+- `alembic/versions/d4be3f102eac_add_geometry_folders_and_folder_id_to_.py` — uses `batch_alter_table` for `folder_id` FK (SQLite cannot `ALTER TABLE` to add FK constraints directly)
 
 ### Frontend
 
 **API layer** (`src/api/geometries.ts`)
-- `geometriesApi.list()`, `.get(id)`, `.upload(name, description, file)` (raw `fetch()` for multipart), `.delete(id)`
+- `foldersApi.list()`, `.create(data)`, `.update(id, data)`, `.delete(id)`
+- `geometriesApi.list()`, `.get(id)`, `.upload(name, description, folderId, file, onProgress?)` — uses `XMLHttpRequest` (not `fetch`) to support `upload.onprogress` callbacks; `onProgress(pct: number)` fires with 0–100 values
+- `geometriesApi.updateFolder(id, folderId)` — convenience wrapper for PATCH with `{ folder_id }`
+- `geometriesApi.delete(id)`
 - `assembliesApi.list()`, `.get(id)`, `.create(data)`, `.update(id, data)`, `.delete(id)`, `.addGeometry(assemblyId, geometryId)`, `.removeGeometry(assemblyId, geometryId)`
 
 **Components** (`src/components/geometries/`, `src/components/assemblies/`)
 
 | File | Description |
 |---|---|
-| `GeometryList.tsx` | Table with Name, File, Size, Status badge, Parts count; click row to expand analysis details (bbox, dimensions, parts table); auto-refreshes every 3s when any item is `pending`/`analyzing` |
-| `GeometryUploadModal.tsx` | Upload form: name, description, STL file input; shows background analysis notice after success |
+| `GeometryList.tsx` | Folder-hierarchy view: geometries grouped into collapsible `FolderSection` panels (Paper + Collapse). Uncategorized geometries shown last. Each geometry row has expand-for-analysis-details + move-to-folder Popover (Select dropdown). Header has "New Folder" + "Upload STL" buttons. Auto-refreshes every 3s when any item is `pending`/`analyzing`. |
+| `GeometryUploadModal.tsx` | Upload form: name, description, folder select (from `foldersApi.list()`), STL file input. Uses XHR upload with progress callback — button shows "Uploading…" and all fields disabled during transfer. On success: registers job via `addJob` then `updateJob` to `pending`. |
 | `AssemblyList.tsx` | Table with Name, Description, Template link badge, Geometry count; row action: manage geometries (opens drawer) |
 | `AssemblyCreateModal.tsx` | Create assembly with optional template link (dropdown from templates list) |
 | `AssemblyGeometriesDrawer.tsx` | Right-side drawer: shows current geometries (with remove button), lists available `ready` geometries to add (multi-checkbox select) |
@@ -685,9 +705,57 @@ Based on prototype implementation in concept_vam, a Template's `settings` JSON f
 
 ### Implementation Notes
 - Upload endpoint uses `Form()` + `File()` FastAPI dependencies — NOT JSON body
-- Frontend upload uses raw `fetch()` with `FormData` (the JSON `client` wrapper cannot handle multipart)
+- Frontend upload uses `XMLHttpRequest` (not `fetch`) for `upload.onprogress` support; the JSON `client` wrapper cannot handle multipart
 - Status polling: `refetchInterval` returns `3000` when any geometry is `pending`/`analyzing`, `false` otherwise
+- SQLite FK workaround: use `op.batch_alter_table()` in Alembic whenever adding FK constraints to existing tables
 - Kinematics (ride height adjustment) deferred — correct-posture STL is assumed for now
+
+---
+
+## Background Jobs System (Step 4 Addition)
+
+A lightweight client-side job tracker for long-running background tasks (STL analysis, file upload).
+
+### Zustand Store (`src/stores/jobs.ts`)
+
+```typescript
+export type JobType = "stl_analysis";
+export type JobStatus = "uploading" | "pending" | "analyzing" | "ready" | "error";
+
+export interface Job {
+  id: string;
+  name: string;
+  type: JobType;
+  status: JobStatus;
+  uploadProgress?: number; // 0-100, only set when status === "uploading"
+  error_message?: string | null;
+  addedAt: number;
+}
+```
+
+**Actions**: `addJob(id, name, type)` — starts as `uploading` · `updateJob(id, status, error_message?)` · `updateUploadProgress(id, progress)` · `removeJob(id)` · `clearCompleted()`
+
+**Selectors**: `selectActiveJobs(s)` · `selectActiveCount(s)` — both include `uploading` + `pending` + `analyzing`
+
+**Persistence**: `zustand/middleware persist` with `partialize` — stores only jobs younger than 24 hours
+
+### Upload Flow
+1. `addJob(tempId, name, "stl_analysis")` — job immediately appears as "Uploading…" in drawer
+2. XHR `upload.onprogress` → `updateUploadProgress(tempId, pct)` — progress bar updates in real time
+3. On XHR success → `removeJob(tempId)` + `addJob(realId, name, ...)` + `updateJob(realId, "pending")`
+4. `useJobsPoller` picks up the real ID and polls until `ready`/`error`
+
+### Poller Hook (`src/hooks/useJobsPoller.ts`)
+- Mounted in `AppShell` — runs for the lifetime of the app
+- Polls `GET /geometries/` every 3 s when any job is `pending` or `analyzing`
+- **Does NOT poll** `uploading` jobs — those are tracked entirely via XHR callbacks
+- Uses `useInterval` from `@mantine/hooks`
+
+### Jobs Drawer (`src/components/layout/JobsDrawer.tsx`)
+- Triggered from AppShell header button with active-count `Indicator` badge
+- Status configs: `uploading` (cyan, real progress %) · `pending` (yellow, 15% animated) · `analyzing` (blue, 60% striped) · `ready` (green, 100%) · `error` (red, 100%)
+- Badge for `uploading` status shows live `XX%` instead of label text
+- "Clear" button removes `ready` + `error` jobs
 
 ---
 
