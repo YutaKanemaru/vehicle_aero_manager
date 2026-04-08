@@ -8,3 +8,8 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Test / dev outputs
+test_compute_engine_result.json
+uvicorn.log
+uvicorn_err.log

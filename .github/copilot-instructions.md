@@ -120,13 +120,15 @@ class SomeModel(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 ```
 
 Rules:
 - UUID primary keys as `str(36)` — do not use integer PKs
 - Always use `Mapped[T]` + `mapped_column()` — never use `Column()` directly
 - Do not put business logic in models
+- **CRITICAL**: Always add **both** `default=datetime.utcnow` (Python-side) **and** `server_default=func.now()` (DB-side) to datetime columns. `server_default` only takes effect when Alembic generates the DDL — tables created via raw SQL or `stamp` will have `NULL` datetime values without the Python-side `default`, causing `ResponseValidationError` at runtime.
 
 ### Pydantic Schemas (`app/schemas/`)
 
@@ -750,6 +752,7 @@ export interface Job {
 - Polls `GET /geometries/` every 3 s when any job is `pending` or `analyzing`
 - **Does NOT poll** `uploading` jobs — those are tracked entirely via XHR callbacks
 - Uses `useInterval` from `@mantine/hooks`
+- **Deleted geometry cleanup**: if a `pending`/`analyzing` job ID is not found in the API response (geometry was deleted mid-analysis), `removeJob()` is called immediately. `ready`/`error` jobs for deleted geometries are also removed on the same poll cycle.
 
 ### Jobs Drawer (`src/components/layout/JobsDrawer.tsx`)
 - Triggered from AppShell header button with active-count `Indicator` badge
@@ -784,6 +787,9 @@ The Compute Engine derives `Computed` fields from STL geometry. Key calculations
 - STL files may be multi-solid ASCII format — parse by solid name
 - Wheel grouping: classify FR-LH / FR-RH / RR-LH / RR-RH by comparing part centroid to vehicle COG (x, y)
 - RPM calculation: `rpm = (inflow_velocity / wheel_circumference) × 60` — needs wheel radius from bbox
+- `analyze_stl(file_path, verbose=False)` — pass `verbose=True` to print step-by-step progress logs (used by `backend/test_compute_engine.py`)
+
+**Test script**: `backend/test_compute_engine.py` — runs `analyze_stl()` standalone and prints vehicle bbox, dimensions, and per-part summary. Run with `uv run python test_compute_engine.py [<stl_path>]`. Auto-detects first STL in `data/uploads/geometries/` if no argument given. Saves full result to `test_compute_engine_result.json`.
 
 ---
 

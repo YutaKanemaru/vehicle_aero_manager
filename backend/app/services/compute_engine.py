@@ -28,13 +28,20 @@ import numpy as np
 import trimesh
 
 
-def analyze_stl(file_path: Path) -> dict:
+def analyze_stl(file_path: Path, verbose: bool = False) -> dict:
     """
     STL ファイルを解析してパーツ情報・車両 bbox を返す。
 
     マルチソリッド ASCII STL（1 ファイルに複数 solid）を想定。
     trimesh が Scene として読み込めた場合は各 solid を個別パーツとして扱う。
+
+    verbose=True にすると各ステップの進捗を print する。
     """
+    def log(msg: str) -> None:
+        if verbose:
+            print(msg)
+
+    log(f"  [1/4] STL 読み込み中: {file_path.name}")
     loaded = trimesh.load(str(file_path), force="scene")
 
     if isinstance(loaded, trimesh.Scene):
@@ -48,7 +55,10 @@ def analyze_stl(file_path: Path) -> dict:
     if not meshes:
         raise ValueError("STL file contains no geometry")
 
+    log(f"  [2/4] {len(meshes)} パーツ検出")
+
     # ─── 車両全体 bbox ──────────────────────────────────────────────────────
+    log("  [3/4] 車両全体 bbox 計算中...")
     all_vertices = np.concatenate([m.vertices for m in meshes.values()], axis=0)
 
     vehicle_bbox = {
@@ -67,8 +77,10 @@ def analyze_stl(file_path: Path) -> dict:
     }
 
     # ─── パーツ別情報 ────────────────────────────────────────────────────────
+    log(f"  [4/4] パーツ別情報を計算中 ({len(meshes)} parts)...")
     part_info: dict[str, dict] = {}
-    for name, mesh in meshes.items():
+    for i, (name, mesh) in enumerate(meshes.items(), 1):
+        log(f"        [{i}/{len(meshes)}] {name}")
         verts = mesh.vertices
         centroid = verts.mean(axis=0)
         part_info[name] = {
@@ -85,6 +97,7 @@ def analyze_stl(file_path: Path) -> dict:
             "face_count": int(len(mesh.faces)),
         }
 
+    log("  ✅ 解析完了")
     return {
         "parts": list(meshes.keys()),
         "vehicle_bbox": vehicle_bbox,
