@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 export type JobType = "stl_analysis";
 export type JobStatus = "pending" | "analyzing" | "ready" | "error";
@@ -19,8 +20,10 @@ interface JobsState {
   clearCompleted: () => void;
 }
 
-export const useJobsStore = create<JobsState>((set) => ({
-  jobs: [],
+export const useJobsStore = create<JobsState>()(
+  persist(
+    (set) => ({
+      jobs: [],
 
   addJob: (id, name, type) =>
     set((s) => ({
@@ -42,11 +45,19 @@ export const useJobsStore = create<JobsState>((set) => ({
     set((s) => ({
       jobs: s.jobs.filter((j) => j.status !== "ready" && j.status !== "error"),
     })),
-}));
-
-// セレクタ helpers
-export const selectActiveJobs = (s: JobsState) =>
-  s.jobs.filter((j) => j.status === "pending" || j.status === "analyzing");
+    }),
+    {
+      name: "vam-jobs",  // localStorage のキー名
+      // リフレッシュ後、pending/analyzing はまだ実行中の可能性があるので保持
+      // ready/error は保持しても問題ないが古くなりすぎたものは除外
+      partialize: (s) => ({
+        jobs: s.jobs.filter(
+          (j) => Date.now() - j.addedAt < 24 * 60 * 60 * 1000  // 24時間以内のみ保持
+        ),
+      }),
+    }
+  )
+);
 
 export const selectActiveCount = (s: JobsState) =>
   s.jobs.filter((j) => j.status === "pending" || j.status === "analyzing").length;
