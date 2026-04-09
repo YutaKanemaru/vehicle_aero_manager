@@ -64,8 +64,8 @@ VAM は、自動車エンジニアが車両外部空力（Aero）および車室
 | Step 1（W1-2） | FastAPI + React + Docker Compose + SQLite + JWT 認証 | ✅ 完了 |
 | Step 2（W3-5） | Ultrafluid Pydantic スキーマ — XML ↔ Pydantic ラウンドトリップ | ✅ 完了 |
 | Step 3（W6-8） | テンプレート CRUD + バージョン管理（Aero/GHN） | ✅ 完了 |
-| Step 4（W9-12） | ジオメトリアップロード + STL 解析 + 計算エンジン + キネマティクス | 🔄 **現在のターゲット** |
-| Step 5（W13-16） | XML 生成 + Configuration 管理 + Diff ビュー + 多孔質係数 UI | ⬜ 未着手 |
+| Step 4（W9-12） | ジオメトリアップロード + STL 解析 + 計算エンジン + キネマティクス | ✅ 完了 |
+| Step 5（W13-16） | XML 生成 + Configuration 管理 + Diff ビュー + 多孔質係数 UI | 🔄 **現在のターゲット** |
 
 **コードを生成する際は現在の Step に集中すること。将来の Step の機能は実装しないこと。**
 
@@ -120,13 +120,15 @@ class SomeModel(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(255))
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow)
 ```
 
 ルール：
 - 主キーは UUID を `str(36)` で使用 — 整数 PK は使わない
 - 必ず `Mapped[T]` + `mapped_column()` を使用 — `Column()` を直接使わない
 - モデルにビジネスロジックを書かない
+- **重要**: datetime カラムには **`default=datetime.utcnow`（Python 側）** と **`server_default=func.now()`（DB 側）** の両方を必ず付けること。`server_default` は Alembic が DDL を生成したときのみ有効 — raw SQL や `stamp` で作成されたテーブルでは Python 側の `default` がないと `NULL` になり、実行時に `ResponseValidationError` が発生する。
 
 ### Pydantic スキーマ（`app/schemas/`）
 
@@ -544,6 +546,162 @@ concept_vam のプロトタイプ実装をベースに、テンプレートの `
 
 ---
 
+## Step 4: ジオメトリアップロード + STL 解析 + Assembly — 実装詳細（完了）
+
+### データモデル（3 層階層）
+
+| モデル | 用途 |
+|---|---|
+| `GeometryFolder` | Geometry を整理するオプションフォルダ（例：車両タイプ別） |
+| `Geometry` | 単一 STL ファイルエンティティ — ファイルパス・ステータス・解析結果を保存 |
+| `GeometryAssembly` | Geometry の名前付きコレクション — オプションでテンプレートにリンク |
+| `assembly_geometry_link` | 多対多の関連テーブル |
+
+**パーツ差し替えワークフロー**: `GeometryAssembly` のメンバー `Geometry` を変更する。  
+**フォルダワークフロー**: 純粋に整理用 — Assembly はフォルダ構造の影響を受けない。
+
+### バックエンド
+
+**モデル**（`app/models/geometry.py`）
+- `GeometryFolder`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`; `geometries` one-to-many リレーション
+- `Geometry`: `id`, `name`, `description`, `folder_id`（nullable FK→geometry_folders）, `file_path`, `original_filename`, `file_size`, `status`（`pending`/`analyzing`/`ready`/`error`）, `analysis_result`（JSON 文字列）, `error_message`, `uploaded_by`（FK→users）, `created_at`, `updated_at`
+- `GeometryAssembly`: `id`, `name`, `description`, `template_id`（nullable FK→templates）, `created_by`, `created_at`, `updated_at`; `geometries` 多対多リレーション
+- `assembly_geometry_link`: 関連テーブル（`assembly_id`, `geometry_id`）
+- ファイル内クラス順序: `assembly_geometry_link` → `GeometryFolder` → `Geometry` → `GeometryAssembly`
+
+**スキーマ**（`app/schemas/geometry.py`）
+- `PartInfo`: `centroid [x,y,z]`, `bbox dict`, `vertex_count`, `face_count`
+- `AnalysisResult`: `parts`, `vehicle_bbox`, `vehicle_dimensions`, `part_info dict`
+- `GeometryResponse`: `analysis_result` + `folder_id: str | None` を含む全レスポンス
+- `GeometryUpdate`: `name`, `description`, `folder_id` — 明示的 null（フォルダから外す）とフィールド未送信を区別するために `model_fields_set` を使用
+- `GeometryFolderCreate`, `GeometryFolderUpdate`, `GeometryFolderResponse`
+- `AssemblyCreate`, `AssemblyUpdate`, `AssemblyResponse`（`geometries: list[GeometryResponse]` を含む）
+- `@field_validator("analysis_result", mode="before")` で DB の JSON 文字列を自動パース
+
+**Compute Engine**（`app/services/compute_engine.py`）
+- `analyze_stl(file_path: Path, verbose: bool = False) -> dict`: `trimesh.load(str(path), force="scene")` → Scene 内の各 solid を処理
+- パーツごとに重心・bbox（x/y/z min/max）・vertex_count・face_count を取得
+- 車両 bbox（全パーツの和集合）と寸法（length/width/height）を計算
+- マルチソリッド ASCII STL を `force="scene"` で完全サポート
+- `verbose=True` で各ステップの進捗をターミナルに表示
+
+**サービス**（`app/services/geometry_service.py`）
+- `upload_geometry(db, name, description, file, current_user, folder_id=None)`: `upload_dir/geometries/{id}/{filename}` にファイルを保存し `BackgroundTasks` を起動
+- `run_analysis()`: バックグラウンドタスク — `pending` → `analyzing` → `ready`/`error`
+- `update_geometry()`: `model_fields_set` を使用 — `folder_id` は明示的に送信された場合のみ更新
+- `delete_geometry()`: DB レコード削除 + `shutil.rmtree` でファイルディレクトリを削除
+- `list_folders`, `create_folder`, `update_folder`, `delete_folder` — フォルダ削除時は子の `geometry.folder_id` を NULL に
+- `_folder_or_404(db, folder_id)` ヘルパーでフォルダ存在確認
+- `GeometryAssembly` の全 CRUD
+- `add_geometry_to_assembly`, `remove_geometry_from_assembly`
+- 権限チェック: `resource.created_by == current_user.id OR current_user.is_admin`
+
+**API エンドポイント**
+
+`app/api/v1/geometries.py`（`/api/v1/geometries/`）:
+| メソッド | パス | 内容 |
+|---|---|---|
+| `GET` | `/geometries/folders/` | フォルダ一覧 |
+| `POST` | `/geometries/folders/` | フォルダ作成 |
+| `PATCH` | `/geometries/folders/{folder_id}` | フォルダ更新 |
+| `DELETE` | `/geometries/folders/{folder_id}` | フォルダ削除（子は Uncategorized に） |
+| `GET` | `/geometries/` | ジオメトリ一覧 |
+| `POST` | `/geometries/` | STL アップロード（multipart/form-data）— バックグラウンド解析を起動 |
+| `GET` | `/geometries/{id}` | ジオメトリ取得（解析結果含む） |
+| `PATCH` | `/geometries/{id}` | name/description/folder_id 更新 |
+| `DELETE` | `/geometries/{id}` | 削除 + ファイル削除 |
+
+**ルート順序が重要**: FastAPI のルーティング競合を避けるため、フォルダエンドポイントは `/{geometry_id}` より前に宣言すること。
+
+`app/api/v1/assemblies.py`（`/api/v1/assemblies/`）:
+| メソッド | パス | 内容 |
+|---|---|---|
+| `GET` | `/assemblies/` | Assembly 一覧 |
+| `POST` | `/assemblies/` | Assembly 作成 |
+| `GET` | `/assemblies/{id}` | Assembly 取得（ジオメトリ含む） |
+| `PATCH` | `/assemblies/{id}` | 更新 |
+| `DELETE` | `/assemblies/{id}` | 削除 |
+| `POST` | `/assemblies/{id}/geometries/{gid}` | ジオメトリを追加 |
+| `DELETE` | `/assemblies/{id}/geometries/{gid}` | ジオメトリを削除 |
+
+**マイグレーション**:
+- `alembic/versions/f46197300d43_add_geometry_and_assembly_tables.py`
+- `alembic/versions/d4be3f102eac_add_geometry_folders_and_folder_id_to_.py` — SQLite 用 `batch_alter_table` で FK 制約を追加
+
+### フロントエンド
+
+**API レイヤー**（`src/api/geometries.ts`）
+- `foldersApi.list()`, `.create(data)`, `.update(id, data)`, `.delete(id)`
+- `geometriesApi.upload(name, description, folderId, file, onProgress?)` — `upload.onprogress` をサポートするため `XMLHttpRequest` を使用（`fetch` ではない）
+- `geometriesApi.updateFolder(id, folderId)` — PATCH `{ folder_id }` のラッパー
+- `assembliesApi.list()`, `.get(id)`, `.create(data)`, `.update(id, data)`, `.delete(id)`, `.addGeometry(assemblyId, geometryId)`, `.removeGeometry(assemblyId, geometryId)`
+
+**コンポーネント**（`src/components/geometries/`、`src/components/assemblies/`）
+
+| ファイル | 内容 |
+|---|---|
+| `GeometryList.tsx` | フォルダ階層表示: ジオメトリを折りたたみ可能な `FolderSection` パネルにグループ化。未分類ジオメトリは最後に表示。各ジオメトリ行に解析詳細展開 + フォルダ移動 Popover。`pending`/`analyzing` のアイテムがある場合は 3 秒ごとに自動更新。 |
+| `GeometryUploadModal.tsx` | アップロードフォーム: name・description・フォルダ選択・STL ファイル入力。XHR アップロードで進捗コールバック — 転送中はボタン「Uploading…」+全フィールド無効化。 |
+| `AssemblyList.tsx` | Name・Description・テンプレートリンクバッジ・ジオメトリ数のテーブル |
+| `AssemblyCreateModal.tsx` | オプションのテンプレートリンク付きで Assembly を作成 |
+| `AssemblyGeometriesDrawer.tsx` | 右サイド Drawer: 現在のジオメトリ（削除ボタン付き）と追加可能な `ready` ジオメトリ一覧 |
+
+**実装ノート**
+- アップロードエンドポイントは `Form()` + `File()` FastAPI dependencies を使用 — JSON ボディではない
+- フロントエンドのアップロードは `XMLHttpRequest`（`fetch` ではない）— `upload.onprogress` のため
+- SQLite FK 制約追加には Alembic の `op.batch_alter_table()` を使用（`ALTER TABLE … ADD FK` 不可）
+- キネマティクス（ライドハイト調整）は延期 — 正しい姿勢の STL を前提とする
+
+---
+
+## Background Jobs システム（Step 4 追加）
+
+STL 解析・ファイルアップロードなどの長時間バックグラウンドタスクを追跡するクライアントサイドの軽量ジョブトラッカー。
+
+### Zustand ストア（`src/stores/jobs.ts`）
+
+```typescript
+export type JobType = "stl_analysis";
+export type JobStatus = "uploading" | "pending" | "analyzing" | "ready" | "error";
+
+export interface Job {
+  id: string;
+  name: string;
+  type: JobType;
+  status: JobStatus;
+  uploadProgress?: number; // 0-100、status === "uploading" のときのみ設定
+  error_message?: string | null;
+  addedAt: number;
+}
+```
+
+**アクション**: `addJob(id, name, type)` — `uploading` で開始 · `updateJob(id, status, error_message?)` · `updateUploadProgress(id, progress)` · `removeJob(id)` · `clearCompleted()`
+
+**セレクタ**: `selectActiveJobs(s)` · `selectActiveCount(s)` — 両方とも `uploading` + `pending` + `analyzing` を含む
+
+**永続化**: `zustand/middleware persist` の `partialize` — 24 時間以内の job のみ保存
+
+### アップロードフロー
+1. `addJob(tempId, name, "stl_analysis")` — job が「Uploading…」として Drawer に即座に表示
+2. XHR `upload.onprogress` → `updateUploadProgress(tempId, pct)` — リアルタイムでプログレスバー更新
+3. XHR 成功時 → `removeJob(tempId)` + `addJob(realId, name, ...)` + `updateJob(realId, "pending")`
+4. `useJobsPoller` が realId を拾い `ready`/`error` になるまでポーリング
+
+### ポーラーフック（`src/hooks/useJobsPoller.ts`）
+- `AppShell` でマウント — アプリのライフタイム中ずっと動作
+- `pending` または `analyzing` の job がある場合に 3 秒ごとに `GET /geometries/` をポーリング
+- `uploading` の job はポーリングしない — XHR コールバックで完全に追跡
+- `@mantine/hooks` の `useInterval` を使用
+- **削除済みジオメトリの自動クリーンアップ**: `pending`/`analyzing` の job ID が API レスポンスに存在しない（解析中に削除）場合は即座に `removeJob()` を呼ぶ。`ready`/`error` の job も同じポーリングサイクルで削除済みジオメトリをチェックして除去。
+
+### Jobs Drawer（`src/components/layout/JobsDrawer.tsx`）
+- AppShell ヘッダーのボタンから起動。アクティブ数の `Indicator` バッジ付き
+- ステータス設定: `uploading`（シアン、実際の進捗 %）· `pending`（黄、15% アニメーション）· `analyzing`（青、60% ストライプ）· `ready`（緑、100%）· `error`（赤、100%）
+- `uploading` ステータスのバッジはラベルテキストの代わりにリアルタイムの `XX%` を表示
+- 「Clear」ボタンで `ready` + `error` の job を削除
+
+---
+
 ## 計算エンジンのメモ（Step 4 参考）
 
 計算エンジンは STL ジオメトリから `Computed` フィールドを導出する。主な計算：
@@ -569,6 +727,9 @@ concept_vam のプロトタイプ実装をベースに、テンプレートの `
 - STL ファイルはマルチソリッド ASCII 形式の場合がある — solid 名でパースする
 - ホイールグルーピング：パーツの重心と車両 COG（x, y）を比較して FR-LH / FR-RH / RR-LH / RR-RH に分類
 - RPM 計算：`rpm = (inflow_velocity / wheel_circumference) × 60` — bbox からホイール半径が必要
+- `analyze_stl(file_path, verbose=False)` — `verbose=True` でステップごとの進捗ログを print（`backend/test_compute_engine.py` から使用）
+
+**テストスクリプト**: `backend/test_compute_engine.py` — `analyze_stl()` をスタンドアロンで実行し、車両 bbox・寸法・パーツ概要を表示。`uv run python test_compute_engine.py [<stl_path>]` で実行。引数なしの場合は `data/uploads/geometries/` 内の最初の STL を自動検出。結果全体を `test_compute_engine_result.json` に保存。
 
 ---
 
