@@ -5,7 +5,7 @@ from app.database import get_db
 from app.auth.deps import get_current_user
 from app.models.user import User
 from app.schemas.geometry import (
-    GeometryResponse, GeometryUpdate,
+    GeometryResponse, GeometryUpdate, GeometryLinkRequest,
     GeometryFolderCreate, GeometryFolderUpdate, GeometryFolderResponse,
 )
 from app.services import geometry_service
@@ -75,6 +75,23 @@ def upload_geometry(
     geometry = geometry_service.upload_geometry(
         db, name, description, file, current_user, folder_id=folder_id
     )
+    background_tasks.add_task(geometry_service.run_analysis, db, geometry.id)
+    return geometry
+
+
+@router.post("/link", response_model=GeometryResponse, status_code=201)
+def link_geometry(
+    background_tasks: BackgroundTasks,
+    data: GeometryLinkRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    STL ファイルをコピーせずサーバーパスのみ登録（Link only モード）。
+    file_path はバックエンドコンテナ内からアクセス可能なパスを指定すること。
+    解析はアップロード時と同様に自動実行。
+    """
+    geometry = geometry_service.link_geometry(db, data, current_user)
     background_tasks.add_task(geometry_service.run_analysis, db, geometry.id)
     return geometry
 

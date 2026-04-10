@@ -65,9 +65,9 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | Step 2 (W3-5) | Ultrafluid Pydantic schema — XML ↔ Pydantic round-trip | ✅ Complete |
 | Step 3 (W6-8) | Template CRUD with versioning (Aero/GHN) | ✅ Complete |
 | Step 4 (W9-12) | Geometry upload + STL analysis + Compute engine + Kinematics | ✅ Complete |
-| Step 5 (W13-16) | XML generation + Configuration management + Diff view + Porous coefficients UI | 🔄 **Current target** |
+| Step 5 (W13-16) | XML generation + Case/Configuration/Run management + Diff view + Porous coefficients UI | ✅ Complete |
 
-**When generating code, focus on the current step. Do not implement features from future steps.**
+**All Phase 1 steps are complete. Next work will be Phase 2 (post-processing) or incremental improvements.**
 
 ---
 
@@ -306,6 +306,12 @@ Rules:
 - Minimize custom CSS — prefer Mantine's style props and `sx`/`style` API
 - Forms: use `@mantine/form`'s `useForm` hook
 - **Mantine v8 gotchas**: `Modal.NativeScrollArea` does not exist — omit `scrollAreaComponent` prop entirely. Use `ScrollArea` component directly inside modal content if needed.
+
+### UI Language
+
+- **All user-facing text in the application must be in English** — labels, placeholders, button text, error messages, tooltips, notifications, and modal titles.
+- Code comments, commit messages, and internal documentation may be written in either English or Japanese.
+- This rule applies to all components under `src/components/` and any string literals rendered to the user.
 
 ### Component Structure
 
@@ -604,34 +610,39 @@ Based on prototype implementation in concept_vam, a Template's `settings` JSON f
 
 ## Step 4: Geometry Upload + STL Analysis + Assembly — Implementation Details (Complete)
 
-### Data Model (3-layer hierarchy)
+### Data Model (5-layer hierarchy)
 
 | Model | Purpose |
 |---|---|
 | `GeometryFolder` | Optional organisational folder for grouping Geometries (e.g. by vehicle type) |
 | `Geometry` | Single STL file entity — stores file path, status, and analysis results |
-| `GeometryAssembly` | Named collection of Geometries — optionally linked to a Template |
+| `AssemblyFolder` | Optional organisational folder for grouping Assemblies |
+| `GeometryAssembly` | Named collection of Geometries — optionally linked to a Template and an AssemblyFolder |
 | `assembly_geometry_link` | Many-to-many association table |
 
 **Part swap workflow**: change which `Geometry` objects are members of a `GeometryAssembly`.
-**Folder workflow**: purely organisational — Assemblies are unaffected by folder structure.
+**Folder workflow**: purely organisational — both Geometry and Assembly hierarchies use the same folder pattern.
 
 ### Backend
 
 **Models** (`app/models/geometry.py`)
 - `GeometryFolder`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`; `geometries` one-to-many relationship
-- `Geometry`: `id`, `name`, `description`, `folder_id` (nullable FK→geometry_folders), `file_path` (relative to `upload_dir`), `original_filename`, `file_size`, `status` (`pending`/`analyzing`/`ready`/`error`), `analysis_result` (JSON string), `error_message`, `uploaded_by` (FK→users), `created_at`, `updated_at`
-- `GeometryAssembly`: `id`, `name`, `description`, `template_id` (nullable FK→templates), `created_by`, `created_at`, `updated_at`; `geometries` many-to-many relationship
+- `Geometry`: `id`, `name`, `description`, `folder_id` (nullable FK→geometry_folders), `file_path` (upload時: `upload_dir` 相対パス / link時: 絶対パス), `original_filename`, `file_size`, `is_linked: bool` (default `False` — `True` の場合消死時にファイルを肝ない), `status` (`pending`/`analyzing`/`ready`/`error`), `analysis_result` (JSON string), `error_message`, `uploaded_by` (FK→users), `created_at`, `updated_at`
+- `AssemblyFolder`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`; `assemblies` one-to-many relationship
+- `GeometryAssembly`: `id`, `name`, `description`, `template_id` (nullable FK→templates), `folder_id` (nullable FK→assembly_folders), `created_by`, `created_at`, `updated_at`; `geometries` many-to-many relationship; `folder` many-to-one relationship
 - `assembly_geometry_link`: association table (`assembly_id`, `geometry_id`)
-- Class ordering in file: `assembly_geometry_link` → `GeometryFolder` → `Geometry` → `GeometryAssembly`
+- Class ordering in file: `assembly_geometry_link` → `GeometryFolder` → `Geometry` → `AssemblyFolder` → `GeometryAssembly`
 
 **Schemas** (`app/schemas/geometry.py`)
 - `PartInfo`: `centroid [x,y,z]`, `bbox dict`, `vertex_count`, `face_count`
 - `AnalysisResult`: `parts`, `vehicle_bbox`, `vehicle_dimensions`, `part_info dict`
-- `GeometryResponse`: full response including parsed `analysis_result` and `folder_id: str | None`
+- `GeometryResponse`: full response including parsed `analysis_result`, `folder_id: str | None`, `is_linked: bool`
 - `GeometryUpdate`: `name`, `description`, `folder_id` — uses `model_fields_set` to distinguish explicit null (remove from folder) from field not sent
+- `GeometryLinkRequest`: `name`, `description`, `file_path` (server absolute path), `folder_id` — for Link only mode
 - `GeometryFolderCreate`, `GeometryFolderUpdate`, `GeometryFolderResponse`
-- `AssemblyCreate`, `AssemblyUpdate`, `AssemblyResponse` (includes `geometries: list[GeometryResponse]`)
+- `AssemblyFolderCreate`, `AssemblyFolderUpdate`, `AssemblyFolderResponse`
+- `AssemblyCreate`, `AssemblyUpdate` — both include `folder_id: str | None = None`
+- `AssemblyResponse` — includes `geometries: list[GeometryResponse]` and `folder_id: str | None`
 - `@field_validator("analysis_result", mode="before")` parses JSON string from DB automatically
 
 **Compute Engine** (`app/services/compute_engine.py`)
@@ -643,12 +654,16 @@ Based on prototype implementation in concept_vam, a Template's `settings` JSON f
 
 **Service** (`app/services/geometry_service.py`)
 - `upload_geometry(db, name, description, file, current_user, folder_id=None)`: saves file to `upload_dir/geometries/{id}/{filename}`, stores relative path, triggers `BackgroundTasks`
-- `run_analysis()`: background task — `pending` → `analyzing` → `ready`/`error`
+- `link_geometry(db, data: GeometryLinkRequest, current_user)`: validates path exists on server, creates `Geometry` row with `is_linked=True` and absolute `file_path`, triggers `BackgroundTasks`
+- `run_analysis()`: background task — `pending` → `analyzing` → `ready`/`error`; `is_linked=True` 時は `file_path` を絶対パスとしてそのまま使用、`is_linked=False` 時は `settings.upload_dir / file_path`
 - `update_geometry()`: uses `model_fields_set` — only updates `folder_id` when field is explicitly in request body
-- `delete_geometry()`: removes DB row + `shutil.rmtree` on file directory
+- `delete_geometry()`: `is_linked=False` の時のみ `shutil.rmtree` 実行。`is_linked=True` の場合は DB 行のみ削除し元ファイルはそのまま
 - `list_folders`, `create_folder`, `update_folder`, `delete_folder` — folder delete sets `geometry.folder_id = None` for all children
 - `_folder_or_404(db, folder_id)` helper validates folder existence
 - All CRUD for both `Geometry` and `GeometryAssembly`
+- Assembly folder CRUD: `list_assembly_folders`, `create_assembly_folder`, `update_assembly_folder`, `delete_assembly_folder` — delete sets `assembly.folder_id = None` for all children
+- `_assembly_folder_or_404(db, folder_id)` helper validates assembly folder existence
+- `create_assembly()` accepts `folder_id`; `update_assembly()` handles `folder_id` via `model_fields_set`
 - `add_geometry_to_assembly`, `remove_geometry_from_assembly`
 - Permission check: `resource.created_by == current_user.id OR current_user.is_admin`
 
@@ -663,35 +678,47 @@ Based on prototype implementation in concept_vam, a Template's `settings` JSON f
 | `DELETE` | `/geometries/folders/{folder_id}` | Delete folder (children become uncategorized) |
 | `GET` | `/geometries/` | List all geometries |
 | `POST` | `/geometries/` | Upload STL (multipart/form-data: `name`, `description`, `folder_id`, `file`) — triggers background analysis |
+| `POST` | `/geometries/link` | Link only (JSON body: `GeometryLinkRequest`) — ファイルコピーなしでサーバーパスのみ登録、即解析 |
 | `GET` | `/geometries/{id}` | Get geometry with analysis result |
 | `PATCH` | `/geometries/{id}` | Update name/description/folder_id |
-| `DELETE` | `/geometries/{id}` | Delete + file cleanup |
+| `DELETE` | `/geometries/{id}` | Delete + file cleanup (linked files are not deleted) |
 
 **Route order matters**: folder endpoints MUST be declared before `/{geometry_id}` in the router file to avoid FastAPI routing ambiguity.
 
 `app/api/v1/assemblies.py` (`/api/v1/assemblies/`):
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/assemblies/folders/` | List all assembly folders |
+| `POST` | `/assemblies/folders/` | Create assembly folder |
+| `PATCH` | `/assemblies/folders/{folder_id}` | Update assembly folder |
+| `DELETE` | `/assemblies/folders/{folder_id}` | Delete assembly folder (children become uncategorized) |
 | `GET` | `/assemblies/` | List all assemblies |
 | `POST` | `/assemblies/` | Create assembly |
 | `GET` | `/assemblies/{id}` | Get assembly with geometries (selectinload) |
-| `PATCH` | `/assemblies/{id}` | Update name/description/template_id |
+| `PATCH` | `/assemblies/{id}` | Update name/description/template_id/folder_id |
 | `DELETE` | `/assemblies/{id}` | Delete assembly |
 | `POST` | `/assemblies/{id}/geometries/{gid}` | Add geometry to assembly |
 | `DELETE` | `/assemblies/{id}/geometries/{gid}` | Remove geometry from assembly |
 
+**Route order matters**: folder endpoints MUST be declared before `/{assembly_id}` in assemblies.py to avoid FastAPI routing ambiguity.
+
 **Migrations**:
 - `alembic/versions/f46197300d43_add_geometry_and_assembly_tables.py`
 - `alembic/versions/d4be3f102eac_add_geometry_folders_and_folder_id_to_.py` — uses `batch_alter_table` for `folder_id` FK (SQLite cannot `ALTER TABLE` to add FK constraints directly)
+- `alembic/versions/bd293b1f57fc_add_assembly_folders.py` — creates `assembly_folders` table; adds `folder_id` FK to `geometry_assemblies` via `batch_alter_table`
+- `alembic/versions/b6662ad9ba21_add_is_linked_to_geometries.py` — adds `is_linked` boolean column to `geometries` (server_default `0`)
 
 ### Frontend
 
 **API layer** (`src/api/geometries.ts`)
-- `foldersApi.list()`, `.create(data)`, `.update(id, data)`, `.delete(id)`
+- `foldersApi.list()`, `.create(data)`, `.update(id, data)`, `.delete(id)` — geometry folders
 - `geometriesApi.list()`, `.get(id)`, `.upload(name, description, folderId, file, onProgress?)` — uses `XMLHttpRequest` (not `fetch`) to support `upload.onprogress` callbacks; `onProgress(pct: number)` fires with 0–100 values
+- `geometriesApi.link(data: GeometryLinkRequest)` — Link only登録（JSON POST to `/geometries/link`）
 - `geometriesApi.updateFolder(id, folderId)` — convenience wrapper for PATCH with `{ folder_id }`
 - `geometriesApi.delete(id)`
+- `assemblyFoldersApi.list()`, `.create(data)`, `.update(id, data)`, `.delete(id)` — assembly folders
 - `assembliesApi.list()`, `.get(id)`, `.create(data)`, `.update(id, data)`, `.delete(id)`, `.addGeometry(assemblyId, geometryId)`, `.removeGeometry(assemblyId, geometryId)`
+- Exported types: `AssemblyFolderResponse`, `AssemblyFolderCreate`, `AssemblyFolderUpdate`
 
 **Components** (`src/components/geometries/`, `src/components/assemblies/`)
 
@@ -699,15 +726,18 @@ Based on prototype implementation in concept_vam, a Template's `settings` JSON f
 |---|---|
 | `GeometryList.tsx` | Folder-hierarchy view: geometries grouped into collapsible `FolderSection` panels (Paper + Collapse). Uncategorized geometries shown last. Each geometry row has expand-for-analysis-details + move-to-folder Popover (Select dropdown). Header has "New Folder" + "Upload STL" buttons. Auto-refreshes every 3s when any item is `pending`/`analyzing`. |
 | `GeometryUploadModal.tsx` | Upload form: name, description, folder select (from `foldersApi.list()`), STL file input. Uses XHR upload with progress callback — button shows "Uploading…" and all fields disabled during transfer. On success: registers job via `addJob` then `updateJob` to `pending`. |
-| `AssemblyList.tsx` | Table with Name, Description, Template link badge, Geometry count; row action: manage geometries (opens drawer) |
-| `AssemblyCreateModal.tsx` | Create assembly with optional template link (dropdown from templates list) |
+| `GeometryLinkModal.tsx` | Link only登録フォーム: name, description, file_path (server absolute path), folder select. JSON POST を使用（XHR不要）。成功後は uploadと同様に job トラッカーに登録。 |
+| `AssemblyList.tsx` | Folder-hierarchy view: assemblies grouped into collapsible `FolderSection` panels (Paper + Collapse). Uncategorized assemblies shown last. Each assembly row has manage-geometries action + move-to-folder Popover. Header has "New Folder" (IconFolderPlus) + "New Assembly" buttons. Folder delete: `delete_assembly_folder` sets all children to uncategorized. |
+| `AssemblyCreateModal.tsx` | Create assembly with optional template link (dropdown from templates list) + optional folder select (`assemblyFoldersApi.list()`) |
 | `AssemblyGeometriesDrawer.tsx` | Right-side drawer: shows current geometries (with remove button), lists available `ready` geometries to add (multi-checkbox select) |
 
 **Navigation**: `AppShell.tsx` nav includes `Geometries` (IconBox) and `Assemblies` (IconStack2).
 
 ### Implementation Notes
 - Upload endpoint uses `Form()` + `File()` FastAPI dependencies — NOT JSON body
+- Link endpoint uses JSON body (`GeometryLinkRequest`) — `file_path` must be accessible from the backend container; in Docker, the directory must be volume-mounted
 - Frontend upload uses `XMLHttpRequest` (not `fetch`) for `upload.onprogress` support; the JSON `client` wrapper cannot handle multipart
+- `is_linked=True` geometries show a cyan "Linked" badge in `GeometryList.tsx`; delete only removes the DB row, not the original file
 - Status polling: `refetchInterval` returns `3000` when any geometry is `pending`/`analyzing`, `false` otherwise
 - SQLite FK workaround: use `op.batch_alter_table()` in Alembic whenever adding FK constraints to existing tables
 - Kinematics (ride height adjustment) deferred — correct-posture STL is assumed for now
@@ -785,11 +815,235 @@ The Compute Engine derives `Computed` fields from STL geometry. Key calculations
 - Use `trimesh` + `numpy` only — already in `pyproject.toml`
 - Do NOT use `numpy-stl` or `scikit-learn` (used in concept_vam prototype but not in this stack)
 - STL files may be multi-solid ASCII format — parse by solid name
+- `trimesh.load()` must always pass `process=False` — skips normal recalculation, vertex deduplication, and BVH build (~20–40% faster for large vehicle STL files); normals are not needed for bbox/centroid analysis
 - Wheel grouping: classify FR-LH / FR-RH / RR-LH / RR-RH by comparing part centroid to vehicle COG (x, y)
 - RPM calculation: `rpm = (inflow_velocity / wheel_circumference) × 60` — needs wheel radius from bbox
 - `analyze_stl(file_path, verbose=False)` — pass `verbose=True` to print step-by-step progress logs (used by `backend/test_compute_engine.py`)
 
 **Test script**: `backend/test_compute_engine.py` — runs `analyze_stl()` standalone and prints vehicle bbox, dimensions, and per-part summary. Run with `uv run python test_compute_engine.py [<stl_path>]`. Auto-detects first STL in `data/uploads/geometries/` if no argument given. Saves full result to `test_compute_engine_result.json`.
+
+---
+
+## Step 5: Case / Configuration / Run — Implementation Details (Complete)
+
+### Data Model (3-layer hierarchy)
+
+| Model | Purpose |
+|---|---|
+| `Case` | Top-level container: bundles Template × 1 + Assembly × 1 + Configurations |
+| `Configuration` | Stores UserInput per test condition (speed, yaw, porous coefficients, compute flags) |
+| `Run` | Execution unit: picks one Configuration → generates XML → links to scheduler job |
+
+**Design decision**: Cases represent geometry/template combos. Cross-geometry comparison = separate Cases with Runs compared via Diff view.
+
+### Backend
+
+**Models** (`app/models/configuration.py`)
+- `Case`: `id`, `name`, `description`, `template_id` (FK→templates), `assembly_id` (FK→geometry_assemblies), `created_by`, `created_at`, `updated_at`; `configurations` and `runs` relationships
+- `Configuration`: `id`, `name`, `description`, `case_id` (FK→cases), `settings` (JSON Text — `ConfigurationSettings`), `created_by`, `created_at`, `updated_at`
+- `Run`: `id`, `name`, `case_id` (FK→cases), `configuration_id` (FK→configurations), `xml_path` (nullable), `status` (`pending`/`generating`/`ready`/`error`), `error_message` (nullable), `scheduler_job_id` (nullable — PBS/Slurm future), `created_by`, `created_at`, `updated_at`
+
+**Schemas** (`app/schemas/configuration.py`)
+
+```python
+class PorousInput(BaseModel):
+    part_name: str
+    inertial_resistance: float   # 1/m — required per porous part
+    viscous_resistance: float    # 1/s — required per porous part
+
+class ComputeOverrides(BaseModel):
+    """Override Template's ComputeOption per Configuration. None = use Template default."""
+    rotate_wheels: bool | None = None
+    porous_media: bool | None = None
+    turbulence_generator: bool | None = None
+    moving_ground: bool | None = None
+    adjust_ride_height: bool | None = None
+
+class RideHeightInput(BaseModel):
+    front_wheel_axis_rh: float | None = None   # m — front wheel centre height from ground
+    rear_wheel_axis_rh: float | None = None    # m
+    adjust_body_wheel_separately: bool = True
+
+class ConfigurationSettings(BaseModel):
+    inflow_velocity: float | None = None       # None = use Template default
+    yaw_angle: float = 0.0                     # degrees
+    simulation_time: float | None = None       # None = use Template default
+    porous_coefficients: list[PorousInput] = []
+    compute_overrides: ComputeOverrides = Field(default_factory=ComputeOverrides)
+    ride_height: RideHeightInput = Field(default_factory=RideHeightInput)
+```
+
+- `CaseCreate`, `CaseUpdate`, `CaseResponse` (includes `configuration_count`, `run_count`)
+- `ConfigurationCreate`, `ConfigurationUpdate`, `ConfigurationResponse`
+- `RunCreate`, `RunResponse` (includes `xml_path`, `status`)
+- `DiffResult`: list of changed fields between two Runs
+
+**Service** (`app/services/configuration_service.py`)
+- `list_cases`, `get_case`, `create_case`, `update_case`, `delete_case`
+- `list_configurations(case_id)`, `get_configuration`, `create_configuration`, `update_configuration`, `delete_configuration`
+- `create_run(case_id, configuration_id)`, `list_runs(case_id)`
+- `generate_xml(run_id, db, background_tasks)` — background task: `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml` → update `run.status`
+- `get_diff(run_id_a, run_id_b, db)` → `DiffResult`
+- Permission check: `resource.created_by == current_user.id OR current_user.is_admin`
+
+**API Endpoints** (`app/api/v1/configurations.py`):
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/cases/` | List all cases |
+| `POST` | `/cases/` | Create case (template_id + assembly_id required) |
+| `GET` | `/cases/{id}` | Get case with configuration_count + run_count |
+| `PATCH` | `/cases/{id}` | Update name/description |
+| `DELETE` | `/cases/{id}` | Delete case + cascade |
+| `GET` | `/cases/{id}/configurations/` | List configurations |
+| `POST` | `/cases/{id}/configurations/` | Create configuration |
+| `GET` | `/cases/{id}/configurations/{cid}` | Get configuration |
+| `PATCH` | `/cases/{id}/configurations/{cid}` | Update configuration |
+| `DELETE` | `/cases/{id}/configurations/{cid}` | Delete configuration |
+| `GET` | `/cases/{id}/runs/` | List runs |
+| `POST` | `/cases/{id}/runs/` | Create run (configuration_id required) |
+| `POST` | `/cases/{id}/runs/{rid}/generate` | Trigger XML generation (background task) |
+| `GET` | `/cases/{id}/runs/{rid}/download` | Download generated XML |
+| `GET` | `/runs/diff?a={rid}&b={rid}` | Diff two runs' settings |
+
+**Migration**: new Alembic revision for `cases`, `configurations`, `runs` tables.
+
+### Template Settings Extensions (`app/schemas/template_settings.py`)
+
+New `ComputeOption` added to `SetupOption`:
+```python
+class ComputeOption(BaseModel):
+    rotate_wheels: bool = True          # overset rotating + rotating wall BC
+    porous_media: bool = True           # porous sources + box refinement for porous
+    turbulence_generator: bool = True   # sources.turbulence (Aero only)
+    moving_ground: bool = True          # belt BC moving (Auto False if rotate_wheels=False)
+    adjust_ride_height: bool = False    # ride height adjustment (Config can override)
+```
+
+New fields added to `TargetNames`:
+```python
+wheel_tire_fr_lh: str = ""   # individual tyre PID — required for OSM + belt auto-position
+wheel_tire_fr_rh: str = ""
+wheel_tire_rr_lh: str = ""
+wheel_tire_rr_rh: str = ""
+overset_fr_lh: str = ""      # OSM region PID
+overset_fr_rh: str = ""
+overset_rr_lh: str = ""
+overset_rr_rh: str = ""
+windtunnel: list[str] = []   # passive parts — excluded from force calc + bbox
+```
+
+New fields added to `SimulationParameter`:
+```python
+start_averaging_time: float = 1.5    # seconds
+avg_window_size: float = 0.3         # seconds
+output_start_time: float | None = None   # None = auto (= simulation_time)
+output_interval_time: float | None = None  # None = auto (= simulation_time)
+yaw_angle: float = 0.0              # Template default yaw (Config can override)
+```
+
+### Compute Engine Extensions (`app/services/compute_engine.py`)
+
+New functions added for XML assembly:
+
+```python
+def resolve_compute_flags(template_flags: ComputeOption, overrides: ComputeOverrides) -> ComputeOption:
+    """Apply Config overrides to Template defaults. Enforce dependency rules:
+       rotate_wheels=False → moving_ground belt auto disabled
+       moving_ground=False → turbulence_generator ground disabled"""
+
+def compute_domain_bbox(vehicle_bbox: dict, multipliers: list[float]) -> dict:
+    """Apply 6 relative multipliers to vehicle bbox → absolute domain bounding box"""
+
+def classify_wheels(analysis_result: dict, target_names: TargetNames) -> dict:
+    """Sort parts matching target_names.wheel into FR_LH/FR_RH/RR_LH/RR_RH by centroid vs COG"""
+
+def compute_wheel_kinematics(wheel_parts: dict, inflow_velocity: float) -> list[dict]:
+    """PCA on rim vertices → axis; rpm = inflow_velocity / (2π×radius) × 60"""
+
+def compute_porous_axis(part_info: dict) -> dict:
+    """PCA on porous part vertices → face normal direction → PorousAxis xyz"""
+
+def compute_coarsest_mesh_size(finest_res: float, n_levels: int) -> float:
+    """Return finest_res × 2^n_levels"""
+
+def assemble_ufx_solver_deck(
+    template_settings: TemplateSettings,
+    analysis_result: dict,
+    config_settings: ConfigurationSettings,
+) -> UfxSolverDeck:
+    """Top-level orchestrator:
+       1. resolve_compute_flags()
+       2. Resolve effective inflow_velocity / simulation_time (Config > Template)
+       3. compute_domain_bbox()
+       4. classify_wheels() + compute_wheel_kinematics()  [if rotate_wheels]
+       5. compute_porous_axis() per porous part           [if porous_media]
+       6. compute_coarsest_mesh_size()
+       7. Assemble all 7 UfxSolverDeck sections
+    """
+```
+
+### Compute Flag Dependency Rules
+
+```
+rotate_wheels = False
+  → meshing.overset.rotating = []
+  → boundary_conditions.wall rotating instances = removed
+  → belt auto-position disabled (belt coords from Template setup)
+
+moving_ground = False
+  → all belt BCs → static (not moving)
+  → turbulence_generator.ground = False (forced)
+
+porous_media = False
+  → sources.porous = []
+  → box_refinement_porous skipped
+
+turbulence_generator = False
+  → sources.turbulence = []
+```
+
+### Excel Settings Classification (from AUR_v1.2_EXT.xlsx / CX1_v1.2_GHN.xlsx)
+
+| Excel Sheet | Setting | Layer |
+|---|---|---|
+| General | `DATA_FOLDER`, `list_stl_files`, `simulationName` | VAM managed |
+| General | `inflow_velocity`, `yaw_angle_vehicle`, `ground_height` | **Configuration** |
+| General | `simulation_time`, `output_start_time`, `output_interval_time` | Config (optional override) |
+| General | `opt_moving_floor`, `osm_wheels`, `activate_body_tg`, `adjust_ride_height` | Config `compute_overrides` |
+| General | `opt_belt_system`, `wall_model`, `solution_type`, `output_format` | **Template** |
+| General | `density`, `dynamic_viscosity`, `temperature` | **Template** |
+| Wheels_baffles | `WheelPartsNames`, `RimPartsNames`, `BafflePartsName` | Template `target_names` |
+| Wheels_baffles | `WheelTireParts_FR/RR_LH/RH` | Template `target_names.wheel_tire_*` |
+| Wheels_baffles | `OversetMeshPartsName_FR/RR_*` | Template `target_names.overset_*` |
+| Wheels_baffles | `windtunnel_parts` | Template `target_names.windtunnel` |
+| Belts | `belt_size_*`, `belt_center_position_*` | Template `setup.boundary_condition_input` |
+| Heat_exchangers | part `name` | Template `target_names.porous` |
+| Heat_exchangers | `coeffs_inertia`, `coeffs_viscous` | **Configuration** `porous_coefficients` |
+| Ride_Height | `front/rear_wheel_axis_RH`, `adjust_body_wheel_separately` | Configuration `ride_height` |
+| Mesh_Control | `triangleSplitting`, `coarsest_voxel_size`, `transitionLayers` | **Template** |
+| Additional_offset_refinement | all rows | Template `setup.meshing.offset_refinement` |
+| Custom_refinement | all rows (GHN only) | Template `setup.meshing.custom_refinement` |
+| Output sheets (all) | all output variable flags | **Template** |
+
+### Frontend Components
+
+- `src/components/cases/CaseList.tsx` — table with Template/Assembly badges, config count, Run button
+- `src/components/cases/CaseCreateModal.tsx` — Template + Assembly selector
+- `src/components/configurations/ConfigurationList.tsx` — list within Case detail
+- `src/components/configurations/ConfigurationCreateModal.tsx` — multi-section form (below)
+- `src/components/runs/RunList.tsx` — status badge, XML download link, Diff selector
+- `src/components/runs/DiffView.tsx` — side-by-side or diff-list view of two Run settings
+- Navigation: `AppShell.tsx` adds `Cases` (IconCar)
+
+**`ConfigurationCreateModal` sections:**
+
+| Section | Fields |
+|---|---|
+| 走行条件 | `inflow_velocity` (Template default shown), `yaw_angle`, `simulation_time` (optional override) |
+| Compute Options | Nested checkbox tree with dependency grayout (rotate_wheels → moving_ground/OSM, etc.) |
+| Porous Coefficients | Auto-generated from Assembly porous parts — `inertial/viscous_resistance` per part (shown only if porous_media=ON) |
+| Ride Height | `front/rear_wheel_axis_rh`, `adjust_body_wheel_separately` (shown only if adjust_ride_height=ON) |
 
 ---
 
@@ -828,19 +1082,13 @@ uv add <package-name>
 6. **Do not use `pip install`** — always use `uv add`.
 7. **Do not skip ahead to future steps** — implement features in the order defined in the Implementation Phases.
 8. **Do not use `class Config` in Pydantic models** — use `model_config = ConfigDict(...)`.
+9. **Do not use Japanese (or any non-English language) in user-facing UI text** — all labels, buttons, messages, and tooltips must be in English.
 
 ---
 
 ## Phase 2+ Roadmap
 
 The following features are planned for future phases. They are documented here for context but **must not be implemented during Phase 1**.
-
-### Case Management
-
-All datasets related to a simulation case are managed by the application: input STL, simulation setup, check-setup results, solver results, and post-processed data. This enables:
-- Easier comparison between cases and table data extraction
-- Job launch script integration with schedulers (PBS, Slurm) for automated file transfer to/from compute nodes
-- Manual file transfer is also supported as a fallback
 
 ### Post-Processing
 

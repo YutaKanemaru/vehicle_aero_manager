@@ -15,6 +15,15 @@ export type AssemblyCreate =
 export type AssemblyUpdate =
   paths["/api/v1/assemblies/{assembly_id}"]["patch"]["requestBody"]["content"]["application/json"];
 
+export type AssemblyFolderResponse =
+  paths["/api/v1/assemblies/folders/"]["get"]["responses"]["200"]["content"]["application/json"][number];
+
+export type AssemblyFolderCreate =
+  paths["/api/v1/assemblies/folders/"]["post"]["requestBody"]["content"]["application/json"];
+
+export type AssemblyFolderUpdate =
+  paths["/api/v1/assemblies/folders/{folder_id}"]["patch"]["requestBody"]["content"]["application/json"];
+
 export type GeometryFolderResponse =
   paths["/api/v1/geometries/folders/"]["get"]["responses"]["200"]["content"]["application/json"][number];
 
@@ -24,7 +33,26 @@ export type GeometryFolderCreate =
 export type GeometryFolderUpdate =
   paths["/api/v1/geometries/folders/{folder_id}"]["patch"]["requestBody"]["content"]["application/json"];
 
-// ─── Folder API ───────────────────────────────────────────────────────────────
+export type GeometryLinkRequest =
+  paths["/api/v1/geometries/link"]["post"]["requestBody"]["content"]["application/json"];
+
+// ─── Assembly Folder API ─────────────────────────────────────────────────────
+
+export const assemblyFoldersApi = {
+  list: (): Promise<AssemblyFolderResponse[]> =>
+    client.get("/assemblies/folders/"),
+
+  create: (data: AssemblyFolderCreate): Promise<AssemblyFolderResponse> =>
+    client.post("/assemblies/folders/", data),
+
+  update: (id: string, data: AssemblyFolderUpdate): Promise<AssemblyFolderResponse> =>
+    client.patch(`/assemblies/folders/${id}`, data),
+
+  delete: (id: string): Promise<void> =>
+    client.delete(`/assemblies/folders/${id}`),
+};
+
+// ─── Geometry Folder API ───────────────────────────────────────────────────
 
 export const foldersApi = {
   list: (): Promise<GeometryFolderResponse[]> =>
@@ -103,6 +131,10 @@ export const geometriesApi = {
 
   delete: (id: string): Promise<void> =>
     client.delete(`/geometries/${id}`),
+
+  /** サーバーパスのみ登録（Link only モード）*/
+  link: (data: GeometryLinkRequest): Promise<GeometryResponse> =>
+    client.post("/geometries/link", data),
 
   updateFolder: (id: string, folderId: string | null): Promise<GeometryResponse> =>
     client.patch(`/geometries/${id}`, { folder_id: folderId }),

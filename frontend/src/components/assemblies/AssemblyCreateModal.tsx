@@ -10,7 +10,7 @@ import {
 import { useForm } from "@mantine/form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
-import { assembliesApi, type AssemblyCreate } from "../../api/geometries";
+import { assembliesApi, assemblyFoldersApi, type AssemblyCreate } from "../../api/geometries";
 import { templatesApi } from "../../api/templates";
 
 interface Props {
@@ -26,8 +26,13 @@ export function AssemblyCreateModal({ opened, onClose }: Props) {
     queryFn: templatesApi.list,
   });
 
+  const { data: folders = [] } = useQuery({
+    queryKey: ["assemblyFolders"],
+    queryFn: assemblyFoldersApi.list,
+  });
+
   const form = useForm<AssemblyCreate>({
-    initialValues: { name: "", description: null, template_id: null },
+    initialValues: { name: "", description: null, template_id: null, folder_id: null },
     validate: {
       name: (v) => (v.trim() ? null : "Name is required"),
     },
@@ -49,6 +54,11 @@ export function AssemblyCreateModal({ opened, onClose }: Props) {
     label: `${t.name} (${t.sim_type.toUpperCase()})`,
   }));
 
+  const folderOptions = folders.map((f) => ({
+    value: f.id,
+    label: f.name,
+  }));
+
   return (
     <Modal opened={opened} onClose={onClose} title="Create Assembly" size="md">
       <form
@@ -57,6 +67,7 @@ export function AssemblyCreateModal({ opened, onClose }: Props) {
             name: values.name.trim(),
             description: values.description || null,
             template_id: values.template_id || null,
+            folder_id: values.folder_id || null,
           })
         )}
       >
@@ -78,6 +89,13 @@ export function AssemblyCreateModal({ opened, onClose }: Props) {
             clearable
             data={templateOptions}
             {...form.getInputProps("template_id")}
+          />
+          <Select
+            label="Folder (optional)"
+            placeholder="Select folder"
+            clearable
+            data={folderOptions}
+            {...form.getInputProps("folder_id")}
           />
           <Group justify="flex-end" mt="md">
             <Button variant="default" onClick={onClose}>Cancel</Button>

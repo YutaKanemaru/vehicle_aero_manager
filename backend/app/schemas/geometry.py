@@ -31,6 +31,7 @@ class GeometryResponse(BaseModel):
     folder_id: str | None
     original_filename: str
     file_size: int
+    is_linked: bool = False
     status: str
     analysis_result: AnalysisResult | None = None
     error_message: str | None
@@ -50,6 +51,14 @@ class GeometryUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     # folder_id: None は「フォルダから外す」を意味する。model_fields_set で判定。
+    folder_id: str | None = None
+
+
+class GeometryLinkRequest(BaseModel):
+    """既存ファイルをコピーせずパスのみ登録する（Link only モード）。"""
+    name: str
+    description: str | None = None
+    file_path: str          # サーバー上の絶対パス（バックエンドから読める必要あり）
     folder_id: str | None = None
 
 
@@ -82,12 +91,14 @@ class AssemblyCreate(BaseModel):
     name: str
     description: str | None = None
     template_id: str | None = None
+    folder_id: str | None = None
 
 
 class AssemblyUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     template_id: str | None = None
+    folder_id: str | None = None
 
 
 class AssemblyResponse(BaseModel):
@@ -97,7 +108,31 @@ class AssemblyResponse(BaseModel):
     name: str
     description: str | None
     template_id: str | None
+    folder_id: str | None
     created_by: str
     created_at: datetime
     updated_at: datetime
     geometries: list[GeometryResponse] = []
+
+
+# ─── AssemblyFolder ─────────────────────────────────────────────────────────────────
+
+class AssemblyFolderCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class AssemblyFolderUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class AssemblyFolderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    description: str | None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime

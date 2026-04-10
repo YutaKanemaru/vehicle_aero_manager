@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.auth.deps import get_current_user
+from app.auth.deps import get_current_user, get_admin_user
 from app.models.user import User
 from app.schemas.template import (
     TemplateCreate,
@@ -18,13 +18,14 @@ router = APIRouter()
 
 
 def _build_response(template) -> TemplateResponse:
-    """Attach active_version and version_count to the response."""
+    """Attach active_version, version_count, and is_hidden to the response."""
     active = next((v for v in template.versions if v.is_active), None)
     return TemplateResponse(
         id=template.id,
         name=template.name,
         description=template.description,
         sim_type=template.sim_type,
+        is_hidden=template.is_hidden,
         created_by=template.created_by,
         created_at=template.created_at,
         updated_at=template.updated_at,
@@ -42,7 +43,7 @@ def list_templates(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    templates = template_service.list_templates(db)
+    templates = template_service.list_templates(db, current_user)
     return [_build_response(t) for t in templates]
 
 
@@ -84,6 +85,20 @@ def delete_template(
     current_user: User = Depends(get_current_user),
 ):
     template_service.delete_template(db, template_id, current_user)
+
+
+@router.patch("/{template_id}/hide", response_model=TemplateResponse)
+def set_template_hidden(
+    template_id: str,
+    data: TemplateUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Admin-only: set or clear the is_hidden flag on a template."""
+    if data.is_hidden is None:
+        raise HTTPException(status_code=422, detail="is_hidden field is required")
+    template = template_service.toggle_hidden(db, template_id, data.is_hidden, current_user)
+    return _build_response(template)
 
 
 # ---------------------------------------------------------------------------

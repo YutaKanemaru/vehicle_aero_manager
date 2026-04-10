@@ -21,6 +21,7 @@ class TemplateCreate(BaseModel):
 class TemplateUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    is_hidden: bool | None = None
 
 
 class TemplateVersionCreate(BaseModel):
@@ -70,5 +71,6 @@ class TemplateResponse(BaseModel):
     created_by: str
     created_at: datetime
     updated_at: datetime
+    is_hidden: bool = False
     active_version: TemplateVersionResponse | None = None
     version_count: int = 0

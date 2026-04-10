@@ -55,12 +55,22 @@ class BoundaryConditionOption(BaseModel):
     )
 
 
+class ComputeOption(BaseModel):
+    """Controls which Computed blocks are generated. Config can override per-case."""
+    rotate_wheels: bool = True          # overset rotating + rotating wall BC
+    porous_media: bool = True           # porous sources + box refinement for porous
+    turbulence_generator: bool = True   # sources.turbulence (Aero only)
+    moving_ground: bool = True          # belt BC moving (auto-False if rotate_wheels=False)
+    adjust_ride_height: bool = False    # ride height adjustment (Config can override)
+
+
 class SetupOption(BaseModel):
     simulation: SimulationOption = Field(default_factory=SimulationOption)
     meshing: MeshingOption = Field(default_factory=MeshingOption)
     boundary_condition: BoundaryConditionOption = Field(
         default_factory=BoundaryConditionOption
     )
+    compute: ComputeOption = Field(default_factory=ComputeOption)
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +89,11 @@ class SimulationParameter(BaseModel):
     number_of_resolution: int = 7           # coarsest = finest × 2^N
     simulation_time: float = 2.0            # seconds
     simulation_time_FP: float = 30.0        # flow passages
+    start_averaging_time: float = 1.5       # seconds
+    avg_window_size: float = 0.3            # seconds
+    output_start_time: float | None = None  # None = auto (= simulation_time)
+    output_interval_time: float | None = None  # None = auto (= simulation_time)
+    yaw_angle: float = 0.0                  # degrees — Template default (Config can override)
 
 
 # ---------------------------------------------------------------------------
@@ -132,16 +147,38 @@ class Setup(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# porous_media — coefficients per porous part (multiple instances supported)
+# ---------------------------------------------------------------------------
+
+class PorousMedia(BaseModel):
+    part_name: str                 # must match a part name found in the assembly STL
+    inertial_resistance: float     # 1/m
+    viscous_resistance: float      # 1/s
+
+
+# ---------------------------------------------------------------------------
 # target_names
 # ---------------------------------------------------------------------------
 
 class TargetNames(BaseModel):
+    # Generic part-name matching patterns (prefix/substring)
     wheel: list[str] = Field(default_factory=list)
     rim: list[str] = Field(default_factory=list)
     porous: list[str] = Field(default_factory=list)
     car_bounding_box: list[str] = Field(default_factory=list)
     baffle: list[str] = Field(default_factory=list)
     triangle_splitting: list[str] = Field(default_factory=list)
+    windtunnel: list[str] = Field(default_factory=list)  # passive parts — excluded from force calc
+    # Individual tyre PIDs — required for OSM + belt auto-position
+    wheel_tire_fr_lh: str = ""
+    wheel_tire_fr_rh: str = ""
+    wheel_tire_rr_lh: str = ""
+    wheel_tire_rr_rh: str = ""
+    # OSM region PIDs
+    overset_fr_lh: str = ""
+    overset_fr_rh: str = ""
+    overset_rr_lh: str = ""
+    overset_rr_rh: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -153,3 +190,4 @@ class TemplateSettings(BaseModel):
     simulation_parameter: SimulationParameter = Field(default_factory=SimulationParameter)
     setup: Setup = Field(default_factory=Setup)
     target_names: TargetNames = Field(default_factory=TargetNames)
+    porous_coefficients: list[PorousMedia] = Field(default_factory=list)

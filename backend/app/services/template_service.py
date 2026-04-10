@@ -39,15 +39,28 @@ def _get_version_or_404(db: Session, template_id: str, version_id: str) -> Templ
 # Template CRUD
 # ---------------------------------------------------------------------------
 
-def list_templates(db: Session) -> list[Template]:
-    templates = db.scalars(
+def list_templates(db: Session, current_user: User) -> list[Template]:
+    stmt = (
         select(Template)
-        .options(
-            selectinload(Template.versions)
-        )
+        .options(selectinload(Template.versions))
         .order_by(Template.created_at.desc())
-    ).all()
+    )
+    if not current_user.is_admin:
+        stmt = stmt.where(Template.is_hidden == False)  # noqa: E712
+    templates = db.scalars(stmt).all()
     return list(templates)
+
+
+def toggle_hidden(
+    db: Session, template_id: str, is_hidden: bool, current_user: User
+) -> Template:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    template = _get_template_or_404(db, template_id)
+    template.is_hidden = is_hidden
+    db.commit()
+    db.refresh(template)
+    return template
 
 
 def get_template(db: Session, template_id: str) -> Template:

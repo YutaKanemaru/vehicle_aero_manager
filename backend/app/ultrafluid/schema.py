@@ -165,7 +165,6 @@ class OffsetInstance(BaseModel):
 
 
 class CustomInstance(BaseModel):
-    """GHN only: custom refinement by part list."""
     name: str
     refinement_level: int
     parts: List[str] = Field(default_factory=list)

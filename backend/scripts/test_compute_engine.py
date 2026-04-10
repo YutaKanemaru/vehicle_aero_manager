@@ -1,8 +1,8 @@
 """
 Compute Engine テストスクリプト
 使い方:
-  uv run python test_compute_engine.py
-  uv run python test_compute_engine.py <STLファイルパス>
+  uv run python scripts/test_compute_engine.py
+  uv run python scripts/test_compute_engine.py <STLファイルパス>
 """
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+BACKEND_DIR = Path(__file__).parent.parent
 
 from app.services.compute_engine import analyze_stl
 
@@ -20,11 +22,11 @@ def main() -> None:
     if len(sys.argv) >= 2:
         file_path = Path(sys.argv[1])
     else:
-        upload_dir = Path(__file__).parent / "data" / "uploads" / "geometries"
+        upload_dir = BACKEND_DIR / "data" / "uploads" / "geometries"
         stl_files = sorted(upload_dir.rglob("*.stl"))
         if not stl_files:
             print("❌ STL ファイルが見つかりません")
-            print("   usage: uv run python test_compute_engine.py <path/to/file.stl>")
+            print("   usage: uv run python scripts/test_compute_engine.py <path/to/file.stl>")
             sys.exit(1)
         file_path = stl_files[0]
         print(f"📂 自動検出: {file_path}\n")
@@ -66,7 +68,7 @@ def main() -> None:
         )
 
     # ---- JSON 出力 -------------------------------------------------------
-    out_path = Path(__file__).parent / "test_compute_engine_result.json"
+    out_path = BACKEND_DIR / "test_compute_engine_result.json"
     out_path.write_text(json.dumps(result, indent=2, ensure_ascii=False))
     print(f"\n✅ 完了 — JSON を保存: {out_path}")
 

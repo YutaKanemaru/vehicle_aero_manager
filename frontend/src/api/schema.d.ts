@@ -156,6 +156,26 @@ export interface paths {
         patch: operations["update_template_api_v1_templates__template_id__patch"];
         trace?: never;
     };
+    "/api/v1/templates/{template_id}/hide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Template Hidden
+         * @description Admin-only: set or clear the is_hidden flag on a template.
+         */
+        patch: operations["set_template_hidden_api_v1_templates__template_id__hide_patch"];
+        trace?: never;
+    };
     "/api/v1/templates/{template_id}/versions": {
         parameters: {
             query?: never;
@@ -268,6 +288,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/geometries/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link Geometry
+         * @description STL ファイルをコピーせずサーバーパスのみ登録（Link only モード）。
+         *     file_path はバックエンドコンテナ内からアクセス可能なパスを指定すること。
+         *     解析はアップロード時と同様に自動実行。
+         */
+        post: operations["link_geometry_api_v1_geometries_link_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/geometries/{geometry_id}": {
         parameters: {
             query?: never;
@@ -285,6 +327,42 @@ export interface paths {
         head?: never;
         /** Update Geometry */
         patch: operations["update_geometry_api_v1_geometries__geometry_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/assemblies/folders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Assembly Folders */
+        get: operations["list_assembly_folders_api_v1_assemblies_folders__get"];
+        put?: never;
+        /** Create Assembly Folder */
+        post: operations["create_assembly_folder_api_v1_assemblies_folders__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assemblies/folders/{folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Assembly Folder */
+        delete: operations["delete_assembly_folder_api_v1_assemblies_folders__folder_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Assembly Folder */
+        patch: operations["update_assembly_folder_api_v1_assemblies_folders__folder_id__patch"];
         trace?: never;
     };
     "/api/v1/assemblies/": {
@@ -342,6 +420,186 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/maps/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Maps */
+        get: operations["list_maps_api_v1_maps__get"];
+        put?: never;
+        /** Create Map */
+        post: operations["create_map_api_v1_maps__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/maps/{map_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Map */
+        get: operations["get_map_api_v1_maps__map_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Map */
+        delete: operations["delete_map_api_v1_maps__map_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Map */
+        patch: operations["update_map_api_v1_maps__map_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/maps/{map_id}/conditions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Conditions */
+        get: operations["list_conditions_api_v1_maps__map_id__conditions__get"];
+        put?: never;
+        /** Create Condition */
+        post: operations["create_condition_api_v1_maps__map_id__conditions__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/maps/{map_id}/conditions/{condition_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Condition */
+        get: operations["get_condition_api_v1_maps__map_id__conditions__condition_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Condition */
+        delete: operations["delete_condition_api_v1_maps__map_id__conditions__condition_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Condition */
+        patch: operations["update_condition_api_v1_maps__map_id__conditions__condition_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/cases/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Cases */
+        get: operations["list_cases_api_v1_cases__get"];
+        put?: never;
+        /** Create Case */
+        post: operations["create_case_api_v1_cases__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Case */
+        get: operations["get_case_api_v1_cases__case_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Case */
+        delete: operations["delete_case_api_v1_cases__case_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Case */
+        patch: operations["update_case_api_v1_cases__case_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/runs/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Runs */
+        get: operations["list_runs_api_v1_cases__case_id__runs__get"];
+        put?: never;
+        /** Create Run */
+        post: operations["create_run_api_v1_cases__case_id__runs__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/runs/{run_id}/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Xml */
+        post: operations["generate_xml_api_v1_cases__case_id__runs__run_id__generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/runs/{run_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Xml */
+        get: operations["download_xml_api_v1_cases__case_id__runs__run_id__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Diff Runs */
+        get: operations["diff_runs_api_v1_runs_diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -388,6 +646,43 @@ export interface components {
             description?: string | null;
             /** Template Id */
             template_id?: string | null;
+            /** Folder Id */
+            folder_id?: string | null;
+        };
+        /** AssemblyFolderCreate */
+        AssemblyFolderCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+        };
+        /** AssemblyFolderResponse */
+        AssemblyFolderResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** AssemblyFolderUpdate */
+        AssemblyFolderUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
         };
         /** AssemblyResponse */
         AssemblyResponse: {
@@ -399,6 +694,8 @@ export interface components {
             description: string | null;
             /** Template Id */
             template_id: string | null;
+            /** Folder Id */
+            folder_id: string | null;
             /** Created By */
             created_by: string;
             /**
@@ -425,6 +722,8 @@ export interface components {
             description?: string | null;
             /** Template Id */
             template_id?: string | null;
+            /** Folder Id */
+            folder_id?: string | null;
         };
         /** BeltOption */
         BeltOption: {
@@ -485,12 +784,201 @@ export interface components {
             /** Box */
             box: number[];
         };
+        /** CaseCreate */
+        CaseCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** Template Id */
+            template_id: string;
+            /** Assembly Id */
+            assembly_id: string;
+            /** Map Id */
+            map_id?: string | null;
+        };
+        /** CaseResponse */
+        CaseResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Template Id */
+            template_id: string;
+            /** Assembly Id */
+            assembly_id: string;
+            /** Map Id */
+            map_id: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Run Count
+             * @default 0
+             */
+            run_count: number;
+        };
+        /** CaseUpdate */
+        CaseUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Map Id */
+            map_id?: string | null;
+        };
+        /**
+         * ComputeOption
+         * @description Controls which Computed blocks are generated. Config can override per-case.
+         */
+        ComputeOption: {
+            /**
+             * Rotate Wheels
+             * @default true
+             */
+            rotate_wheels: boolean;
+            /**
+             * Porous Media
+             * @default true
+             */
+            porous_media: boolean;
+            /**
+             * Turbulence Generator
+             * @default true
+             */
+            turbulence_generator: boolean;
+            /**
+             * Moving Ground
+             * @default true
+             */
+            moving_ground: boolean;
+            /**
+             * Adjust Ride Height
+             * @default false
+             */
+            adjust_ride_height: boolean;
+        };
+        /** ConditionCreate */
+        ConditionCreate: {
+            /** Name */
+            name: string;
+            /** Inflow Velocity */
+            inflow_velocity: number;
+            /**
+             * Yaw Angle
+             * @default 0
+             */
+            yaw_angle: number;
+        };
+        /** ConditionMapCreate */
+        ConditionMapCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+        };
+        /** ConditionMapResponse */
+        ConditionMapResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Condition Count
+             * @default 0
+             */
+            condition_count: number;
+        };
+        /** ConditionMapUpdate */
+        ConditionMapUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+        };
+        /** ConditionResponse */
+        ConditionResponse: {
+            /** Id */
+            id: string;
+            /** Map Id */
+            map_id: string;
+            /** Name */
+            name: string;
+            /** Inflow Velocity */
+            inflow_velocity: number;
+            /** Yaw Angle */
+            yaw_angle: number;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ConditionUpdate */
+        ConditionUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Inflow Velocity */
+            inflow_velocity?: number | null;
+            /** Yaw Angle */
+            yaw_angle?: number | null;
+        };
         /** CustomRefinement */
         CustomRefinement: {
             /** Level */
             level: number;
             /** Parts */
             parts: string[];
+        };
+        /** DiffField */
+        DiffField: {
+            /** Field */
+            field: string;
+            /** Run A Value */
+            run_a_value: string | null;
+            /** Run B Value */
+            run_b_value: string | null;
+        };
+        /** DiffResult */
+        DiffResult: {
+            /** Run A Id */
+            run_a_id: string;
+            /** Run B Id */
+            run_b_id: string;
+            /** Changed Fields */
+            changed_fields: components["schemas"]["DiffField"][];
         };
         /** GeometryFolderCreate */
         GeometryFolderCreate: {
@@ -527,6 +1015,20 @@ export interface components {
             /** Description */
             description?: string | null;
         };
+        /**
+         * GeometryLinkRequest
+         * @description 既存ファイルをコピーせずパスのみ登録する（Link only モード）。
+         */
+        GeometryLinkRequest: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /** File Path */
+            file_path: string;
+            /** Folder Id */
+            folder_id?: string | null;
+        };
         /** GeometryResponse */
         GeometryResponse: {
             /** Id */
@@ -541,6 +1043,11 @@ export interface components {
             original_filename: string;
             /** File Size */
             file_size: number;
+            /**
+             * Is Linked
+             * @default false
+             */
+            is_linked: boolean;
             /** Status */
             status: string;
             analysis_result?: components["schemas"]["AnalysisResult"] | null;
@@ -667,6 +1174,56 @@ export interface components {
             /** Face Count */
             face_count: number;
         };
+        /** PorousMedia */
+        PorousMedia: {
+            /** Part Name */
+            part_name: string;
+            /** Inertial Resistance */
+            inertial_resistance: number;
+            /** Viscous Resistance */
+            viscous_resistance: number;
+        };
+        /** RunCreate */
+        RunCreate: {
+            /** Name */
+            name: string;
+            /** Condition Id */
+            condition_id: string;
+        };
+        /** RunResponse */
+        RunResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Case Id */
+            case_id: string;
+            /** Condition Id */
+            condition_id: string;
+            /** Xml Path */
+            xml_path: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "generating" | "ready" | "error";
+            /** Error Message */
+            error_message: string | null;
+            /** Scheduler Job Id */
+            scheduler_job_id: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** Setup */
         "Setup-Input": {
             /**
@@ -706,12 +1263,14 @@ export interface components {
             simulation?: components["schemas"]["SimulationOption"];
             meshing?: components["schemas"]["MeshingOption"];
             boundary_condition?: components["schemas"]["BoundaryConditionOption"];
+            compute?: components["schemas"]["ComputeOption"];
         };
         /** SetupOption */
         "SetupOption-Output": {
             simulation?: components["schemas"]["SimulationOption"];
             meshing?: components["schemas"]["MeshingOption"];
             boundary_condition?: components["schemas"]["BoundaryConditionOption"];
+            compute?: components["schemas"]["ComputeOption"];
         };
         /** SimulationOption */
         SimulationOption: {
@@ -783,6 +1342,25 @@ export interface components {
              * @default 30
              */
             simulation_time_FP: number;
+            /**
+             * Start Averaging Time
+             * @default 1.5
+             */
+            start_averaging_time: number;
+            /**
+             * Avg Window Size
+             * @default 0.3
+             */
+            avg_window_size: number;
+            /** Output Start Time */
+            output_start_time?: number | null;
+            /** Output Interval Time */
+            output_interval_time?: number | null;
+            /**
+             * Yaw Angle
+             * @default 0
+             */
+            yaw_angle: number;
         };
         /** TargetNames */
         TargetNames: {
@@ -798,6 +1376,48 @@ export interface components {
             baffle?: string[];
             /** Triangle Splitting */
             triangle_splitting?: string[];
+            /** Windtunnel */
+            windtunnel?: string[];
+            /**
+             * Wheel Tire Fr Lh
+             * @default
+             */
+            wheel_tire_fr_lh: string;
+            /**
+             * Wheel Tire Fr Rh
+             * @default
+             */
+            wheel_tire_fr_rh: string;
+            /**
+             * Wheel Tire Rr Lh
+             * @default
+             */
+            wheel_tire_rr_lh: string;
+            /**
+             * Wheel Tire Rr Rh
+             * @default
+             */
+            wheel_tire_rr_rh: string;
+            /**
+             * Overset Fr Lh
+             * @default
+             */
+            overset_fr_lh: string;
+            /**
+             * Overset Fr Rh
+             * @default
+             */
+            overset_fr_rh: string;
+            /**
+             * Overset Rr Lh
+             * @default
+             */
+            overset_rr_lh: string;
+            /**
+             * Overset Rr Rh
+             * @default
+             */
+            overset_rr_rh: string;
         };
         /** TemplateCreate */
         TemplateCreate: {
@@ -845,6 +1465,11 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Is Hidden
+             * @default false
+             */
+            is_hidden: boolean;
             active_version?: components["schemas"]["TemplateVersionResponse"] | null;
             /**
              * Version Count
@@ -858,6 +1483,8 @@ export interface components {
             simulation_parameter?: components["schemas"]["SimulationParameter"];
             setup?: components["schemas"]["Setup-Input"];
             target_names?: components["schemas"]["TargetNames"];
+            /** Porous Coefficients */
+            porous_coefficients?: components["schemas"]["PorousMedia"][];
         };
         /** TemplateSettings */
         "TemplateSettings-Output": {
@@ -865,6 +1492,8 @@ export interface components {
             simulation_parameter?: components["schemas"]["SimulationParameter"];
             setup?: components["schemas"]["Setup-Output"];
             target_names?: components["schemas"]["TargetNames"];
+            /** Porous Coefficients */
+            porous_coefficients?: components["schemas"]["PorousMedia"][];
         };
         /** TemplateUpdate */
         TemplateUpdate: {
@@ -872,6 +1501,8 @@ export interface components {
             name?: string | null;
             /** Description */
             description?: string | null;
+            /** Is Hidden */
+            is_hidden?: boolean | null;
         };
         /** TemplateVersionCreate */
         TemplateVersionCreate: {
@@ -1318,6 +1949,41 @@ export interface operations {
             };
         };
     };
+    set_template_hidden_api_v1_templates__template_id__hide_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_versions_api_v1_templates__template_id__versions_get: {
         parameters: {
             query?: never;
@@ -1621,6 +2287,39 @@ export interface operations {
             };
         };
     };
+    link_geometry_api_v1_geometries_link_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeometryLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeometryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_geometry_api_v1_geometries__geometry_id__get: {
         parameters: {
             query?: never;
@@ -1703,6 +2402,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GeometryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_assembly_folders_api_v1_assemblies_folders__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssemblyFolderResponse"][];
+                };
+            };
+        };
+    };
+    create_assembly_folder_api_v1_assemblies_folders__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssemblyFolderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssemblyFolderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_assembly_folder_api_v1_assemblies_folders__folder_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_assembly_folder_api_v1_assemblies_folders__folder_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssemblyFolderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssemblyFolderResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1915,6 +2731,630 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssemblyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_maps_api_v1_maps__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConditionMapResponse"][];
+                };
+            };
+        };
+    };
+    create_map_api_v1_maps__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConditionMapCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConditionMapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_map_api_v1_maps__map_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConditionMapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_map_api_v1_maps__map_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_map_api_v1_maps__map_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConditionMapUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConditionMapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_conditions_api_v1_maps__map_id__conditions__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConditionResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_condition_api_v1_maps__map_id__conditions__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConditionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConditionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_condition_api_v1_maps__map_id__conditions__condition_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                condition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConditionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_condition_api_v1_maps__map_id__conditions__condition_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                condition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_condition_api_v1_maps__map_id__conditions__condition_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                map_id: string;
+                condition_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConditionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConditionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_cases_api_v1_cases__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseResponse"][];
+                };
+            };
+        };
+    };
+    create_case_api_v1_cases__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_case_api_v1_cases__case_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_case_api_v1_cases__case_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_case_api_v1_cases__case_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_runs_api_v1_cases__case_id__runs__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_run_api_v1_cases__case_id__runs__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_xml_api_v1_cases__case_id__runs__run_id__generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_xml_api_v1_cases__case_id__runs__run_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diff_runs_api_v1_runs_diff_get: {
+        parameters: {
+            query: {
+                /** @description Run A ID */
+                a: string;
+                /** @description Run B ID */
+                b: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiffResult"];
                 };
             };
             /** @description Validation Error */

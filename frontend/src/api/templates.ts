@@ -73,4 +73,10 @@ export const templatesApi = {
     data: TemplateForkRequest,
   ): Promise<TemplateResponse> =>
     client.post(`/templates/${templateId}/fork`, data),
+
+  setHidden: (
+    templateId: string,
+    is_hidden: boolean,
+  ): Promise<TemplateResponse> =>
+    client.patch(`/templates/${templateId}/hide`, { is_hidden }),
 };

@@ -10,7 +10,7 @@ import {
   Stack,
   Title,
 } from "@mantine/core";
-import { IconPlus, IconTrash, IconVersions, IconGitFork } from "@tabler/icons-react";
+import { IconPlus, IconTrash, IconVersions, IconGitFork, IconEye, IconEyeOff } from "@tabler/icons-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { templatesApi, type TemplateResponse } from "../../api/templates";
@@ -42,12 +42,34 @@ export function TemplateList() {
     },
   });
 
+  const hideMutation = useMutation({
+    mutationFn: ({ id, is_hidden }: { id: string; is_hidden: boolean }) =>
+      templatesApi.setHidden(id, is_hidden),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["templates"] });
+      notifications.show({
+        message: vars.is_hidden ? "Template hidden" : "Template visible",
+        color: "blue",
+      });
+    },
+    onError: (e: Error) => {
+      notifications.show({ message: e.message, color: "red" });
+    },
+  });
+
   const canDelete = (t: TemplateResponse) =>
     user?.id === t.created_by || user?.is_admin;
 
   const rows = templates.map((t) => (
-    <Table.Tr key={t.id}>
-      <Table.Td>{t.name}</Table.Td>
+    <Table.Tr key={t.id} opacity={t.is_hidden ? 0.5 : 1}>
+      <Table.Td>
+        <Group gap="xs">
+          {t.name}
+          {t.is_hidden && (
+            <Badge size="xs" color="gray" variant="filled">Hidden</Badge>
+          )}
+        </Group>
+      </Table.Td>
       <Table.Td>
         <Badge variant="light" color={t.sim_type === "aero" ? "blue" : "violet"}>
           {t.sim_type.toUpperCase()}
@@ -77,6 +99,18 @@ export function TemplateList() {
                 <IconGitFork size={16} />
               </ActionIcon>
             </Tooltip>
+          {user?.is_admin && (
+            <Tooltip label={t.is_hidden ? "Show template" : "Hide template"}>
+              <ActionIcon
+                variant="subtle"
+                color={t.is_hidden ? "gray" : "orange"}
+                loading={hideMutation.isPending}
+                onClick={() => hideMutation.mutate({ id: t.id, is_hidden: !t.is_hidden })}
+              >
+                {t.is_hidden ? <IconEye size={16} /> : <IconEyeOff size={16} />}
+              </ActionIcon>
+            </Tooltip>
+          )}
           {canDelete(t) && (
             <Tooltip label="Delete">
               <ActionIcon

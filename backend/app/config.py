@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     # Storage — 絶対パスで固定（起動ディレクトリ依存を防ぐ）
     upload_dir: Path = _BACKEND_DIR / "data" / "uploads"
     result_dir: Path = _BACKEND_DIR / "data" / "results"
+    runs_dir: Path = _BACKEND_DIR / "data" / "runs"
 
     # CORS
     cors_origins: list[str] = ["http://localhost:5173"]  # Vite dev server

@@ -31,6 +31,7 @@ import {
   IconFolder,
   IconFolderOpen,
   IconArrowRight,
+  IconLink,
 } from "@tabler/icons-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
@@ -45,6 +46,7 @@ import {
 } from "../../api/geometries";
 import { useAuthStore } from "../../stores/auth";
 import { GeometryUploadModal } from "./GeometryUploadModal";
+import { GeometryLinkModal } from "./GeometryLinkModal";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -173,6 +175,13 @@ function GeometryRow({ geometry, canDelete, folders }: GeometryRowProps) {
           <Group gap={4}>
             {expanded ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
             <Text size="sm">{geometry.name}</Text>
+            {geometry.is_linked && (
+              <Tooltip label="リンク登録（ファイルはコピーされていません）" withArrow>
+                <Badge size="xs" color="cyan" variant="light" leftSection={<IconLink size={10} />}>
+                  Linked
+                </Badge>
+              </Tooltip>
+            )}
           </Group>
         </Table.Td>
         <Table.Td>
@@ -433,6 +442,7 @@ function FolderCreateModal({ opened, onClose }: FolderCreateModalProps) {
 export function GeometryList() {
   const user = useAuthStore((s) => s.user);
   const [uploadOpened, { open: openUpload, close: closeUpload }] = useDisclosure(false);
+  const [linkOpened, { open: openLink, close: closeLink }] = useDisclosure(false);
   const [folderCreateOpened, { open: openFolderCreate, close: closeFolderCreate }] = useDisclosure(false);
 
   const queryClient = useQueryClient();
@@ -501,6 +511,9 @@ export function GeometryList() {
           >
             New Folder
           </Button>
+          <Button variant="default" leftSection={<IconLink size={16} />} onClick={openLink}>
+            Link STL
+          </Button>
           <Button leftSection={<IconUpload size={16} />} onClick={openUpload}>
             Upload STL
           </Button>
@@ -542,6 +555,7 @@ export function GeometryList() {
       )}
 
       <GeometryUploadModal opened={uploadOpened} onClose={closeUpload} />
+      <GeometryLinkModal opened={linkOpened} onClose={closeLink} />
       <FolderCreateModal opened={folderCreateOpened} onClose={closeFolderCreate} />
     </Stack>
   );
