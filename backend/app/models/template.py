@@ -19,7 +19,7 @@ class Template(Base):
     )
     name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    sim_type: Mapped[str] = mapped_column(String(10))  # "aero" | "ghn"
+    sim_type: Mapped[str] = mapped_column(String(10))  # "aero" | "ghn" | "fan_noise"
     is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

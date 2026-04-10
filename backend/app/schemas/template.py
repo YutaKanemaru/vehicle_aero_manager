@@ -13,7 +13,7 @@ from app.schemas.template_settings import TemplateSettings
 class TemplateCreate(BaseModel):
     name: str
     description: str | None = None
-    sim_type: Literal["aero", "ghn"]
+    sim_type: Literal["aero", "ghn", "fan_noise"]
     settings: TemplateSettings
     comment: str | None = None  # comment for the initial version
 
