@@ -15,7 +15,10 @@ import numpy as np
 import trimesh
 
 if TYPE_CHECKING:
-    from app.schemas.template_settings import ComputeOption, TargetNames, TemplateSettings
+    from app.schemas.template_settings import (
+        ComputeOption, GroundConfig, TargetNames, TemplateSettings,
+        TurbulenceGeneratorOption, Belt5Config,
+    )
     from app.ultrafluid.schema import UfxSolverDeck
 
 
@@ -106,32 +109,75 @@ def analyze_stl_to_json(file_path: Path) -> str:
 # XML 組み立てエンジン (Step 5)
 # ===========================================================================
 
-def resolve_compute_flags(
-    template_flags: ComputeOption,
-) -> ComputeOption:
+# ---------------------------------------------------------------------------
+# Timing / iteration helpers
+# ---------------------------------------------------------------------------
+
+def compute_dt(coarsest_mesh_size: float, inflow_velocity: float, mach_factor: float) -> float:
     """
-    Template の ComputeOption に依存関係ルールを適用して返す。
+    LBM タイムステップを計算する。
 
-    依存関係ルール:
-    - rotate_wheels=False → moving_ground を強制 False
+    dt = coarsest_mesh_size / (inflow_velocity × mach_factor × √3)
+
+    √3 は LBM の音速スケーリング定数 (cs = 1/√3 × dx/dt)。
     """
-    from app.schemas.template_settings import ComputeOption as CO
+    denom = inflow_velocity * mach_factor * math.sqrt(3.0)
+    if denom <= 0:
+        return 1e-4
+    return coarsest_mesh_size / denom
 
-    flags = CO(**template_flags.model_dump())
 
-    # 依存関係の強制
-    if not flags.rotate_wheels:
-        flags.moving_ground = False
+def time_to_iterations(time_sec: float, dt: float) -> int:
+    """秒 → コースメッシュのイテレーション数に変換。"""
+    if dt <= 0 or time_sec <= 0:
+        return 0
+    return max(1, round(time_sec / dt))
 
-    return flags
 
+def compute_finest_voxel_size(coarsest_voxel_size: float, n_levels: int) -> float:
+    """finest = coarsest / 2^n_levels  (UI 表示用)"""
+    return coarsest_voxel_size / (2 ** n_levels)
+
+
+def compute_reference_length(wheel_kinematics_map: dict) -> float:
+    """
+    フロント軸とリア軸の車軸中心間距離（ホイールベース）を返す。
+
+    wheel_kinematics_map: {"fr_lh": {"center": {...}, ...}, "rr_lh": ..., ...}
+    FR と RR のどちらか側の center.x の差を使う。
+    """
+    fr = wheel_kinematics_map.get("fr_lh") or wheel_kinematics_map.get("fr_rh")
+    rr = wheel_kinematics_map.get("rr_lh") or wheel_kinematics_map.get("rr_rh")
+    if fr and rr:
+        return abs(rr["center"]["x_pos"] - fr["center"]["x_pos"])
+    return 1.0  # フォールバック
+
+
+def compute_moment_reference_origin(wheel_kinematics_map: dict) -> dict:
+    """
+    FR / RR 車軸中心の X 中点を モーメント基準点として返す。
+
+    Returns: {"x_pos": float, "y_pos": 0.0, "z_pos": float}
+    """
+    fr = wheel_kinematics_map.get("fr_lh") or wheel_kinematics_map.get("fr_rh")
+    rr = wheel_kinematics_map.get("rr_lh") or wheel_kinematics_map.get("rr_rh")
+    if fr and rr:
+        x = (fr["center"]["x_pos"] + rr["center"]["x_pos"]) / 2.0
+        z = (fr["center"]["z_pos"] + rr["center"]["z_pos"]) / 2.0
+        return {"x_pos": x, "y_pos": 0.0, "z_pos": z}
+    return {"x_pos": 0.0, "y_pos": 0.0, "z_pos": 0.0}
+
+
+# ---------------------------------------------------------------------------
+# Compute domain bbox
+# ---------------------------------------------------------------------------
 
 def compute_domain_bbox(vehicle_bbox: dict, multipliers: list[float]) -> dict:
     """
     車両 bbox に 6 つの相対倍率を掛けて絶対的な計算領域 bbox を返す。
 
     multipliers: [x_min_mult, x_max_mult, y_min_mult, y_max_mult, z_min_mult, z_max_mult]
-    規約: x_min_mult と z_min_mult は車両 COG から前後方向に掛ける
+    車両 COG を基準に X/Y 方向へ展開、Z は vehicle z_min 基準。
     """
     cx = (vehicle_bbox["x_min"] + vehicle_bbox["x_max"]) / 2
     cy = (vehicle_bbox["y_min"] + vehicle_bbox["y_max"]) / 2
@@ -151,19 +197,18 @@ def compute_domain_bbox(vehicle_bbox: dict, multipliers: list[float]) -> dict:
     }
 
 
-def compute_coarsest_mesh_size(finest_res: float, n_levels: int) -> float:
-    """finest_resolution_size × 2^n_levels"""
-    return finest_res * (2 ** n_levels)
-
-
 def _matches_any(part_name: str, patterns: list[str]) -> bool:
     """パーツ名がパターンリストのいずれかに部分一致するか判定"""
     return any(p and p.lower() in part_name.lower() for p in patterns)
 
 
+# ---------------------------------------------------------------------------
+# Wheel classification & kinematics
+# ---------------------------------------------------------------------------
+
 def classify_wheels(
     analysis_result: dict,
-    target_names: TargetNames,
+    target_names: "TargetNames",
 ) -> dict[str, dict]:
     """
     analysis_result の part_info からホイール部品を FR-LH/FR-RH/RR-LH/RR-RH に分類する。
@@ -175,7 +220,6 @@ def classify_wheels(
     """
     part_info: dict[str, dict] = analysis_result.get("part_info", {})
 
-    # 個別 PID が指定されている場合は直接マッピング
     explicit: dict[str, str] = {
         "fr_lh": target_names.wheel_tire_fr_lh,
         "fr_rh": target_names.wheel_tire_fr_rh,
@@ -190,17 +234,16 @@ def classify_wheels(
             result[key] = part_info.get(pid)
         return {k: v for k, v in result.items() if v is not None}
 
-    # 自動分類: wheel パターンにマッチした部品を重心で振り分け
+    # 自動分類: wheel パターンでマッチした部品を重心で振り分け
     wheel_parts = {
         name: info for name, info in part_info.items()
         if _matches_any(name, target_names.wheel)
-        and not _matches_any(name, ["VREV_", "Overset"])  # OSM 領域を除外
+        and not _matches_any(name, ["VREV_", "Overset"])
     }
 
     if not wheel_parts:
         return {}
 
-    # 車両 COG (x, y)
     vbbox = analysis_result["vehicle_bbox"]
     cog_x = (vbbox["x_min"] + vbbox["x_max"]) / 2
     cog_y = (vbbox["y_min"] + vbbox["y_max"]) / 2
@@ -219,64 +262,51 @@ def classify_wheels(
 def compute_wheel_kinematics(
     part_info: dict,
     inflow_velocity: float,
-    rim_vertices: np.ndarray | None = None,
+    rim_vertices: "np.ndarray | None" = None,
 ) -> dict:
     """
-    ホイール情報から overset rotating インスタンスのパラメータを計算する。
+    ホイール情報から overset rotating インスタンスパラメータを計算する。
 
-    Returns:
-        {"center": XYZPos dict, "axis": XYZDir dict, "rpm": float, "radius": float}
+    Returns: {"center": XYZPos dict, "axis": XYZDir dict, "rpm": float, "radius": float}
     """
     bbox = part_info["bbox"]
     centroid = part_info["centroid"]
 
-    # ホイール半径 = Z 方向の寸法 / 2 (回転軸が Y 方向の場合)
-    # または bbox から推定
-    radius_y = (bbox["z_max"] - bbox["z_min"]) / 2
-    radius_z = (bbox["y_max"] - bbox["y_min"]) / 2
-    radius = min(radius_y, radius_z) if radius_y > 0 and radius_z > 0 else max(radius_y, radius_z)
+    radius_z = (bbox["z_max"] - bbox["z_min"]) / 2
+    radius_y = (bbox["y_max"] - bbox["y_min"]) / 2
+    radius = min(radius_z, radius_y) if radius_z > 0 and radius_y > 0 else max(radius_z, radius_y)
 
-    # rim vertices が与えられていれば PCA で軸を計算
     if rim_vertices is not None and len(rim_vertices) >= 3:
         centered = rim_vertices - rim_vertices.mean(axis=0)
         _, _, vt = np.linalg.svd(centered, full_matrices=False)
-        axis = vt[2]  # 最小分散方向 = 回転軸
+        axis = vt[2]
         if axis[1] < 0:
-            axis = -axis  # Y 正方向に揃える
+            axis = -axis
         axis_dir = {"x_dir": float(axis[0]), "y_dir": float(axis[1]), "z_dir": float(axis[2])}
     else:
-        # デフォルト: Y 軸方向 (標準的な車両座標系)
         axis_dir = {"x_dir": 0.0, "y_dir": 1.0, "z_dir": 0.0}
 
-    # RPM = (inflow_velocity / circumference) × 60
     circumference = 2 * math.pi * radius
     rpm = (inflow_velocity / circumference) * 60.0 if circumference > 0 else 0.0
 
-    center = {
-        "x_pos": centroid[0],
-        "y_pos": centroid[1],
-        "z_pos": centroid[2],
+    return {
+        "center": {"x_pos": centroid[0], "y_pos": centroid[1], "z_pos": centroid[2]},
+        "axis": axis_dir,
+        "rpm": rpm,
+        "radius": radius,
     }
 
-    return {"center": center, "axis": axis_dir, "rpm": rpm, "radius": radius}
 
-
-def compute_porous_axis(part_info: dict, vertices: np.ndarray | None = None) -> dict:
-    """
-    ポーラス部品の主軸方向を PCA で計算する。
-    vertices が与えられない場合は bbox から推定。
-
-    Returns: {"x_dir": float, "y_dir": float, "z_dir": float}
-    """
+def compute_porous_axis(part_info: dict, vertices: "np.ndarray | None" = None) -> dict:
+    """ポーラス部品の主軸方向を PCA / bbox から返す。"""
     if vertices is not None and len(vertices) >= 3:
         centered = vertices - vertices.mean(axis=0)
         _, _, vt = np.linalg.svd(centered, full_matrices=False)
-        axis = vt[0]  # 最大分散方向 = 主軸 (= ポーラス流れ方向)
+        axis = vt[0]
         if axis[0] < 0:
-            axis = -axis  # X 正方向に揃える
+            axis = -axis
         return {"x_dir": float(axis[0]), "y_dir": float(axis[1]), "z_dir": float(axis[2])}
 
-    # bbox から推定: 最も薄い方向が porous 方向
     bbox = part_info["bbox"]
     dims = {
         "x": bbox["x_max"] - bbox["x_min"],
@@ -291,55 +321,351 @@ def compute_porous_axis(part_info: dict, vertices: np.ndarray | None = None) -> 
     }
 
 
-def _compute_num_iterations(
-    simulation_time: float,
-    inflow_velocity: float,
-    coarsest_mesh_size: float,
-    mach_factor: float,
-) -> int:
+# ---------------------------------------------------------------------------
+# Ground / belt / BL-suction helpers
+# ---------------------------------------------------------------------------
+
+def _resolve_no_slip_xmin(
+    ground_cfg: "GroundConfig",
+    belt5_center_xmin: float | None,
+) -> float | None:
     """
-    コース最粗メッシュでの総イテレーション数を計算する。
+    BL suction が有効な場合の no-slip x min 位置を解決する。
 
-    dt_coarsest ≈ coarsest_mesh_size / (inflow_velocity * mach_factor)
-    num_iter = ceil(simulation_time / dt_coarsest)
+    Returns None if bl_suction.apply == False.
     """
-    if inflow_velocity <= 0 or coarsest_mesh_size <= 0:
-        return 10000
-    dt = coarsest_mesh_size / (inflow_velocity * mach_factor)
-    return max(1, math.ceil(simulation_time / dt))
+    bl = ground_cfg.bl_suction
+    if not bl.apply:
+        return None  # 全面 no-slip、xmin 位置なし
+
+    # 5-belt: center belt x_min から導出
+    if (
+        ground_cfg.ground_mode == "rotating_belt_5"
+        and bl.no_slip_xmin_from_belt_xmin
+        and belt5_center_xmin is not None
+    ):
+        return belt5_center_xmin + bl.bl_xmin_offset
+
+    # それ以外: ユーザー直接指定
+    if bl.no_slip_xmin_pos is not None:
+        return bl.no_slip_xmin_pos
+
+    return None
 
 
-def _compute_avg_iteration(
-    avg_start_time: float,
-    inflow_velocity: float,
-    coarsest_mesh_size: float,
-    mach_factor: float,
-) -> int:
-    return max(0, _compute_num_iterations(
-        avg_start_time, inflow_velocity, coarsest_mesh_size, mach_factor
+def _static_floor_dims(
+    vbbox: dict,
+    no_slip_xmin: float | None,
+) -> dict:
+    """
+    static floor の xmin/xmax/ymin/ymax を body 寸法から計算する。
+
+    setup_script_ext_aero_2026_v1.99.py の body-based ロジックに従う:
+      xmax = body xMax + body_length × 0.75
+      ymin = body yMin - body_width × 0.25
+      ymax = body yMax + body_width × 0.25
+    """
+    body_length = vbbox["x_max"] - vbbox["x_min"]
+    body_width  = vbbox["y_max"] - vbbox["y_min"]
+    xmin = no_slip_xmin if no_slip_xmin is not None else vbbox["x_min"]
+    return {
+        "x_min": xmin,
+        "x_max": vbbox["x_max"] + body_length * 0.75,
+        "y_min": vbbox["y_min"] - body_width  * 0.25,
+        "y_max": vbbox["y_max"] + body_width  * 0.25,
+    }
+
+
+def _compute_belt5_center_xmin(
+    vbbox: dict,
+    wheel_kin_map: dict,
+    belt5_cfg: "Belt5Config",
+) -> float:
+    """
+    5ベルトシステムのセンターベルト x_min を計算する。
+
+    center_belt_position == "at_wheelbase_center" の場合:
+      center_x = (FR wheel x + RR wheel x) / 2
+      center_xmin = center_x - belt_size_center.x / 2
+    """
+    if belt5_cfg.center_belt_position == "user_specified" and belt5_cfg.center_belt_x_pos is not None:
+        return belt5_cfg.center_belt_x_pos - belt5_cfg.belt_size_center.x / 2
+
+    # ホイール運動学から center x を計算
+    fr = wheel_kin_map.get("fr_lh") or wheel_kin_map.get("fr_rh")
+    rr = wheel_kin_map.get("rr_lh") or wheel_kin_map.get("rr_rh")
+    if fr and rr:
+        center_x = (fr["center"]["x_pos"] + rr["center"]["x_pos"]) / 2.0
+    else:
+        center_x = (vbbox["x_min"] + vbbox["x_max"]) / 2.0
+
+    return center_x - belt5_cfg.belt_size_center.x / 2
+
+
+def _build_belt5_wall_instances(
+    wheel_kin_map: dict,
+    belt5_cfg: "Belt5Config",
+    vbbox: dict,
+    velocity_dir: dict,
+    FluidBCMoving: type,
+    XYZDir: type,
+    WallInstance: type,
+) -> tuple[list, float]:
+    """
+    5ベルト wall BC インスタンスを生成する。
+
+    Returns: (wall_instances, center_belt_xmin)
+    """
+    bsw = belt5_cfg.belt_size_wheel
+    bsc = belt5_cfg.belt_size_center
+    vx, vy = velocity_dir["x_dir"], velocity_dir["y_dir"]
+
+    # センターベルト xmin
+    center_xmin = _compute_belt5_center_xmin(vbbox, wheel_kin_map, belt5_cfg)
+
+    # ホイールベルトの y 中心位置を tire centroid から決定
+    belt_y_positions: dict[str, float] = {}
+    for key in ("fr_lh", "fr_rh", "rr_lh", "rr_rh"):
+        kin = wheel_kin_map.get(key)
+        if kin:
+            belt_y_positions[key] = kin["center"]["y_pos"]
+        else:
+            # フォールバック: 全幅の ±1/4
+            width = vbbox["y_max"] - vbbox["y_min"]
+            y_mid = (vbbox["y_min"] + vbbox["y_max"]) / 2
+            belt_y_positions["fr_lh"] = y_mid - width / 4
+            belt_y_positions["fr_rh"] = y_mid + width / 4
+            belt_y_positions["rr_lh"] = y_mid - width / 4
+            belt_y_positions["rr_rh"] = y_mid + width / 4
+            break
+
+    # narrow car fallback: LH-RH 間距離の最小制約
+    if belt5_cfg.narrow_car_fallback.enabled:
+        min_gap = belt5_cfg.narrow_car_fallback.min_belt_gap
+        for axle in (("fr_lh", "fr_rh"), ("rr_lh", "rr_rh")):
+            lh_key, rh_key = axle
+            gap = belt_y_positions.get(rh_key, 0) - belt_y_positions.get(lh_key, 0)
+            if gap < min_gap:
+                mid = (belt_y_positions.get(lh_key, 0) + belt_y_positions.get(rh_key, 0)) / 2
+                belt_y_positions[lh_key] = mid - min_gap / 2
+                belt_y_positions[rh_key] = mid + min_gap / 2
+
+    instances = []
+
+    # ホイールベルト x 位置: ホイール centroid を基準に bsw.x の幅で設置
+    for key, belt_label in (
+        ("fr_lh", "Belt_Wheel_FR_LH"),
+        ("fr_rh", "Belt_Wheel_FR_RH"),
+        ("rr_lh", "Belt_Wheel_RR_LH"),
+        ("rr_rh", "Belt_Wheel_RR_RH"),
+    ):
+        kin = wheel_kin_map.get(key)
+        center_x = kin["center"]["x_pos"] if kin else (vbbox["x_min"] + vbbox["x_max"]) / 2
+        instances.append(WallInstance(
+            name=belt_label,
+            parts=[belt_label],
+            fluid_bc_settings=FluidBCMoving(
+                type="moving",
+                velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
+            ),
+        ))
+
+    # センターベルト
+    instances.append(WallInstance(
+        name="Belt_Center",
+        parts=["Belt_Center"],
+        fluid_bc_settings=FluidBCMoving(
+            type="moving",
+            velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
+        ),
     ))
 
+    return instances, center_xmin
+
+
+def _build_ground_box_refinements(
+    no_slip_xmin: float,
+    coarsest: float,
+    ground_height: float,
+    floor_dims: dict,
+    ground_mode: str,
+    belt_active: bool,
+    BoundingBox: type,
+    BoxInstance: type,
+) -> list:
+    """
+    地面境界層用 box refinement を生成する。
+
+    setup_script_ext_aero_2026_v1.99.py のロジックに従う:
+      - box_ground_RL5: 24 layers × coarsest × 0.5^5 の高さ
+      - box_ground_RL6:  8 layers × coarsest × 0.5^6 の高さ
+      - static ground かつ belt なし: RL1~RL4 の追加 box も生成
+
+    Returns: list[BoxInstance]
+    """
+    OFFSET_X = -0.01   # no_slip_xmin からのオフセット
+    OFFSET_Z = -0.01   # ground_height からのオフセット
+    NUM_LAYERS_RL5 = 24
+    NUM_LAYERS_RL6 = 8
+    INFLATION_FACTORS = [1.4, 1.2, 1.1, 1.05]  # RL1-4 のインフレ係数
+
+    h_rl5 = coarsest * (0.5 ** 5) * NUM_LAYERS_RL5
+    h_rl6 = coarsest * (0.5 ** 6) * NUM_LAYERS_RL6
+
+    x_min_box = no_slip_xmin + OFFSET_X
+    x_max_box = floor_dims["x_max"]
+    y_min_box  = floor_dims["y_min"]
+    y_max_box  = floor_dims["y_max"]
+    z_min_box  = ground_height + OFFSET_Z
+
+    instances = []
+
+    for rl, thickness in ((5, h_rl5), (6, h_rl6)):
+        instances.append(BoxInstance(
+            name=f"box_ground_RL{rl}",
+            refinement_level=rl,
+            bounding_box=BoundingBox(
+                x_min=x_min_box,
+                x_max=x_max_box,
+                y_min=y_min_box,
+                y_max=y_max_box,
+                z_min=z_min_box,
+                z_max=ground_height + thickness,
+            ),
+        ))
+
+    # static ground かつ belt なし: RL1~RL4 も追加
+    if ground_mode == "static" and not belt_active:
+        rl5_len = x_max_box - x_min_box
+        rl5_wid = y_max_box - y_min_box
+        for i, factor in enumerate(INFLATION_FACTORS, 1):
+            inflate = (factor - 1) * 0.5
+            instances.append(BoxInstance(
+                name=f"box_ground_add_RL{i}",
+                refinement_level=i,
+                bounding_box=BoundingBox(
+                    x_min=x_min_box - rl5_len * inflate,
+                    x_max=x_max_box + rl5_len * inflate,
+                    y_min=y_min_box - rl5_wid * inflate,
+                    y_max=y_max_box + rl5_wid * inflate,
+                    z_min=z_min_box,
+                    z_max=ground_height + h_rl5,
+                ),
+            ))
+
+    return instances
+
+
+def _build_tg_instances(
+    sim_type: str,
+    tg_cfg: "TurbulenceGeneratorOption",
+    vbbox: dict,
+    coarsest: float,
+    no_slip_xmin: float | None,
+    floor_dims: dict,
+    BoundingBox: type,
+    BoxInstance: type,
+    TurbulenceInstance: type,
+    TurbulencePoint: type,
+    TurbulenceBoundingBox: type,
+) -> tuple[list, list]:
+    """
+    Turbulence generator インスタンスと、body TG 用 box refinement を生成する。
+
+    sim_type == "aero" のときのみ有効。
+    setup_script_ext_aero_2026_v1.99.py のロジックに従う。
+
+    Returns: (tg_instances, extra_box_instances)
+    """
+    if sim_type != "aero":
+        return [], []
+
+    ground_height = vbbox["z_min"]
+    car_length_x = vbbox["x_max"] - vbbox["x_min"]
+    car_length_y = vbbox["y_max"] - vbbox["y_min"]
+    car_length_z = vbbox["z_max"] - vbbox["z_min"]
+    car_y_center = (vbbox["y_min"] + vbbox["y_max"]) / 2
+
+    h_rl6 = coarsest * (0.5 ** 6) * 8
+
+    tg_instances = []
+    box_instances = []
+    OFFSET = 0.02  # box refinement パディング
+
+    if tg_cfg.enable_ground_tg and no_slip_xmin is not None:
+        tg_instances.append(TurbulenceInstance(
+            name="tg_ground",
+            num_eddies=tg_cfg.ground_tg_num_eddies,
+            length_scale=coarsest * (0.5 ** 6),
+            turbulence_intensity=tg_cfg.ground_tg_intensity,
+            point=TurbulencePoint(x_pos=no_slip_xmin - 0.01),
+            bounding_box=TurbulenceBoundingBox(
+                y_min=floor_dims["y_min"],
+                y_max=floor_dims["y_max"],
+                z_min=ground_height,
+                z_max=ground_height + h_rl6,
+            ),
+        ))
+
+    if tg_cfg.enable_body_tg:
+        tg_x = vbbox["x_min"] - car_length_x * 0.05
+        tg_y_min = car_y_center - car_length_y * 0.45
+        tg_y_max = car_y_center + car_length_y * 0.45
+        tg_z_min = vbbox["z_min"] + car_length_z * 0.10
+        tg_z_max = vbbox["z_min"] + car_length_z * 0.65
+
+        tg_instances.append(TurbulenceInstance(
+            name="tg_body",
+            num_eddies=tg_cfg.body_tg_num_eddies,
+            length_scale=coarsest * (0.5 ** 6),
+            turbulence_intensity=tg_cfg.body_tg_intensity,
+            point=TurbulencePoint(x_pos=tg_x),
+            bounding_box=TurbulenceBoundingBox(
+                y_min=tg_y_min,
+                y_max=tg_y_max,
+                z_min=tg_z_min,
+                z_max=tg_z_max,
+            ),
+        ))
+
+        # body TG 専用 box refinement RL6
+        box_instances.append(BoxInstance(
+            name="boxRL_tg_body",
+            refinement_level=6,
+            bounding_box=BoundingBox(
+                x_min=tg_x - OFFSET * 0.5,
+                x_max=vbbox["x_min"] + car_length_x * 0.08 + OFFSET,
+                y_min=tg_y_min - OFFSET * 0.5,
+                y_max=tg_y_max + OFFSET * 0.5,
+                z_min=tg_z_min - OFFSET * 0.5,
+                z_max=tg_z_max + OFFSET * 0.5,
+            ),
+        ))
+
+    return tg_instances, box_instances
+
+
+# ---------------------------------------------------------------------------
+# Main assembler
+# ---------------------------------------------------------------------------
 
 def assemble_ufx_solver_deck(
-    template_settings: TemplateSettings,
+    template_settings: "TemplateSettings",
     analysis_result: dict,
+    sim_type: str,
     inflow_velocity: float,
     yaw_angle: float = 0.0,
-    source_file: str = "geometry.stl",
-) -> UfxSolverDeck:
+    source_files: list[str] | None = None,
+    source_file: str | None = None,
+) -> "UfxSolverDeck":
     """
     Template (Fixed) + Geometry analysis_result (Computed) + Config (UserInput)
     から UfxSolverDeck を組み立てる。
 
-    1. resolve_compute_flags()
-    2. 有効な inflow_velocity / simulation_time を決定 (Config 優先)
-    3. compute_domain_bbox()
-    4. classify_wheels() + compute_wheel_kinematics()   [rotate_wheels=True のみ]
-    5. compute_porous_axis() per porous part            [porous_media=True のみ]
-    6. compute_coarsest_mesh_size()
-    7. UfxSolverDeck を組み立て
+    sim_type: "aero" | "ghn" | "fan_noise"
+    source_files: Assembly に複数 Geometry がある場合
+    source_file:  単一 Geometry の場合
     """
-    # 遅延インポート (循環定義を避けるため)
     from app.ultrafluid.schema import (
         AeroCoefficients, BoundaryConditions, BoundingBox,
         CoefficientsAlongAxis, DomainPart, ExportBounds,
@@ -348,7 +674,7 @@ def assemble_ufx_solver_deck(
         Geometry, InletInstance, Material, Meshing, MeshingGeneral,
         MomentReferenceSystem, Overset, Output, OutputCoarsening,
         OutputGeneral, OutputVariablesFull, OutputVariablesSurface,
-        AeroCoefficients, BoxInstance, BoundingRange, CustomInstance,
+        BoxInstance, BoundingRange, CustomInstance,
         DomainPartInstance, OffsetInstance, OutletInstance, PorousAxis,
         PorousInstance, Refinement, RotatingInstance, Simulation,
         SimulationGeneral, Sources, SurfaceMeshOptimization,
@@ -357,72 +683,127 @@ def assemble_ufx_solver_deck(
         XYZDir, XYZPos,
     )
 
-    sp = template_settings.simulation_parameter
-    so = template_settings.setup_option
+    sp   = template_settings.simulation_parameter
+    so   = template_settings.setup_option
     setup = template_settings.setup
-    tn = template_settings.target_names
-    vbbox = analysis_result.get("vehicle_bbox", {})
+    tn   = template_settings.target_names
+    out_cfg = template_settings.output
+    gc   = so.boundary_condition.ground
+    tg_cfg = so.boundary_condition.turbulence_generator
+
+    vbbox: dict    = analysis_result.get("vehicle_bbox", {})
     part_info: dict = analysis_result.get("part_info", {})
 
-    # ── 1. Compute flags ──────────────────────────────────────────────────
-    flags = resolve_compute_flags(so.compute)
+    # ── 有効パラメータ ────────────────────────────────────────────────────
+    temperature_k = (sp.temperature + 273.15) if so.simulation.temperature_degree else sp.temperature
+    coarsest      = sp.coarsest_voxel_size                 # ユーザー入力のコースメッシュサイズ
+    dt            = compute_dt(coarsest, inflow_velocity, sp.mach_factor)
 
-    # ── 2. 有効パラメータ ──────────────────────────────────────────────────
-    simulation_time = sp.simulation_time
-    yaw_angle_deg   = yaw_angle  # degrees
-    temperature_k   = (sp.temperature + 273.15) if so.simulation.temperature_degree else sp.temperature
+    # parameter_preset: fan_noise のときのみ "fan_noise"、それ以外 "default"
+    parameter_preset = "fan_noise" if sim_type == "fan_noise" else "default"
 
-    # ── 3. Computed メッシュパラメータ ─────────────────────────────────────
-    coarsest = compute_coarsest_mesh_size(sp.finest_resolution_size, sp.number_of_resolution)
-
-    # ── 4. Domain bounding box ────────────────────────────────────────────
+    # ── Domain bounding box ───────────────────────────────────────────────
     if vbbox:
         abs_bbox = compute_domain_bbox(vbbox, setup.domain_bounding_box)
     else:
         abs_bbox = {"x_min": -10.0, "x_max": 30.0, "y_min": -15.0, "y_max": 15.0, "z_min": 0.0, "z_max": 8.0}
-
     domain_bb = BoundingBox(**abs_bbox)
 
-    # ── 5. ホイール運動学 ──────────────────────────────────────────────────
-    rotating_instances: list[RotatingInstance] = []
-    wheel_wall_instances: list[WallInstance] = []
-    if flags.rotate_wheels:
+    ground_height = vbbox.get("z_min", 0.0)
+
+    # ── Yaw 방향 ──────────────────────────────────────────────────────────
+    yaw_rad = math.radians(yaw_angle)
+    vx = inflow_velocity * math.cos(yaw_rad)
+    vy = inflow_velocity * math.sin(yaw_rad)
+    velocity_dir = {"x_dir": vx, "y_dir": vy}
+
+    # ── Wheel kinematics ──────────────────────────────────────────────────
+    is_aero = sim_type == "aero"
+    wheel_kin_map: dict[str, dict] = {}
+    rotating_instances: list = []
+
+    if is_aero and gc.ground_mode != "static" and so.compute.rotate_wheels:
         wheel_map = classify_wheels(analysis_result, tn)
-        osm_map = {
-            "fr_lh": tn.overset_fr_lh,
-            "fr_rh": tn.overset_fr_rh,
-            "rr_lh": tn.overset_rr_lh,
-            "rr_rh": tn.overset_rr_rh,
+        osm_map   = {
+            "fr_lh": tn.overset_fr_lh, "fr_rh": tn.overset_fr_rh,
+            "rr_lh": tn.overset_rr_lh, "rr_rh": tn.overset_rr_rh,
         }
         label_map = {
-            "fr_lh": "VREV_Front_Left",
-            "fr_rh": "VREV_Front_Right",
-            "rr_lh": "VREV_Rear_Left",
-            "rr_rh": "VREV_Rear_Right",
+            "fr_lh": "VREV_Front_Left", "fr_rh": "VREV_Front_Right",
+            "rr_lh": "VREV_Rear_Left",  "rr_rh": "VREV_Rear_Right",
         }
         for key, winfo in wheel_map.items():
             kin = compute_wheel_kinematics(winfo, inflow_velocity)
-            osm_pid = osm_map.get(key, "")
-            ri = RotatingInstance(
-                name=label_map.get(key, key),
-                rpm=kin["rpm"],
-                center=XYZPos(**kin["center"]),
-                axis=XYZDir(**kin["axis"]),
-                parts=[osm_pid] if osm_pid else [],
-            )
-            rotating_instances.append(ri)
-            # rotating wall BC (ホイール表面)
-            tire_pid_map = {
-                "fr_lh": tn.wheel_tire_fr_lh,
-                "fr_rh": tn.wheel_tire_fr_rh,
-                "rr_lh": tn.wheel_tire_rr_lh,
-                "rr_rh": tn.wheel_tire_rr_rh,
-            }
+            wheel_kin_map[key] = kin
+            if gc.overset_wheels:
+                rotating_instances.append(RotatingInstance(
+                    name=label_map[key],
+                    rpm=kin["rpm"],
+                    center=XYZPos(**kin["center"]),
+                    axis=XYZDir(**kin["axis"]),
+                    parts=[osm_map[key]] if osm_map.get(key) else [],
+                ))
+
+    # ── Belt positioning (5-belt) ─────────────────────────────────────────
+    center_belt_xmin: float | None = None
+    if is_aero and gc.ground_mode == "rotating_belt_5" and vbbox:
+        center_belt_xmin = _compute_belt5_center_xmin(vbbox, wheel_kin_map, gc.belt5)
+
+    # ── BL suction xmin ───────────────────────────────────────────────────
+    no_slip_xmin: float | None = None
+    if gc.ground_mode != "full_moving":
+        no_slip_xmin = _resolve_no_slip_xmin(gc, center_belt_xmin)
+
+    # ── Static floor dimensions (for TG + ground refinement boxes) ───────
+    floor_dims: dict = {}
+    if vbbox:
+        floor_dims = _static_floor_dims(vbbox, no_slip_xmin)
+
+    # ── Ground box refinements ────────────────────────────────────────────
+    ground_box_instances: list = []
+    need_ground_refinement = (
+        is_aero and (
+            gc.apply_static_ground_refinement
+            or (tg_cfg.enable_ground_tg and no_slip_xmin is not None)
+        )
+        and vbbox and no_slip_xmin is not None
+    )
+    if need_ground_refinement:
+        belt_active = gc.ground_mode in ("rotating_belt_1", "rotating_belt_5")
+        ground_box_instances = _build_ground_box_refinements(
+            no_slip_xmin, coarsest, ground_height, floor_dims,
+            gc.ground_mode, belt_active,
+            BoundingBox, BoxInstance,
+        )
+
+    # ── Turbulence generators ─────────────────────────────────────────────
+    turbulence_instances: list = []
+    tg_extra_boxes: list = []
+    if is_aero and vbbox and so.compute.turbulence_generator:
+        turbulence_instances, tg_extra_boxes = _build_tg_instances(
+            sim_type, tg_cfg, vbbox, coarsest,
+            no_slip_xmin, floor_dims,
+            BoundingBox, BoxInstance,
+            TurbulenceInstance, TurbulencePoint, TurbulenceBoundingBox,
+        )
+
+    # ── Wall BCs ──────────────────────────────────────────────────────────
+    wall_instances: list = []
+
+    # ホイール wall BC
+    tire_pid_map = {
+        "fr_lh": tn.wheel_tire_fr_lh, "fr_rh": tn.wheel_tire_fr_rh,
+        "rr_lh": tn.wheel_tire_rr_lh, "rr_rh": tn.wheel_tire_rr_rh,
+    }
+    if is_aero and gc.ground_mode != "static" and so.compute.rotate_wheels:
+        for key, kin in wheel_kin_map.items():
             tire_pid = tire_pid_map.get(key, "")
             if tire_pid:
-                wheel_wall_instances.append(WallInstance(
+                roughness = tn.tire_roughness if tn.tire_roughness > 0 else None
+                wall_instances.append(WallInstance(
                     name=f"Wheel_{key.upper()}",
                     parts=[tire_pid],
+                    roughness=roughness,
                     fluid_bc_settings=FluidBCRotating(
                         type="rotating",
                         rpm=kin["rpm"],
@@ -430,10 +811,61 @@ def assemble_ufx_solver_deck(
                         axis=XYZDir(**kin["axis"]),
                     ),
                 ))
+    else:
+        # ghn / fan_noise / aero static: wheel = static BC
+        wheel_parts_all = [
+            name for name in part_info
+            if _matches_any(name, tn.wheel)
+        ]
+        if wheel_parts_all:
+            wall_instances.append(WallInstance(
+                name="Wheels",
+                parts=wheel_parts_all,
+                fluid_bc_settings=FluidBCStatic(type="static"),
+            ))
 
-    # ── 6. Porous sources ─────────────────────────────────────────────────
-    porous_instances: list[PorousInstance] = []
-    if flags.porous_media:
+    # ベルト wall BC
+    if is_aero and gc.ground_mode == "rotating_belt_5" and so.compute.moving_ground:
+        belt_wis, _ = _build_belt5_wall_instances(
+            wheel_kin_map, gc.belt5, vbbox, velocity_dir,
+            FluidBCMoving, XYZDir, WallInstance,
+        )
+        wall_instances.extend(belt_wis)
+
+    elif is_aero and gc.ground_mode == "rotating_belt_1" and so.compute.moving_ground:
+        wall_instances.append(WallInstance(
+            name="Belt",
+            parts=["Belt"],
+            fluid_bc_settings=FluidBCMoving(
+                type="moving",
+                velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
+            ),
+        ))
+
+    # 地面 wall BC
+    if is_aero and gc.ground_mode == "full_moving":
+        wall_instances.append(WallInstance(
+            name="Ground",
+            parts=["Ground"],
+            fluid_bc_settings=FluidBCMoving(
+                type="moving",
+                velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
+            ),
+        ))
+    else:
+        # static ground BC ("uFX_ground")
+        ground_parts = ["uFX_ground"]
+        if gc.ground_patch_active and floor_dims:
+            pass  # 実際のパーツ名は STL 由来のため、ここでは標準名を使用
+        wall_instances.append(WallInstance(
+            name="uFX_ground",
+            parts=ground_parts,
+            fluid_bc_settings=FluidBCStatic(type="static"),
+        ))
+
+    # ── Porous sources ────────────────────────────────────────────────────
+    porous_instances: list = []
+    if so.compute.porous_media:
         porous_coeff_map = {p.part_name: p for p in template_settings.porous_coefficients}
         for pname, pinfo in part_info.items():
             if not _matches_any(pname, tn.porous):
@@ -450,90 +882,20 @@ def assemble_ufx_solver_deck(
                 parts=[pname],
             ))
 
-    # ── 7. Turbulence generators ──────────────────────────────────────────
-    turbulence_instances: list[TurbulenceInstance] = []
-    if flags.turbulence_generator and so.boundary_condition.turbulence_generator.activate_body_tg:
-        # デフォルト: 車体前方の TG
-        if vbbox:
-            tg_body_x = vbbox["x_min"] - coarsest
-            turbulence_instances.append(TurbulenceInstance(
-                name="tg_body",
-                num_eddies=100,
-                length_scale=0.1,
-                turbulence_intensity=0.01,
-                point=TurbulencePoint(x_pos=tg_body_x),
-                bounding_box=TurbulenceBoundingBox(
-                    y_min=abs_bbox["y_min"] * 0.8,
-                    z_min=abs_bbox["z_min"],
-                    y_max=abs_bbox["y_max"] * 0.8,
-                    z_max=abs_bbox["z_max"] * 0.5,
-                ),
-            ))
-        if so.boundary_condition.turbulence_generator.activate_ground_tg and flags.moving_ground and vbbox:
-            turbulence_instances.append(TurbulenceInstance(
-                name="tg_ground",
-                num_eddies=100,
-                length_scale=0.05,
-                turbulence_intensity=0.005,
-                point=TurbulencePoint(x_pos=abs_bbox["x_min"] + coarsest),
-                bounding_box=TurbulenceBoundingBox(
-                    y_min=abs_bbox["y_min"] * 0.5,
-                    z_min=abs_bbox["z_min"],
-                    y_max=abs_bbox["y_max"] * 0.5,
-                    z_max=coarsest * 2,
-                ),
-            ))
+    # ── Iteration counts ──────────────────────────────────────────────────
+    num_iter   = time_to_iterations(sp.simulation_time, dt)
+    avg_start  = time_to_iterations(sp.start_averaging_time, dt)
+    avg_window = time_to_iterations(sp.avg_window_size, dt)
 
-    # ── 8. Inlet velocity vector (yaw angle 対応) ─────────────────────────
-    yaw_rad = math.radians(yaw_angle_deg)
-    vx = inflow_velocity * math.cos(yaw_rad)
-    vy = inflow_velocity * math.sin(yaw_rad)
-
-    # ── 9. Wall BCs (belt + ground) ───────────────────────────────────────
-    wall_instances: list[WallInstance] = list(wheel_wall_instances)
-
-    # Belt (moving ground) — center belt
-    belt_bc = so.boundary_condition.belt
-    if belt_bc.opt_belt_system and flags.moving_ground:
-        wall_instances.append(WallInstance(
-            name="Belt_Center",
-            parts=["Belt_Center"],
-            fluid_bc_settings=FluidBCMoving(
-                type="moving",
-                velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
-            ),
-        ))
-        # Wheel belts
-        for wkey in ("fr_lh", "fr_rh", "rr_lh", "rr_rh"):
-            wall_instances.append(WallInstance(
-                name=f"Belt_Wheel_{wkey.upper()}",
-                parts=[f"Belt_Wheel_{wkey.upper()}"],
-                fluid_bc_settings=FluidBCMoving(
-                    type="moving",
-                    velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
-                ),
-            ))
-    else:
-        wall_instances.append(WallInstance(
-            name="Ground",
-            parts=["Ground"],
-            fluid_bc_settings=FluidBCSlip(type="slip"),
-        ))
-
-    # ── 10. Iteration counts ───────────────────────────────────────────────
-    num_iter   = _compute_num_iterations(simulation_time, inflow_velocity, coarsest, sp.mach_factor)
-    avg_start  = _compute_avg_iteration(sp.start_averaging_time, inflow_velocity, coarsest, sp.mach_factor)
-    avg_window = _compute_avg_iteration(sp.avg_window_size, inflow_velocity, coarsest, sp.mach_factor)
-    out_start  = _compute_avg_iteration(
-        sp.output_start_time if sp.output_start_time is not None else simulation_time,
-        inflow_velocity, coarsest, sp.mach_factor,
+    fd = out_cfg.full_data
+    out_start = time_to_iterations(
+        fd.output_start_time if fd.output_start_time is not None else sp.simulation_time, dt
     )
-    out_freq   = _compute_avg_iteration(
-        sp.output_interval_time if sp.output_interval_time is not None else simulation_time,
-        inflow_velocity, coarsest, sp.mach_factor,
+    out_freq = time_to_iterations(
+        fd.output_interval if fd.output_interval is not None else sp.simulation_time, dt
     )
 
-    # ── 11. Mesh refinement ────────────────────────────────────────────────
+    # ── Mesh refinement ───────────────────────────────────────────────────
     box_instances = [
         BoxInstance(
             name=name,
@@ -544,26 +906,19 @@ def assemble_ufx_solver_deck(
                 z_min=br.box[4], z_max=br.box[5],
             ),
         )
-        for name, br in setup.meshing.box_refinement.items()
+        for name, br in {**setup.meshing.box_refinement, **setup.meshing.part_box_refinement}.items()
     ]
-    box_instances += [
-        BoxInstance(
-            name=name,
-            refinement_level=br.level,
-            bounding_box=BoundingBox(
-                x_min=br.box[0], x_max=br.box[1],
-                y_min=br.box[2], y_max=br.box[3],
-                z_min=br.box[4], z_max=br.box[5],
-            ),
-        )
-        for name, br in setup.meshing.part_box_refinement.items()
-    ]
+    box_instances += ground_box_instances + tg_extra_boxes
+
     offset_instances = [
         OffsetInstance(
             name=name,
             normal_distance=orf.normal_distance,
             refinement_level=orf.level,
-            parts=orf.parts,
+            parts=[
+                p for p in orf.parts
+                if not _matches_any(p, tn.windtunnel)
+            ] if orf.parts else [],
         )
         for name, orf in setup.meshing.offset_refinement.items()
     ]
@@ -572,7 +927,64 @@ def assemble_ufx_solver_deck(
         for name, cr in setup.meshing.custom_refinement.items()
     ]
 
-    # ── 12. Assemble UfxSolverDeck ─────────────────────────────────────────
+    # ── Baffle parts ──────────────────────────────────────────────────────
+    baffle_parts = [name for name in part_info if _matches_any(name, tn.baffle)]
+
+    # ── triangle splitting ────────────────────────────────────────────────
+    ts_parts = tn.triangle_splitting if so.meshing.triangle_splitting_specify_part else []
+    ts_active = so.meshing.triangle_splitting and (not so.meshing.triangle_splitting_specify_part or bool(ts_parts))
+
+    # ── Moment reference system ───────────────────────────────────────────
+    if wheel_kin_map:
+        moment_origin = compute_moment_reference_origin(wheel_kin_map)
+    else:
+        # フォールバック: vehicle bbox の中心
+        if vbbox:
+            cx = (vbbox["x_min"] + vbbox["x_max"]) / 2
+            moment_origin = {"x_pos": cx, "y_pos": 0.0, "z_pos": ground_height}
+        else:
+            moment_origin = {"x_pos": 0.0, "y_pos": 0.0, "z_pos": 0.0}
+
+    # ── Reference length / area for aero coefficients ─────────────────────
+    aero_cfg = out_cfg.aero_coefficients
+    ref_length = 1.0
+    if not aero_cfg.reference_length_auto:
+        ref_length = aero_cfg.reference_length or 1.0
+    elif wheel_kin_map:
+        ref_length = compute_reference_length(wheel_kin_map)
+
+    ref_area = aero_cfg.reference_area or 1.0
+
+    # ── Output bounding box ───────────────────────────────────────────────
+    if fd.bbox is not None and len(fd.bbox) == 6:
+        out_bb = BoundingBox(
+            x_min=fd.bbox[0], x_max=fd.bbox[1],
+            y_min=fd.bbox[2], y_max=fd.bbox[3],
+            z_min=fd.bbox[4], z_max=fd.bbox[5],
+        )
+    elif fd.bbox_mode == "from_meshing_box" and fd.bbox_source_box_name and fd.bbox_source_box_name in setup.meshing.box_refinement:
+        br = setup.meshing.box_refinement[fd.bbox_source_box_name]
+        out_bb = BoundingBox(
+            x_min=br.box[0], x_max=br.box[1],
+            y_min=br.box[2], y_max=br.box[3],
+            z_min=br.box[4], z_max=br.box[5],
+        )
+    else:
+        out_bb = domain_bb
+
+    # ── passive parts (windtunnel → passive) ──────────────────────────────
+    passive_parts = [
+        p for p in part_info
+        if _matches_any(p, tn.windtunnel)
+    ]
+    # include_wheel_belt_forces=False → wheel belt parts も passive に追加
+    if is_aero and gc.ground_mode == "rotating_belt_5" and not gc.belt5.include_wheel_belt_forces:
+        passive_parts += [
+            f"Belt_Wheel_{k.upper()}"
+            for k in ("fr_lh", "fr_rh", "rr_lh", "rr_rh")
+        ]
+
+    # ── Assemble UfxSolverDeck ────────────────────────────────────────────
     deck = UfxSolverDeck(
         version=Version(gui_version="2024", solver_version="2024"),
         simulation=Simulation(
@@ -580,6 +992,7 @@ def assemble_ufx_solver_deck(
                 num_coarsest_iterations=num_iter,
                 mach_factor=sp.mach_factor,
                 num_ramp_up_iterations=sp.num_ramp_up_iter,
+                parameter_preset=parameter_preset,
             ),
             material=Material(
                 name="Air",
@@ -588,21 +1001,23 @@ def assemble_ufx_solver_deck(
                 temperature=temperature_k,
                 specific_gas_constant=sp.specific_gas_constant,
             ),
-            wall_modeling=WallModeling(wall_model="GLW", coupling="adaptive_two-way"),
+            wall_modeling=WallModeling(
+                wall_model="GLW",
+                coupling="adaptive_two-way",
+                transitional_bl_detection=(True if sim_type == "ghn" else None),
+            ),
         ),
         geometry=Geometry(
             source_file=source_file,
-            baffle_parts=[
-                name for name in part_info
-                if _matches_any(name, tn.baffle)
-            ],
+            source_files=source_files or [],
+            baffle_parts=baffle_parts,
             domain_bounding_box=domain_bb,
             triangle_plinth=False,
             surface_mesh_optimization=SurfaceMeshOptimization(
                 triangle_splitting=TriangleSplitting(
-                    active=so.meshing.triangle_splitting,
+                    active=ts_active,
                     max_absolute_edge_length=0.0,
-                    max_relative_edge_length=9.0,
+                    max_relative_edge_length=so.meshing.max_relative_edge_length,
                 )
             ),
             domain_part=DomainPart(export_mesh=False, domain_part_instances=[]),
@@ -643,57 +1058,52 @@ def assemble_ufx_solver_deck(
         ),
         output=Output(
             general=OutputGeneral(
-                file_format=FileFormat(ensight=True, h3d=False),
+                file_format=FileFormat(
+                    ensight=fd.file_format_ensight,
+                    h3d=fd.file_format_h3d,
+                ),
                 output_coarsening=OutputCoarsening(
-                    active=True,
-                    coarsen_by_num_refinement_levels=1,
-                    coarsest_target_refinement_level=4,
+                    active=fd.output_coarsening_active,
+                    coarsen_by_num_refinement_levels=fd.coarsen_by_num_refinement_levels,
+                    coarsest_target_refinement_level=fd.coarsest_target_refinement_level,
                     export_uncoarsened_voxels=False,
                 ),
                 time_varying_geometry_output=False,
-                merge_output_files=True,
-                delete_unmerged_output_files=True,
+                merge_output_files=fd.merge_output,
+                delete_unmerged_output_files=fd.delete_unmerged,
                 saved_states=0,
                 avg_start_coarsest_iteration=avg_start,
                 avg_window_size=avg_window,
                 output_frequency=out_freq,
                 output_start_iteration=out_start,
-                output_variables_full=OutputVariablesFull(
-                    time_avg_pressure=True,
-                    time_avg_velocity=True,
-                    time_avg_wall_shear_stress=True,
-                    surface_normal=True,
-                    lambda_2=True,
-                    q_criterion=True,
-                ),
-                output_variables_surface=OutputVariablesSurface(
-                    time_avg_pressure=True,
-                    time_avg_wall_shear_stress=True,
-                    surface_normal=True,
-                ),
-                bounding_box=domain_bb,
+                output_variables_full=fd.output_variables_full,
+                output_variables_surface=fd.output_variables_surface,
+                bounding_box=out_bb,
             ),
             moment_reference_system=MomentReferenceSystem(
                 **{"Type": "SAE"},
-                origin=XYZPos(x_pos=0.0, y_pos=0.0, z_pos=0.0),
+                origin=XYZPos(**moment_origin),
                 roll_axis=XYZDir(x_dir=1.0, y_dir=0.0, z_dir=0.0),
                 pitch_axis=XYZDir(x_dir=0.0, y_dir=1.0, z_dir=0.0),
                 yaw_axis=XYZDir(x_dir=0.0, y_dir=0.0, z_dir=1.0),
             ),
             aero_coefficients=AeroCoefficients(
                 output_start_iteration=avg_start,
-                coefficients_parts=False,
-                reference_area_auto=True,
-                reference_area=1.0,
-                reference_length_auto=True,
-                reference_length=1.0,
+                coefficients_parts=True,
+                reference_area_auto=aero_cfg.reference_area_auto,
+                reference_area=ref_area,
+                reference_length_auto=aero_cfg.reference_length_auto,
+                reference_length=ref_length,
                 coefficients_along_axis=CoefficientsAlongAxis(
-                    num_sections_x=10,
-                    num_sections_y=10,
-                    num_sections_z=5,
-                    export_bounds=ExportBounds(active=True, exclude_domain_parts=True),
+                    num_sections_x=aero_cfg.num_sections_x if aero_cfg.coefficients_along_axis_active else 0,
+                    num_sections_y=aero_cfg.num_sections_y if aero_cfg.coefficients_along_axis_active else 0,
+                    num_sections_z=aero_cfg.num_sections_z if aero_cfg.coefficients_along_axis_active else 0,
+                    export_bounds=ExportBounds(
+                        active=aero_cfg.export_bounds_active,
+                        exclude_domain_parts=aero_cfg.export_bounds_exclude_domain_parts,
+                    ),
                 ),
-                passive_parts=list(tn.windtunnel),
+                passive_parts=passive_parts,
             ),
             section_cut=[],
             partial_surface=[],
