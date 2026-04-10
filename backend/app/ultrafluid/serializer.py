@@ -192,7 +192,12 @@ def _ser_simulation(parent: etree._Element, s: Simulation) -> None:
 def _ser_geometry(parent: etree._Element, g: Geometry) -> None:
     el = etree.SubElement(parent, "geometry")
 
-    _sub_str(el, "source_file", g.source_file)
+    if g.source_files:
+        sfs_el = etree.SubElement(el, "source_files")
+        for name in g.source_files:
+            _sub_str(sfs_el, "name", name)
+    elif g.source_file:
+        _sub_str(el, "source_file", g.source_file)
 
     baffle = etree.SubElement(el, "baffle_parts")
     for name in g.baffle_parts:

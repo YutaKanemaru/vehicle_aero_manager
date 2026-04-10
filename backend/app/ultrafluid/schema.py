@@ -132,10 +132,15 @@ class DomainPart(BaseModel):
 
 
 class Geometry(BaseModel):
-    source_file: str
+    # Exactly one of source_file / source_files is populated.
+    # source_file:  single STL or ZIP filename  (1 geometry in assembly)
+    # source_files: list of filenames           (multiple geometries in assembly)
+    # Compute Engine sets the appropriate field; parser detects which tag is present.
+    source_file: Optional[str] = None
+    source_files: List[str] = Field(default_factory=list)
     baffle_parts: List[str] = Field(default_factory=list)
     domain_bounding_box: BoundingBox            # Computed
-    triangle_plinth: bool
+    triangle_plinth: bool = False
     surface_mesh_optimization: SurfaceMeshOptimization
     domain_part: DomainPart
 

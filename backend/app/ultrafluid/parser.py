@@ -251,8 +251,19 @@ def _parse_geometry(el: etree._Element) -> Geometry:
             bounding_range=_parse_bounding_range(inst_el.find("bounding_range")),
         ))
 
+    # source_file vs source_files: detect which tag is present in the XML
+    sfs_el = el.find("source_files")
+    if sfs_el is not None:
+        source_file = None
+        source_files = _names(sfs_el)
+    else:
+        sf_el = el.find("source_file")
+        source_file = sf_el.text.strip() if sf_el is not None and sf_el.text else None
+        source_files = []
+
     return Geometry(
-        source_file=_text(el, "source_file"),
+        source_file=source_file,
+        source_files=source_files,
         baffle_parts=baffle_parts,
         domain_bounding_box=_parse_bounding_box(el.find("domain_bounding_box")),
         triangle_plinth=_bool(el, "triangle_plinth"),
