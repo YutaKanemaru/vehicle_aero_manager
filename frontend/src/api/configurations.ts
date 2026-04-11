@@ -96,8 +96,17 @@ export const runsApi = {
   generate: (caseId: string, runId: string): Promise<RunResponse> =>
     client.post(`/cases/${caseId}/runs/${runId}/generate`, {}),
 
-  downloadUrl: (caseId: string, runId: string): string =>
-    `/api/v1/cases/${caseId}/runs/${runId}/download`,
+  download: async (caseId: string, runId: string): Promise<Blob> => {
+    const token = localStorage.getItem("vam_token");
+    const res = await fetch(`/api/v1/cases/${caseId}/runs/${runId}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    return res.blob();
+  },
 
   diff: (runIdA: string, runIdB: string): Promise<DiffResult> =>
     client.get(`/runs/diff?a=${runIdA}&b=${runIdB}`),

@@ -19,6 +19,7 @@ from app.ultrafluid.schema import (
     OutputVariablesSurface,
     PartialSurfaceOutputVariables,
     PartialVolumeOutputVariables,
+    SectionCutOutputVariables,
 )
 
 
@@ -39,6 +40,7 @@ class MeshingOption(BaseModel):
     triangle_splitting: bool = True
     triangle_splitting_specify_part: bool = False  # True: only parts in target_names.triangle_splitting
     max_relative_edge_length: float = 9.0
+    refinement_level_transition_layers: int = 8
     domain_bounding_box_relative: bool = True  # bbox multipliers relative to car dimensions
     box_offset_relative: bool = True
     box_refinement_porous: bool = True
@@ -110,6 +112,10 @@ class GroundConfig(BaseModel):
       - belt configs are ignored
       Only bl_suction and ground_patch_active apply.
     """
+    # Ground height definition
+    ground_height_mode: Literal["from_geometry", "absolute"] = "from_geometry"
+    ground_height_absolute: float = 0.0  # m — used when ground_height_mode == "absolute"
+
     # aero: one of 4 exclusive modes
     ground_mode: Literal[
         "static", "rotating_belt_1", "rotating_belt_5", "full_moving"
@@ -318,12 +324,70 @@ class AeroCoefficientsConfig(BaseModel):
     export_bounds_exclude_domain_parts: bool = True
 
 
-class ProbeConfig(BaseModel):
-    """Single probe point."""
-    name: str
-    x_pos: float
-    y_pos: float
-    z_pos: float
+class ProbePointConfig(BaseModel):
+    """Single probe location for CSV export/import (x;y;z;description format)."""
+    x_pos: float = 0.0
+    y_pos: float = 0.0
+    z_pos: float = 0.0
+    description: str = ""
+
+
+class ProbeFileOutputVariables(BaseModel):
+    """Output variables for a probe_file_instance. None = use solver default."""
+    pressure: bool | None = None
+    time_avg_pressure: bool | None = None
+    window_avg_pressure: bool | None = None
+    cp: bool | None = None
+    velocity: bool | None = None
+    time_avg_velocity: bool | None = None
+    window_avg_velocity: bool | None = None
+    velocity_magnitude: bool | None = None
+    time_avg_velocity_magnitude: bool | None = None
+    window_avg_velocity_magnitude: bool | None = None
+    wall_shear_stress: bool | None = None           # surface probes only
+    time_avg_wall_shear_stress: bool | None = None  # surface probes only
+    window_avg_wall_shear_stress: bool | None = None  # surface probes only
+    density: bool | None = None
+    time_avg_density: bool | None = None
+    window_avg_density: bool | None = None
+    pressure_std: bool | None = None
+    pressure_var: bool | None = None
+
+
+class ProbeFileConfig(BaseModel):
+    """Configuration for one <probe_file_instance>."""
+    name: str = "probe"
+    probe_type: str = "volume"          # "volume" | "surface"
+    radius: float = 0.0                 # m — fictitious sphere radius for averaging
+    output_frequency: float = 1.0       # coarsest iterations between outputs
+    output_start_iteration: int = 0
+    scientific_notation: bool = True
+    output_precision: int = 7
+    output_variables: ProbeFileOutputVariables = Field(default_factory=ProbeFileOutputVariables)
+    points: list[ProbePointConfig] = Field(default_factory=list)  # probe locations for CSV gen
+
+
+class SectionCutConfig(BaseModel):
+    """Section cut output configuration (one instance)."""
+    name: str = "section_cut"
+    output_start_time: float | None = None   # seconds; None = use full_data value
+    output_interval: float | None = None      # seconds; None = use full_data value
+    file_format_ensight: bool = False
+    file_format_h3d: bool = True
+    merge_output: bool = True
+    delete_unmerged: bool = True
+    triangulation: bool = False
+    # Cut plane definition — axis normal direction (unit vector)
+    axis_x: float = 0.0
+    axis_y: float = 0.0
+    axis_z: float = 1.0
+    # Point on the cut plane
+    point_x: float = 0.0
+    point_y: float = 0.0
+    point_z: float = 0.0
+    # Optional bounding box [xmin,xmax,ymin,ymax,zmin,zmax]; empty = full domain
+    bbox: list[float] = Field(default_factory=list)
+    output_variables: SectionCutOutputVariables = Field(default_factory=SectionCutOutputVariables)
 
 
 class OutputSettings(BaseModel):
@@ -331,7 +395,8 @@ class OutputSettings(BaseModel):
     partial_surfaces: list[PartialSurfaceOutputConfig] = Field(default_factory=list)
     partial_volumes: list[PartialVolumeOutputConfig] = Field(default_factory=list)
     aero_coefficients: AeroCoefficientsConfig = Field(default_factory=AeroCoefficientsConfig)
-    probes: list[ProbeConfig] = Field(default_factory=list)
+    section_cuts: list[SectionCutConfig] = Field(default_factory=list)
+    probe_files: list[ProbeFileConfig] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

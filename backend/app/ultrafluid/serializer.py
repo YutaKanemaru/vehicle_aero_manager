@@ -43,6 +43,8 @@ from .schema import (
     PartialVolumeOutputVariables,
     PorousAxis,
     PorousInstance,
+    ProbeFileInstance,
+    ProbeOutputVariables,
     Refinement,
     RotatingInstance,
     SectionCutInstance,
@@ -514,6 +516,22 @@ def _ser_partial_volume_output_variables(parent: etree._Element, v: PartialVolum
     _sub_bool(el, "window_avg_temperature", v.window_avg_temperature)
 
 
+def _ser_probe_output_variables(parent: etree._Element, v: ProbeOutputVariables) -> None:
+    el = etree.SubElement(parent, "output_variables")
+    # Only emit explicitly set variables (None = omit, use solver default)
+    for field_name in [
+        "pressure", "time_avg_pressure", "window_avg_pressure", "cp",
+        "velocity", "time_avg_velocity", "window_avg_velocity",
+        "velocity_magnitude", "time_avg_velocity_magnitude", "window_avg_velocity_magnitude",
+        "wall_shear_stress", "time_avg_wall_shear_stress", "window_avg_wall_shear_stress",
+        "density", "time_avg_density", "window_avg_density",
+        "pressure_std", "pressure_var",
+    ]:
+        val = getattr(v, field_name)
+        if val is not None:
+            _sub_bool(el, field_name, val)
+
+
 def _ser_output(parent: etree._Element, o: Output) -> None:
     el = etree.SubElement(parent, "output")
 
@@ -576,7 +594,21 @@ def _ser_output(parent: etree._Element, o: Output) -> None:
     else:
         etree.SubElement(el, "section_cut")
 
-    etree.SubElement(el, "probe_file")
+    if o.probe_file:
+        pf_wrapper = etree.SubElement(el, "probe_file")
+        for inst in o.probe_file:
+            inst_el = etree.SubElement(pf_wrapper, "probe_file_instance")
+            _sub_str(inst_el, "name", inst.name)
+            _sub_str(inst_el, "source_file", inst.source_file)
+            _sub_str(inst_el, "type", inst.probe_type)
+            _sub_float(inst_el, "radius", inst.radius)
+            _sub_float(inst_el, "output_frequency", inst.output_frequency)
+            _sub_bool(inst_el, "scientific_notation", inst.scientific_notation)
+            _sub_int(inst_el, "output_precision", inst.output_precision)
+            _sub_int(inst_el, "output_start_iteration", inst.output_start_iteration)
+            _ser_probe_output_variables(inst_el, inst.output_variables)
+    else:
+        etree.SubElement(el, "probe_file")
 
     if o.partial_surface:
         ps_wrapper = etree.SubElement(el, "partial_surface")

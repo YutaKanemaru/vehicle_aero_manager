@@ -1429,7 +1429,7 @@ export interface components {
              * Sim Type
              * @enum {string}
              */
-            sim_type: "aero" | "ghn";
+            sim_type: "aero" | "ghn" | "fan_noise";
             settings: components["schemas"]["TemplateSettings-Input"];
             /** Comment */
             comment?: string | null;

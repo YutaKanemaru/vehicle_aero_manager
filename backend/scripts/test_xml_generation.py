@@ -156,7 +156,8 @@ def main() -> None:
         yaw_angle = template_settings.simulation_parameter.yaw_angle
         source_file = geo.original_filename or geo.name
 
-        print(f"[INFO] inflow_velocity={inflow_velocity} m/s  yaw={yaw_angle} deg")
+        sim_type = version.template.sim_type  # "aero" | "ghn" | "fan_noise"
+        print(f"[INFO] inflow_velocity={inflow_velocity} m/s  yaw={yaw_angle} deg  sim_type={sim_type}")
         print(f"[INFO] source_file={source_file}")
 
         # ── assemble ───────────────────────────────────────────────────────
@@ -164,6 +165,7 @@ def main() -> None:
         deck = assemble_ufx_solver_deck(
             template_settings=template_settings,
             analysis_result=analysis_result,
+            sim_type=sim_type,
             inflow_velocity=inflow_velocity,
             yaw_angle=yaw_angle,
             source_file=source_file,

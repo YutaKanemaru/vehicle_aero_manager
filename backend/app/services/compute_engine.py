@@ -396,8 +396,10 @@ def _compute_belt5_center_xmin(
     rr = wheel_kin_map.get("rr_lh") or wheel_kin_map.get("rr_rh")
     if fr and rr:
         center_x = (fr["center"]["x_pos"] + rr["center"]["x_pos"]) / 2.0
-    else:
+    elif vbbox:
         center_x = (vbbox["x_min"] + vbbox["x_max"]) / 2.0
+    else:
+        center_x = 0.0
 
     return center_x - belt5_cfg.belt_size_center.x / 2
 
@@ -676,7 +678,8 @@ def assemble_ufx_solver_deck(
         OutputGeneral, OutputVariablesFull, OutputVariablesSurface,
         BoxInstance, BoundingRange, CustomInstance,
         DomainPartInstance, OffsetInstance, OutletInstance, PorousAxis,
-        PorousInstance, Refinement, RotatingInstance, Simulation,
+        PartialSurfaceInstance, PartialVolumeInstance,
+        PorousInstance, ProbeFileInstance, ProbeOutputVariables, Refinement, RotatingInstance, SectionCutInstance, Simulation,
         SimulationGeneral, Sources, SurfaceMeshOptimization,
         TriangleSplitting, TurbulenceBoundingBox, TurbulenceInstance,
         TurbulencePoint, UfxSolverDeck, Version, WallInstance, WallModeling,
@@ -709,7 +712,11 @@ def assemble_ufx_solver_deck(
         abs_bbox = {"x_min": -10.0, "x_max": 30.0, "y_min": -15.0, "y_max": 15.0, "z_min": 0.0, "z_max": 8.0}
     domain_bb = BoundingBox(**abs_bbox)
 
-    ground_height = vbbox.get("z_min", 0.0)
+    # Ground height: absolute value or from geometry z_min
+    if gc.ground_height_mode == "absolute":
+        ground_height = gc.ground_height_absolute
+    else:
+        ground_height = vbbox.get("z_min", 0.0)
 
     # ── Yaw 방향 ──────────────────────────────────────────────────────────
     yaw_rad = math.radians(yaw_angle)
@@ -825,7 +832,7 @@ def assemble_ufx_solver_deck(
             ))
 
     # ベルト wall BC
-    if is_aero and gc.ground_mode == "rotating_belt_5" and so.compute.moving_ground:
+    if is_aero and gc.ground_mode == "rotating_belt_5" and so.compute.moving_ground and vbbox:
         belt_wis, _ = _build_belt5_wall_instances(
             wheel_kin_map, gc.belt5, vbbox, velocity_dir,
             FluidBCMoving, XYZDir, WallInstance,
@@ -894,6 +901,189 @@ def assemble_ufx_solver_deck(
     out_freq = time_to_iterations(
         fd.output_interval if fd.output_interval is not None else sp.simulation_time, dt
     )
+
+    # ── Section cut instances ─────────────────────────────────────────────
+    sc_instances: list = []
+    for sc in out_cfg.section_cuts:
+        sc_start = time_to_iterations(
+            sc.output_start_time if sc.output_start_time is not None
+            else (fd.output_start_time if fd.output_start_time is not None else sp.simulation_time),
+            dt,
+        )
+        sc_freq = time_to_iterations(
+            sc.output_interval if sc.output_interval is not None
+            else (fd.output_interval if fd.output_interval is not None else sp.simulation_time),
+            dt,
+        )
+        if len(sc.bbox) == 6:
+            sc_bbox = BoundingBox(
+                x_min=sc.bbox[0], x_max=sc.bbox[1],
+                y_min=sc.bbox[2], y_max=sc.bbox[3],
+                z_min=sc.bbox[4], z_max=sc.bbox[5],
+            )
+        else:
+            sc_bbox = BoundingBox(**abs_bbox)
+        sc_instances.append(SectionCutInstance(
+            name=sc.name,
+            merge_output_files=sc.merge_output,
+            delete_unmerged_output_files=sc.delete_unmerged,
+            triangulation=sc.triangulation,
+            file_format=FileFormat(ensight=sc.file_format_ensight, h3d=sc.file_format_h3d),
+            axis=XYZDir(x_dir=sc.axis_x, y_dir=sc.axis_y, z_dir=sc.axis_z),
+            point=XYZPos(x_pos=sc.point_x, y_pos=sc.point_y, z_pos=sc.point_z),
+            bounding_box=sc_bbox,
+            output_frequency=sc_freq,
+            output_start_iteration=sc_start,
+            output_variables=sc.output_variables,
+        ))
+
+    # ── Probe file instances ──────────────────────────────────────────────
+    probe_instances: list = []
+    for pf_cfg in out_cfg.probe_files:
+        pf_freq = time_to_iterations(
+            pf_cfg.output_frequency if pf_cfg.output_frequency > 0 else sp.simulation_time,
+            dt,
+        )
+        ov = pf_cfg.output_variables
+        probe_ov = ProbeOutputVariables(
+            pressure=ov.pressure,
+            time_avg_pressure=ov.time_avg_pressure,
+            window_avg_pressure=ov.window_avg_pressure,
+            cp=ov.cp,
+            velocity=ov.velocity,
+            time_avg_velocity=ov.time_avg_velocity,
+            window_avg_velocity=ov.window_avg_velocity,
+            velocity_magnitude=ov.velocity_magnitude,
+            time_avg_velocity_magnitude=ov.time_avg_velocity_magnitude,
+            window_avg_velocity_magnitude=ov.window_avg_velocity_magnitude,
+            wall_shear_stress=ov.wall_shear_stress,
+            time_avg_wall_shear_stress=ov.time_avg_wall_shear_stress,
+            window_avg_wall_shear_stress=ov.window_avg_wall_shear_stress,
+            density=ov.density,
+            time_avg_density=ov.time_avg_density,
+            window_avg_density=ov.window_avg_density,
+            pressure_std=ov.pressure_std,
+            pressure_var=ov.pressure_var,
+        )
+        probe_instances.append(ProbeFileInstance(
+            name=pf_cfg.name,
+            source_file=f"{pf_cfg.name}.csv",  # relative path beside output.xml
+            probe_type=pf_cfg.probe_type,
+            radius=pf_cfg.radius,
+            output_frequency=pf_freq,
+            scientific_notation=pf_cfg.scientific_notation,
+            output_precision=pf_cfg.output_precision,
+            output_start_iteration=pf_cfg.output_start_iteration,
+            output_variables=probe_ov,
+        ))
+
+    # ── Partial surface instances ─────────────────────────────────────────
+    all_part_names = list(part_info.keys())
+    baffle_patterns = tn.baffle
+    ps_instances: list = []
+    for ps_cfg in out_cfg.partial_surfaces:
+        ps_start = time_to_iterations(
+            ps_cfg.output_start_time if ps_cfg.output_start_time is not None
+            else (fd.output_start_time if fd.output_start_time is not None else sp.simulation_time),
+            dt,
+        )
+        ps_freq = time_to_iterations(
+            ps_cfg.output_interval if ps_cfg.output_interval is not None
+            else (fd.output_interval if fd.output_interval is not None else sp.simulation_time),
+            dt,
+        )
+        # include_parts: empty = all parts; non-empty = filter by substring match
+        if ps_cfg.include_parts:
+            parts_list = [p for p in all_part_names if any(pat in p for pat in ps_cfg.include_parts)]
+        else:
+            parts_list = list(all_part_names)
+        # exclude_parts: remove matching
+        if ps_cfg.exclude_parts:
+            parts_list = [p for p in parts_list if not any(pat in p for pat in ps_cfg.exclude_parts)]
+        # baffle_export_option: auto-exclude baffle parts when set
+        if ps_cfg.baffle_export_option is not None and baffle_patterns:
+            parts_list = [p for p in parts_list if not _matches_any(p, baffle_patterns)]
+        ps_instances.append(PartialSurfaceInstance(
+            name=ps_cfg.name,
+            parts=parts_list,
+            merge_output_files=ps_cfg.merge_output,
+            delete_unmerged_output_files=ps_cfg.delete_unmerged,
+            file_format=FileFormat(ensight=ps_cfg.file_format_ensight, h3d=ps_cfg.file_format_h3d),
+            output_frequency=ps_freq,
+            output_start_iteration=ps_start,
+            output_variables=ps_cfg.output_variables,
+        ))
+
+    # ── Partial volume instances ──────────────────────────────────────────
+    pv_instances: list = []
+    for pv_cfg in out_cfg.partial_volumes:
+        pv_start = time_to_iterations(
+            pv_cfg.output_start_time if pv_cfg.output_start_time is not None
+            else (fd.output_start_time if fd.output_start_time is not None else sp.simulation_time),
+            dt,
+        )
+        pv_freq = time_to_iterations(
+            pv_cfg.output_interval if pv_cfg.output_interval is not None
+            else (fd.output_interval if fd.output_interval is not None else sp.simulation_time),
+            dt,
+        )
+        # Resolve bounding box based on bbox_mode
+        if pv_cfg.bbox_mode == "from_meshing_box" and pv_cfg.bbox_source_box_name:
+            _box = (
+                setup.meshing.box_refinement.get(pv_cfg.bbox_source_box_name)
+                or setup.meshing.part_box_refinement.get(pv_cfg.bbox_source_box_name)
+            )
+            if _box:
+                pv_bb = BoundingBox(
+                    x_min=_box.box[0], x_max=_box.box[1],
+                    y_min=_box.box[2], y_max=_box.box[3],
+                    z_min=_box.box[4], z_max=_box.box[5],
+                )
+            else:
+                pv_bb = BoundingBox(**abs_bbox)
+        elif pv_cfg.bbox_mode == "around_parts" and pv_cfg.bbox_source_parts and part_info:
+            matched = [
+                p for n, p in part_info.items()
+                if any(pat in n for pat in pv_cfg.bbox_source_parts)
+            ]
+            if matched:
+                pv_bb = BoundingBox(
+                    x_min=min(p["bbox"]["x_min"] for p in matched),
+                    x_max=max(p["bbox"]["x_max"] for p in matched),
+                    y_min=min(p["bbox"]["y_min"] for p in matched),
+                    y_max=max(p["bbox"]["y_max"] for p in matched),
+                    z_min=min(p["bbox"]["z_min"] for p in matched),
+                    z_max=max(p["bbox"]["z_max"] for p in matched),
+                )
+            else:
+                pv_bb = BoundingBox(**abs_bbox)
+        elif pv_cfg.bbox_mode == "user_defined" and pv_cfg.bbox and len(pv_cfg.bbox) == 6:
+            b = pv_cfg.bbox
+            pv_bb = BoundingBox(
+                x_min=b[0], x_max=b[1], y_min=b[2], y_max=b[3], z_min=b[4], z_max=b[5]
+            )
+        else:
+            pv_bb = BoundingBox(**abs_bbox)
+        pv_coarsening = (
+            OutputCoarsening(
+                active=True,
+                coarsest_target_refinement_level=pv_cfg.coarsest_target_refinement_level,
+                coarsen_by_num_refinement_levels=pv_cfg.coarsen_by_num_refinement_levels,
+                export_uncoarsened_voxels=False,
+            )
+            if pv_cfg.output_coarsening_active else None
+        )
+        pv_instances.append(PartialVolumeInstance(
+            name=pv_cfg.name,
+            merge_output_files=pv_cfg.merge_output,
+            delete_unmerged_output_files=pv_cfg.delete_unmerged,
+            file_format=FileFormat(ensight=pv_cfg.file_format_ensight, h3d=pv_cfg.file_format_h3d),
+            output_frequency=pv_freq,
+            output_start_iteration=pv_start,
+            bounding_box=pv_bb,
+            output_variables=pv_cfg.output_variables,
+            output_coarsening=pv_coarsening,
+        ))
 
     # ── Mesh refinement ───────────────────────────────────────────────────
     box_instances = [
@@ -1027,7 +1217,7 @@ def assemble_ufx_solver_deck(
                 coarsest_mesh_size=coarsest,
                 mesh_preview=False,
                 mesh_export=False,
-                refinement_level_transition_layers=8,
+                refinement_level_transition_layers=so.meshing.refinement_level_transition_layers,
             ),
             refinement=Refinement(
                 box=box_instances,
@@ -1105,10 +1295,38 @@ def assemble_ufx_solver_deck(
                 ),
                 passive_parts=passive_parts,
             ),
-            section_cut=[],
-            partial_surface=[],
-            partial_volume=[],
+            section_cut=sc_instances,
+            probe_file=probe_instances,
+            partial_surface=ps_instances,
+            partial_volume=pv_instances,
         ),
     )
 
     return deck
+
+
+# ---------------------------------------------------------------------------
+# Probe CSV helpers
+# ---------------------------------------------------------------------------
+
+def build_probe_csv_files(template_settings: "TemplateSettings") -> dict[str, bytes]:
+    """
+    Generate probe location CSV file contents from template probe_files config.
+
+    Returns a dict of {filename: csv_bytes} for each configured probe_file_instance.
+    The CSV format is `x_pos;y_pos;z_pos;description` (no header), matching the
+    Ultrafluid <source_file> expected format.
+
+    The caller (configuration_service) is responsible for writing these files
+    to the run output directory alongside output.xml.
+    """
+    result: dict[str, bytes] = {}
+    for pf_cfg in template_settings.output.probe_files:
+        lines: list[str] = []
+        for pt in pf_cfg.points:
+            desc = pt.description.replace(";", "_")  # escape semicolons in description
+            lines.append(f"{pt.x_pos};{pt.y_pos};{pt.z_pos};{desc}")
+        csv_content = "\n".join(lines)
+        filename = f"{pf_cfg.name}.csv"
+        result[filename] = csv_content.encode("utf-8")
+    return result

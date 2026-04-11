@@ -414,7 +414,7 @@ The root element is `<uFX_solver_deck>`. Key sub-structures:
     <moment_reference_system>     # Type, origin, roll/pitch/yaw axis
     <aero_coefficients>           # reference_area/length, coefficients_along_axis, passive_parts
     <section_cut><section_cut_instance>[]  # GHN specific — high-frequency transient output
-    <probe_file/>                 # typically empty
+    <probe_file><probe_file_instance>[]    # optional — probe locations loaded from CSV
     <partial_surface><partial_surface_instance>[]
     <partial_volume><partial_volume_instance>[]
     <monitoring_surface/>
@@ -489,7 +489,7 @@ Ultrafluid XML file
 - `Template.versions` → `cascade="all, delete-orphan"`
 
 **Schemas** (`app/schemas/template.py`, `app/schemas/template_settings.py`)
-- `TemplateSettings`: 4-section Pydantic model (`setup_option`, `simulation_parameter`, `setup`, `target_names`)
+- `TemplateSettings`: 6-section Pydantic model (`setup_option`, `simulation_parameter`, `setup`, `output`, `target_names`, `porous_coefficients`)
 - `TemplateCreate`, `TemplateUpdate`, `TemplateVersionCreate`, `TemplateForkRequest` (requests)
 - `TemplateResponse`, `TemplateVersionResponse` (responses — include `active_version`, `version_count`)
 - `@field_validator("settings", mode="before")` parses JSON string from DB automatically
@@ -544,67 +544,122 @@ Ultrafluid XML file
 
 ## Template JSON Schema (Step 3 Reference)
 
-Based on prototype implementation in concept_vam, a Template's `settings` JSON field follows this 4-section structure:
+A Template's `settings` JSON field follows a **5-section + 1 top-level** structure (see `app/schemas/template_settings.py`):
 
 ```json
 {
   "setup_option": {
     "simulation": {
-      "temperature_degree": true,         // temperature input is °C (converted to K)
-      "simulation_time_with_FP": false     // use flow-passage time instead of fixed time
+      "temperature_degree": true,
+      "simulation_time_with_FP": false
     },
     "meshing": {
       "triangle_splitting": true,
-      "domain_bounding_box_relative": true, // bbox defined relative to car dimensions
+      "triangle_splitting_specify_part": false,
+      "max_relative_edge_length": 9.0,
+      "refinement_level_transition_layers": 8,
+      "domain_bounding_box_relative": true,
       "box_offset_relative": true,
       "box_refinement_porous": true
     },
     "boundary_condition": {
-      "ground": { "moving_ground": true, "no_slip_static_ground_patch": true,
-                  "ground_zmin_auto": true, "boundary_layer_suction_position_from_belt_xmin": true },
-      "belt": { "opt_belt_system": true, "num_belts": 5,
-                "include_wheel_belt_forces": true, "wheel_belt_location_auto": true },
-      "turbulence_generator": { "activate_body_tg": true, "activate_ground_tg": true }
+      "ground": {
+        "ground_height_mode": "from_geometry",
+        "ground_mode": "rotating_belt_5",
+        "overset_wheels": true,
+        "ground_patch_active": true,
+        "bl_suction": { "apply": true, "no_slip_xmin_from_belt_xmin": true, "bl_xmin_offset": 0.0 },
+        "belt5": { "wheel_belt_location_auto": true, "belt_size_wheel": {"x": 0.4, "y": 0.3}, ... }
+      },
+      "turbulence_generator": {
+        "enable_ground_tg": true, "enable_body_tg": true,
+        "ground_tg_num_eddies": 800, "body_tg_num_eddies": 800
+      }
+    },
+    "compute": {
+      "rotate_wheels": true, "porous_media": true,
+      "turbulence_generator": true, "moving_ground": true, "adjust_ride_height": false
     }
   },
   "simulation_parameter": {
-    "inflow_velocity": 38.88,             // m/s (Fixed)
-    "density": 1.2041,                   // kg/m³ (Fixed)
-    "dynamic_viscosity": 1.8194e-5,      // kg/(s·m) (Fixed)
-    "temperature": 20,                   // °C (Fixed)
-    "specific_gas_constant": 287.05,     // J/(kg·K) (Fixed)
-    "mach_factor": 2,                    // (Fixed)
-    "num_ramp_up_iter": 200,             // (Fixed)
-    "finest_resolution_size": 0.0015,    // m — determines coarsest mesh size (Fixed)
-    "number_of_resolution": 7,           // coarsest = finest × 2^N (Fixed)
-    "simulation_time": 2,                // seconds (Fixed)
-    "simulation_time_FP": 30             // flow passages (Fixed, if time_with_FP=true)
+    "inflow_velocity": 38.88,
+    "density": 1.2041,
+    "dynamic_viscosity": 1.8194e-5,
+    "temperature": 20.0,
+    "specific_gas_constant": 287.05,
+    "mach_factor": 2.0,
+    "num_ramp_up_iter": 200,
+    "coarsest_voxel_size": 0.192,
+    "number_of_resolution": 7,
+    "simulation_time": 2.0,
+    "simulation_time_FP": 30.0,
+    "start_averaging_time": 1.5,
+    "avg_window_size": 0.3,
+    "yaw_angle": 0.0
   },
   "setup": {
-    "domain_bounding_box": [-5, 15, -12, 12, 0, 20],  // relative multipliers (Fixed)
+    "domain_bounding_box": [-5, 15, -12, 12, 0, 20],
     "meshing": {
       "box_refinement": { "Box_RL1": {"level": 1, "box": [...]}, ... },
-      "part_box_refinement": { ... },
-      "offset_refinement": { ... },
-      "custom_refinement": { ... }
+      "part_box_refinement": {},
+      "offset_refinement": { "Body_RL7": {"level": 7, "normal_distance": 0.192, "parts": []}, ... },
+      "custom_refinement": {}
+    }
+  },
+  "output": {
+    "full_data": {
+      "output_start_time": null, "output_interval": null,
+      "file_format_ensight": false, "file_format_h3d": true,
+      "output_coarsening_active": false,
+      "bbox_mode": "from_meshing_box",
+      "output_variables_full": { "pressure": false, ... },
+      "output_variables_surface": { "pressure": false, ... }
     },
-    "boundary_condition_input": {
-      "belts": { "belt_size_wheel": {"x": 0.4, "y": 0.3}, ... },
-      "boundary_layer_suction_xpos": -1.1
+    "partial_surfaces": [
+      { "name": "PS_Body", "include_parts": ["Body_"], "exclude_parts": [],
+        "baffle_export_option": null, "output_variables": {...} }
+    ],
+    "partial_volumes": [
+      { "name": "PV_Wake", "bbox_mode": "user_defined",
+        "bbox": [-1, 5, -1.5, 1.5, 0, 1.5], "output_variables": {...} }
+    ],
+    "section_cuts": [
+      { "name": "SC_Center", "axis_x": 0, "axis_y": 1, "axis_z": 0,
+        "point_x": 0, "point_y": 0, "point_z": 0.5, "bbox": [], "output_variables": {...} }
+    ],
+    "probe_files": [
+      { "name": "front_probes", "probe_type": "volume", "radius": 0.05,
+        "output_frequency": 1.0, "output_start_iteration": 0,
+        "scientific_notation": true, "output_precision": 7,
+        "output_variables": { "cp": true, "time_avg_pressure": true },
+        "points": [ {"x_pos": 0.5, "y_pos": 0.0, "z_pos": 0.3, "description": "nose"} ]
+      }
+    ],
+    "aero_coefficients": {
+      "reference_area_auto": true, "reference_length_auto": true,
+      "coefficients_along_axis_active": false
     }
   },
   "target_names": {
-    "wheel":            ["Wheel_"],          // part name matching patterns
-    "rim":              ["_Spokes_"],
-    "porous":           ["Porous_Media_"],
-    "car_bounding_box": [""],
-    "baffle":           ["_Baffle_"],
-    "triangle_splitting": [""]
-  }
+    "wheel": ["Wheel_"], "rim": ["_Spokes_"],
+    "porous": ["Porous_Media_"], "car_bounding_box": [""],
+    "baffle": ["_Baffle_"], "triangle_splitting": [""],
+    "windtunnel": [], "wheel_tire_fr_lh": "", "wheel_tire_fr_rh": "",
+    "wheel_tire_rr_lh": "", "wheel_tire_rr_rh": "",
+    "overset_fr_lh": "", "overset_fr_rh": "", "overset_rr_lh": "", "overset_rr_rh": "",
+    "tire_roughness": 0.0
+  },
+  "porous_coefficients": [
+    { "part_name": "Porous_Media_Radiator", "inertial_resistance": 50.0, "viscous_resistance": 10.0 }
+  ]
 }
 ```
 
-**Key principle**: `setup_option` (bool flags) and `simulation_parameter` (physical values) are Fixed and stored in the Template. `setup` contains geometry-relative sizing rules. `target_names` maps solver concepts to part naming conventions.
+**Key principles:**
+- `setup_option` (flags) + `simulation_parameter` (physical values) + `setup` (geometry-relative rules) are **Fixed** in Template.
+- `output` fully defines all output instances (full data, partial surface/volume, section cuts, probe files).
+- `target_names` maps solver concepts to part-naming patterns.
+- `porous_coefficients` provides default porous resistance values (can be overridden per Configuration).
 
 ---
 
@@ -882,7 +937,8 @@ class ConfigurationSettings(BaseModel):
 - `list_cases`, `get_case`, `create_case`, `update_case`, `delete_case`
 - `list_configurations(case_id)`, `get_configuration`, `create_configuration`, `update_configuration`, `delete_configuration`
 - `create_run(case_id, configuration_id)`, `list_runs(case_id)`
-- `generate_xml(run_id, db, background_tasks)` — background task: `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml` → update `run.status`
+- `generate_xml(run_id, db, background_tasks)` — background task: `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml`; then `build_probe_csv_files()` writes one CSV per probe_file_instance beside the XML → update `run.status`
+- Multi-STL: if Assembly has 1 geometry → `source_file`; if multiple → `source_files` list passed to `assemble_ufx_solver_deck`
 - `get_diff(run_id_a, run_id_b, db)` → `DiffResult`
 - Permission check: `resource.created_by == current_user.id OR current_user.is_admin`
 
@@ -910,78 +966,134 @@ class ConfigurationSettings(BaseModel):
 
 ### Template Settings Extensions (`app/schemas/template_settings.py`)
 
-New `ComputeOption` added to `SetupOption`:
+`TemplateSettings` has **6 top-level fields** (5 sections + `porous_coefficients`):
+
 ```python
-class ComputeOption(BaseModel):
-    rotate_wheels: bool = True          # overset rotating + rotating wall BC
-    porous_media: bool = True           # porous sources + box refinement for porous
-    turbulence_generator: bool = True   # sources.turbulence (Aero only)
-    moving_ground: bool = True          # belt BC moving (Auto False if rotate_wheels=False)
-    adjust_ride_height: bool = False    # ride height adjustment (Config can override)
+class TemplateSettings(BaseModel):
+    setup_option:          SetupOption
+    simulation_parameter:  SimulationParameter
+    setup:                 Setup
+    output:                OutputSettings
+    target_names:          TargetNames
+    porous_coefficients:   list[PorousMedia] = []
 ```
 
-New fields added to `TargetNames`:
+**`SetupOption.compute`** (ComputeOption):
 ```python
-wheel_tire_fr_lh: str = ""   # individual tyre PID — required for OSM + belt auto-position
+class ComputeOption(BaseModel):
+    rotate_wheels: bool = True
+    porous_media: bool = True
+    turbulence_generator: bool = True  # Aero only
+    moving_ground: bool = True
+    adjust_ride_height: bool = False
+```
+
+**`SimulationParameter`** key fields:
+```python
+coarsest_voxel_size: float = 0.192  # m (ext aero); Compute Engine uses this directly
+number_of_resolution: int = 7
+start_averaging_time: float = 1.5   # seconds
+avg_window_size: float = 0.3        # seconds
+yaw_angle: float = 0.0              # Template default (Config can override)
+```
+
+**`OutputSettings`** (full structure in `app/schemas/template_settings.py`):
+```python
+class OutputSettings(BaseModel):
+    full_data:          FullDataOutputConfig
+    partial_surfaces:   list[PartialSurfaceOutputConfig]
+    partial_volumes:    list[PartialVolumeOutputConfig]
+    aero_coefficients:  AeroCoefficientsConfig
+    section_cuts:       list[SectionCutConfig]    # GHN primarily
+    probe_files:        list[ProbeFileConfig]     # optional for any sim type
+```
+
+**`ProbeFileConfig`**:
+```python
+class ProbePointConfig(BaseModel):
+    x_pos: float; y_pos: float; z_pos: float; description: str = ""
+
+class ProbeFileOutputVariables(BaseModel):
+    # All Optional[bool] — None = use solver default
+    pressure: bool | None = None
+    cp: bool | None = None
+    velocity: bool | None = None
+    time_avg_pressure: bool | None = None
+    wall_shear_stress: bool | None = None  # surface probes only
+    # ... 18 fields total
+
+class ProbeFileConfig(BaseModel):
+    name: str = "probe"              # also used as CSV filename
+    probe_type: str = "volume"       # "volume" | "surface"
+    radius: float = 0.0              # fictitious sphere radius for averaging
+    output_frequency: float = 1.0   # coarsest iterations between outputs
+    output_start_iteration: int = 0
+    scientific_notation: bool = True
+    output_precision: int = 7
+    output_variables: ProbeFileOutputVariables
+    points: list[ProbePointConfig]   # probe locations; generates CSV at XML build time
+```
+
+**`TargetNames`** key fields:
+```python
+wheel_tire_fr_lh: str = ""  # individual tyre PID — belt auto-position & roughness
 wheel_tire_fr_rh: str = ""
 wheel_tire_rr_lh: str = ""
 wheel_tire_rr_rh: str = ""
-overset_fr_lh: str = ""      # OSM region PID
+overset_fr_lh: str = ""     # OSM region PID
 overset_fr_rh: str = ""
 overset_rr_lh: str = ""
 overset_rr_rh: str = ""
-windtunnel: list[str] = []   # passive parts — excluded from force calc + bbox
-```
-
-New fields added to `SimulationParameter`:
-```python
-start_averaging_time: float = 1.5    # seconds
-avg_window_size: float = 0.3         # seconds
-output_start_time: float | None = None   # None = auto (= simulation_time)
-output_interval_time: float | None = None  # None = auto (= simulation_time)
-yaw_angle: float = 0.0              # Template default yaw (Config can override)
+windtunnel: list[str] = []  # passive parts — excluded from force calc + offset refinement
+tire_roughness: float = 0.0
 ```
 
 ### Compute Engine Extensions (`app/services/compute_engine.py`)
 
-New functions added for XML assembly:
+Key functions for XML assembly:
 
 ```python
-def resolve_compute_flags(template_flags: ComputeOption, overrides: ComputeOverrides) -> ComputeOption:
-    """Apply Config overrides to Template defaults. Enforce dependency rules:
-       rotate_wheels=False → moving_ground belt auto disabled
-       moving_ground=False → turbulence_generator ground disabled"""
-
-def compute_domain_bbox(vehicle_bbox: dict, multipliers: list[float]) -> dict:
-    """Apply 6 relative multipliers to vehicle bbox → absolute domain bounding box"""
-
-def classify_wheels(analysis_result: dict, target_names: TargetNames) -> dict:
-    """Sort parts matching target_names.wheel into FR_LH/FR_RH/RR_LH/RR_RH by centroid vs COG"""
-
-def compute_wheel_kinematics(wheel_parts: dict, inflow_velocity: float) -> list[dict]:
-    """PCA on rim vertices → axis; rpm = inflow_velocity / (2π×radius) × 60"""
-
-def compute_porous_axis(part_info: dict) -> dict:
-    """PCA on porous part vertices → face normal direction → PorousAxis xyz"""
-
-def compute_coarsest_mesh_size(finest_res: float, n_levels: int) -> float:
-    """Return finest_res × 2^n_levels"""
-
 def assemble_ufx_solver_deck(
     template_settings: TemplateSettings,
     analysis_result: dict,
-    config_settings: ConfigurationSettings,
+    sim_type: str,
+    inflow_velocity: float,
+    yaw_angle: float,
+    source_file: str | None = None,
+    source_files: list[str] | None = None,
 ) -> UfxSolverDeck:
-    """Top-level orchestrator:
-       1. resolve_compute_flags()
-       2. Resolve effective inflow_velocity / simulation_time (Config > Template)
-       3. compute_domain_bbox()
-       4. classify_wheels() + compute_wheel_kinematics()  [if rotate_wheels]
-       5. compute_porous_axis() per porous part           [if porous_media]
-       6. compute_coarsest_mesh_size()
-       7. Assemble all 7 UfxSolverDeck sections
+    """Top-level orchestrator — assembles all 7 UfxSolverDeck sections.
+    Multi-STL: if source_files provided, sets geometry.source_files list.
+    Probe instances: builds ProbeFileInstance per probe_files config.
+    Partial surface/volume: builds instances dynamically from template output config.
     """
+
+def build_probe_csv_files(template_settings: TemplateSettings) -> dict[str, bytes]:
+    """Returns {filename: csv_bytes} for each probe_file_instance.
+    CSV format: x_pos;y_pos;z_pos;description (no header).
+    Called by configuration_service after XML generation — CSVs saved beside output.xml.
+    """
+
+def resolve_compute_flags(template_flags: ComputeOption, overrides: ComputeOverrides) -> ComputeOption:
+    """Apply Config overrides to Template defaults with dependency rules."""
+
+def compute_domain_bbox(vehicle_bbox: dict, multipliers: list[float]) -> dict:
+    """Apply 6 relative multipliers to vehicle bbox → absolute domain bounding box."""
+
+def classify_wheels(analysis_result: dict, target_names: TargetNames) -> dict:
+    """Sort wheel parts into FR_LH/FR_RH/RR_LH/RR_RH by centroid vs COG."""
+
+def compute_wheel_kinematics(wheel_parts: dict, inflow_velocity: float) -> list[dict]:
+    """PCA on rim vertices → axis; rpm = inflow_velocity / (2π×radius) × 60."""
+
+def compute_porous_axis(part_info: dict) -> dict:
+    """PCA on porous part vertices → face normal → PorousAxis xyz."""
 ```
+
+**Partial surface/volume build logic** (in `assemble_ufx_solver_deck`):
+- `ps_instances` loop: filters `all_part_names` by `include_parts` / `exclude_parts` patterns; auto-excludes baffles when `baffle_export_option` is set.
+- `pv_instances` loop: builds `BoundingBox` per mode — `from_meshing_box` (finds matching box in template meshing setup), `around_parts` (union of part bboxes from analysis_result), `user_defined` (literal bbox list).
+- `probe_instances` loop: builds `ProbeFileInstance` with `source_file = f"{name}.csv"` (relative, written by `build_probe_csv_files`).
 
 ### Compute Flag Dependency Rules
 
@@ -1040,10 +1152,35 @@ turbulence_generator = False
 
 | Section | Fields |
 |---|---|
-| 走行条件 | `inflow_velocity` (Template default shown), `yaw_angle`, `simulation_time` (optional override) |
+| Conditions | `inflow_velocity` (Template default shown), `yaw_angle`, `simulation_time` (optional override) |
 | Compute Options | Nested checkbox tree with dependency grayout (rotate_wheels → moving_ground/OSM, etc.) |
 | Porous Coefficients | Auto-generated from Assembly porous parts — `inertial/viscous_resistance` per part (shown only if porous_media=ON) |
 | Ride Height | `front/rear_wheel_axis_rh`, `adjust_body_wheel_separately` (shown only if adjust_ride_height=ON) |
+
+**`TemplateSettingsForm.tsx`** (used inside Create/Edit/View modals):
+
+Form state is managed by `src/hooks/useTemplateSettingsForm.ts` (`useTemplateSettingsForm` hook). Key interfaces:
+```typescript
+interface OffsetRefinementFormItem  { name, level, normal_distance, parts: string }
+interface CustomRefinementFormItem  { name, level, parts: string }
+interface PorousCoeffFormItem       { part_name, inertial_resistance, viscous_resistance }
+interface PartialSurfaceFormItem    { name, include_parts, exclude_parts, baffle_export_option, output_variables, ... }
+interface PartialVolumeFormItem     { name, bbox_mode, bbox_source_box, bbox, output_variables, ... }
+interface SectionCutFormItem        { name, axis_x/y/z, point_x/y/z, bbox, output_variables, ... }
+interface ProbeFileFormItem         { name, probe_type, radius, output_frequency, output_variables, points: ProbePointFormItem[] }
+interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
+```
+
+`TemplateSettingsForm.tsx` accordion sections:
+
+| Accordion | Contents |
+|---|---|
+| Simulation Run Parameters | velocity, run time, averaging, mach factor, wall model, material |
+| Meshing | coarsest voxel, refinement levels, triangle splitting, offset refinement dynamic list, custom refinement dynamic list |
+| Boundary Conditions | ground mode, belt config, BL suction, turbulence generator, porous coefficients (template defaults) dynamic list |
+| Output | full data format/coarsening, output variables checkboxes (full: 24 vars, surface: 15 vars), partial surface dynamic list (include/exclude/baffle/per-instance output vars), partial volume dynamic list (3 bbox_mode variants), section cuts dynamic list, **probe files dynamic list** (probe points, CSV import/export) |
+| Aero Coefficients | reference area/length, coefficients along axis |
+| Target Part Names | all `target_names` fields |
 
 ---
 

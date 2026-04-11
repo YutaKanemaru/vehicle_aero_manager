@@ -65,6 +65,41 @@ class OutputCoarsening(BaseModel):
     export_uncoarsened_voxels: bool
 
 
+class ProbeOutputVariables(BaseModel):
+    """Output variables applicable to probe_file_instance (volume or surface)."""
+    pressure: Optional[bool] = None
+    time_avg_pressure: Optional[bool] = None
+    window_avg_pressure: Optional[bool] = None
+    cp: Optional[bool] = None
+    velocity: Optional[bool] = None
+    time_avg_velocity: Optional[bool] = None
+    window_avg_velocity: Optional[bool] = None
+    velocity_magnitude: Optional[bool] = None
+    time_avg_velocity_magnitude: Optional[bool] = None
+    window_avg_velocity_magnitude: Optional[bool] = None
+    wall_shear_stress: Optional[bool] = None          # surface probes only
+    time_avg_wall_shear_stress: Optional[bool] = None  # surface probes only
+    window_avg_wall_shear_stress: Optional[bool] = None  # surface probes only
+    density: Optional[bool] = None
+    time_avg_density: Optional[bool] = None
+    window_avg_density: Optional[bool] = None
+    pressure_std: Optional[bool] = None
+    pressure_var: Optional[bool] = None
+
+
+class ProbeFileInstance(BaseModel):
+    """One <probe_file_instance> element inside <probe_file>."""
+    name: str
+    source_file: str                          # relative path to *.csv with probe locations
+    probe_type: str = "volume"               # "volume" | "surface"
+    radius: float = 0.0                       # m
+    output_frequency: float = 1.0
+    scientific_notation: bool = True
+    output_precision: int = 7
+    output_start_iteration: int = 0
+    output_variables: ProbeOutputVariables = Field(default_factory=ProbeOutputVariables)
+
+
 # ---------------------------------------------------------------------------
 # Version
 # ---------------------------------------------------------------------------
@@ -526,6 +561,7 @@ class Output(BaseModel):
     moment_reference_system: MomentReferenceSystem
     aero_coefficients: AeroCoefficients
     section_cut: List[SectionCutInstance] = Field(default_factory=list)     # GHN only
+    probe_file: List[ProbeFileInstance] = Field(default_factory=list)
     partial_surface: List[PartialSurfaceInstance] = Field(default_factory=list)
     partial_volume: List[PartialVolumeInstance] = Field(default_factory=list)
 

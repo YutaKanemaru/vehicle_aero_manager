@@ -326,19 +326,29 @@ def _generate_xml_task(run_id: str) -> None:
         merged_analysis = _merge_analysis_results(assembly)
         template_settings = TemplateSettings.model_validate(json.loads(active_version.settings))
 
-        source_file = "geometry.stl"
+        source_file: str | None = None
+        source_files: list[str] = []
         if assembly and assembly.geometries:
-            source_file = assembly.geometries[0].original_filename
+            geom_names = [g.original_filename for g in assembly.geometries]
+            if len(geom_names) == 1:
+                source_file = geom_names[0]
+            else:
+                source_files = geom_names
 
-        from app.services.compute_engine import assemble_ufx_solver_deck
+        from app.services.compute_engine import assemble_ufx_solver_deck, build_probe_csv_files
         from app.ultrafluid.serializer import serialize_ufx
+
+        template = db.get(Template, case.template_id)
+        sim_type = template.sim_type if template else "aero"
 
         deck = assemble_ufx_solver_deck(
             template_settings=template_settings,
             analysis_result=merged_analysis,
+            sim_type=sim_type,
             inflow_velocity=condition.inflow_velocity,
             yaw_angle=condition.yaw_angle,
             source_file=source_file,
+            source_files=source_files if source_files else None,
         )
         xml_bytes = serialize_ufx(deck)
 
@@ -346,6 +356,11 @@ def _generate_xml_task(run_id: str) -> None:
         out_dir.mkdir(parents=True, exist_ok=True)
         xml_path = out_dir / "output.xml"
         xml_path.write_bytes(xml_bytes)
+
+        # Save probe location CSV files alongside the XML (one per probe_file_instance)
+        probe_csvs = build_probe_csv_files(template_settings)
+        for csv_filename, csv_bytes in probe_csvs.items():
+            (out_dir / csv_filename).write_bytes(csv_bytes)
 
         # JSON snapshots — human-readable debug files, DB is the source of truth
         (out_dir / "template_settings.json").write_text(
@@ -371,9 +386,10 @@ def _generate_xml_task(run_id: str) -> None:
         run.error_message = None
 
     except Exception as exc:
+        import traceback
         if run:
             run.status = "error"
-            run.error_message = str(exc)
+            run.error_message = traceback.format_exc()
     finally:
         db.commit()
         db.close()

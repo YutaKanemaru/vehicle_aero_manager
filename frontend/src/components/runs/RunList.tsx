@@ -88,12 +88,18 @@ export function RunList({ caseId }: Props) {
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
 
-  function downloadXml(runId: string) {
-    const url = runsApi.downloadUrl(caseId, runId);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "output.xml";
-    a.click();
+  async function downloadXml(runId: string) {
+    try {
+      const blob = await runsApi.download(caseId, runId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "output.xml";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      notifications.show({ message: (e as Error).message, color: "red" });
+    }
   }
 
   function openDiff() {
