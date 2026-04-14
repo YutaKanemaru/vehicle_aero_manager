@@ -235,6 +235,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/templates/{template_id}/versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Version
+         * @description Edit an existing version's settings in-place (no new version created).
+         */
+        patch: operations["update_version_api_v1_templates__template_id__versions__version_id__patch"];
+        trace?: never;
+    };
     "/api/v1/templates/{template_id}/versions/{version_id}/activate": {
         parameters: {
             query?: never;
@@ -2637,6 +2657,12 @@ export interface components {
              */
             created_at: string;
         };
+        /** TemplateVersionUpdate */
+        TemplateVersionUpdate: {
+            settings: components["schemas"]["TemplateSettings-Input"];
+            /** Comment */
+            comment?: string | null;
+        };
         /** Token */
         Token: {
             /** Access Token */
@@ -3244,6 +3270,42 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateVersionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_version_api_v1_templates__template_id__versions__version_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateVersionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

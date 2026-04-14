@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.template import Template, TemplateVersion
 from app.models.user import User
 from app.schemas.template import (
-    TemplateCreate, TemplateUpdate, TemplateVersionCreate, TemplateForkRequest,
-    SettingsValidateResponse, SettingsValidationError,
+    TemplateCreate, TemplateUpdate, TemplateVersionCreate, TemplateVersionUpdate,
+    TemplateForkRequest, SettingsValidateResponse, SettingsValidationError,
 )
 from app.schemas.template_settings import TemplateSettings
 
@@ -233,6 +233,25 @@ def activate_version(
         .values(is_active=False)
     )
     version.is_active = True
+    db.commit()
+    db.refresh(version)
+    return version
+
+
+def update_version_settings(
+    db: Session,
+    template_id: str,
+    version_id: str,
+    data: TemplateVersionUpdate,
+    current_user: User,
+) -> TemplateVersion:
+    """Overwrite the settings (and optionally comment) of an existing version in-place."""
+    template = _get_template_or_404(db, template_id)
+    _check_owner_or_admin(template, current_user)
+    version = _get_version_or_404(db, template_id, version_id)
+    version.settings = data.settings.model_dump_json()
+    if data.comment is not None:
+        version.comment = data.comment
     db.commit()
     db.refresh(version)
     return version

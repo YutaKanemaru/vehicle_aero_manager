@@ -20,6 +20,9 @@ type TemplateVersionResponse =
 type TemplateVersionCreate =
   paths["/api/v1/templates/{template_id}/versions"]["post"]["requestBody"]["content"]["application/json"];
 
+type TemplateVersionUpdate =
+  paths["/api/v1/templates/{template_id}/versions/{version_id}"]["patch"]["requestBody"]["content"]["application/json"];
+
 type TemplateForkRequest =
   paths["/api/v1/templates/{template_id}/fork"]["post"]["requestBody"]["content"]["application/json"];
 
@@ -39,6 +42,7 @@ export type {
   TemplateUpdate,
   TemplateVersionResponse,
   TemplateVersionCreate,
+  TemplateVersionUpdate,
   TemplateForkRequest,
   TemplateSettingsPreset,
   SettingsValidateResponse,
@@ -78,6 +82,13 @@ export const templatesApi = {
     versionId: string,
   ): Promise<TemplateVersionResponse> =>
     client.patch(`/templates/${templateId}/versions/${versionId}/activate`, {}),
+
+  updateVersion: (
+    templateId: string,
+    versionId: string,
+    data: TemplateVersionUpdate,
+  ): Promise<TemplateVersionResponse> =>
+    client.patch(`/templates/${templateId}/versions/${versionId}`, data),
 
   fork: (
     templateId: string,

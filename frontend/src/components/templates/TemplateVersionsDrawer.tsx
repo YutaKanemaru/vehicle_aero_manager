@@ -14,12 +14,13 @@ import {
   Code,
   ScrollArea,
 } from "@mantine/core";
-import { IconCheck, IconPlus, IconCode, IconEye } from "@tabler/icons-react";
+import { IconCheck, IconPlus, IconCode, IconEye, IconEdit } from "@tabler/icons-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { templatesApi, type TemplateResponse } from "../../api/templates";
 import { useAuthStore } from "../../stores/auth";
 import { TemplateVersionCreateModal } from "./TemplateVersionCreateModal";
+import { TemplateVersionEditModal } from "./TemplateVersionEditModal";
 import { TemplateSettingsViewModal } from "./TemplateSettingsViewModal";
 import type { TemplateVersionResponse } from "../../api/templates";
 
@@ -34,6 +35,7 @@ export function TemplateVersionsDrawer({ template, onClose }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [expandedSettings, setExpandedSettings] = useState<string | null>(null);
   const [viewingVersion, setViewingVersion] = useState<TemplateVersionResponse | null>(null);
+  const [editingVersion, setEditingVersion] = useState<TemplateVersionResponse | null>(null);
 
   const { data: versions = [], isLoading } = useQuery({
     queryKey: ["templates", template.id, "versions"],
@@ -132,6 +134,17 @@ export function TemplateVersionsDrawer({ template, onClose }: Props) {
                         <IconCode size={16} />
                       </ActionIcon>
                     </Tooltip>
+                    {canManage && (
+                      <Tooltip label="Edit settings">
+                        <ActionIcon
+                          variant="subtle"
+                          color="blue"
+                          onClick={() => setEditingVersion(v)}
+                        >
+                          <IconEdit size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
                     {canManage && !v.is_active && (
                       <Tooltip label="Set as active">
                         <ActionIcon
@@ -182,6 +195,15 @@ export function TemplateVersionsDrawer({ template, onClose }: Props) {
           templateName={template.name}
           simType={template.sim_type}
           description={template.description ?? undefined}
+        />
+      )}
+
+      {editingVersion && (
+        <TemplateVersionEditModal
+          opened
+          onClose={() => setEditingVersion(null)}
+          template={template}
+          version={editingVersion}
         />
       )}
     </>

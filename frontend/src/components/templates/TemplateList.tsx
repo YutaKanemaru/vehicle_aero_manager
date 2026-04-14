@@ -10,12 +10,13 @@ import {
   Stack,
   Title,
 } from "@mantine/core";
-import { IconPlus, IconTrash, IconVersions, IconGitFork, IconEye, IconEyeOff, IconDownload, IconUpload } from "@tabler/icons-react";
+import { IconPlus, IconTrash, IconVersions, IconGitFork, IconEye, IconEyeOff, IconDownload, IconUpload, IconEdit } from "@tabler/icons-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { templatesApi, type TemplateResponse } from "../../api/templates";
 import { TemplateCreateModal } from "./TemplateCreateModal";
 import { TemplateVersionsDrawer } from "./TemplateVersionsDrawer";
+import { TemplateVersionEditModal } from "./TemplateVersionEditModal";
 import { TemplateForkModal } from "./TemplateForkModal";
 import { TemplateImportModal } from "./TemplateImportModal";
 import { useAuthStore } from "../../stores/auth";
@@ -39,6 +40,7 @@ export function TemplateList() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateResponse | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<TemplateResponse | null>(null);
   const [forkTarget, setForkTarget] = useState<TemplateResponse | null>(null);
 
   const { data: templates = [], isLoading } = useQuery({
@@ -73,6 +75,9 @@ export function TemplateList() {
   });
 
   const canDelete = (t: TemplateResponse) =>
+    user?.id === t.created_by || user?.is_admin;
+
+  const canManage = (t: TemplateResponse) =>
     user?.id === t.created_by || user?.is_admin;
 
   const rows = templates.map((t) => (
@@ -122,6 +127,17 @@ export function TemplateList() {
                   onClick={() => downloadSettingsJson(t)}
                 >
                   <IconDownload size={16} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            {t.active_version && canManage(t) && (
+              <Tooltip label="Edit active version settings">
+                <ActionIcon
+                  variant="subtle"
+                  color="indigo"
+                  onClick={() => setEditingTemplate(t)}
+                >
+                  <IconEdit size={16} />
                 </ActionIcon>
               </Tooltip>
             )}
@@ -216,6 +232,15 @@ export function TemplateList() {
           opened
           source={forkTarget}
           onClose={() => setForkTarget(null)}
+        />
+      )}
+
+      {editingTemplate?.active_version && (
+        <TemplateVersionEditModal
+          opened
+          onClose={() => setEditingTemplate(null)}
+          template={editingTemplate}
+          version={editingTemplate.active_version}
         />
       )}
     </Stack>

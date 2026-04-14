@@ -9,6 +9,7 @@ from app.schemas.template import (
     TemplateUpdate,
     TemplateResponse,
     TemplateVersionCreate,
+    TemplateVersionUpdate,
     TemplateVersionResponse,
     TemplateForkRequest,
     SettingsValidateRequest,
@@ -159,6 +160,18 @@ def create_version(
     current_user: User = Depends(get_current_user),
 ):
     return template_service.create_version(db, template_id, data, current_user)
+
+
+@router.patch("/{template_id}/versions/{version_id}", response_model=TemplateVersionResponse)
+def update_version(
+    template_id: str,
+    version_id: str,
+    data: TemplateVersionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Edit an existing version's settings in-place (no new version created)."""
+    return template_service.update_version_settings(db, template_id, version_id, data, current_user)
 
 
 @router.patch("/{template_id}/versions/{version_id}/activate", response_model=TemplateVersionResponse)

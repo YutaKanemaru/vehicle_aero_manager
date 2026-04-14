@@ -29,6 +29,11 @@ class TemplateVersionCreate(BaseModel):
     comment: str | None = None
 
 
+class TemplateVersionUpdate(BaseModel):
+    settings: TemplateSettings
+    comment: str | None = None
+
+
 class TemplateForkRequest(BaseModel):
     name: str
     description: str | None = None
