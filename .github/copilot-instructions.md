@@ -489,7 +489,7 @@ The root element is `<uFX_solver_deck>`. Key sub-structures:
 | Classification | Description | Example |
 |---|---|---|
 | `Fixed` | Value defined in a Template, does not change per geometry | `simulation.general.*`, `boundary_conditions.inlet.velocity` |
-| `Computed` | Derived from STL geometry analysis (trimesh/NumPy) | `geometry.domain_bounding_box`, `meshing.overset.rotating` |
+| `Computed` | Derived from STL geometry analysis (streaming ASCII parser + NumPy) | `geometry.domain_bounding_box`, `meshing.overset.rotating` |
 | `UserInput` | Set explicitly by the engineer via UI | `sources.porous.resistance` |
 
 ### XML Generation Pipeline
@@ -742,14 +742,17 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
 - `@field_validator("analysis_result", mode="before")` parses JSON string from DB automatically
 
 **Compute Engine** (`app/services/compute_engine.py`)
-- `analyze_stl(file_path: Path) -> dict`: `trimesh.load(str(path), force="scene")` → processes each solid in `Scene.geometry`
-- Extracts per-part: centroid, bbox (x/y/z min/max), vertex_count, face_count
+- `_detect_stl_format(file_path) -> "ascii" | "binary"`: reads 84 bytes only — detects binary by magic bytes OR by `80 + 4 + n*50 == file_size` check to handle binaries whose header starts with `solid`
+- `_parse_stl_ascii_streaming(file_path, verbose) -> dict`: line-by-line streaming parser — **never allocates vertex arrays**; maintains running `x_min/max, y_min/max, z_min/max, vertex_count, face_count` per solid; centroid = bbox center `(min+max)/2` on `endsolid`
+- `analyze_stl(file_path: Path) -> dict`: calls `_detect_stl_format` → raises `ValueError` if binary; calls streaming parser; computes vehicle bbox by union of per-part bboxes (no `np.concatenate`)
+- **Binary STL is not supported** — `ValueError("Binary STL format is not supported. Please convert to ASCII STL before uploading.")` is raised immediately
+- Extracts per-part: centroid (bbox center), bbox (x/y/z min/max), vertex_count, face_count
 - Computes vehicle bbox (union of all parts) and dimensions (length, width, height)
 - Returns JSON-serializable dict matching `AnalysisResult` schema
-- Multi-solid ASCII STL fully supported via `force="scene"`
+- Multi-solid ASCII STL fully supported
 
 **Service** (`app/services/geometry_service.py`)
-- `upload_geometry(db, name, description, file, current_user, folder_id=None)`: saves file to `upload_dir/geometries/{id}/{filename}`, stores relative path, triggers `BackgroundTasks`
+- `upload_geometry(db, name, description, file, current_user, folder_id=None)`: saves file to `upload_dir/geometries/{id}/{filename}` using `shutil.copyfileobj(..., length=8MB)` (chunked — avoids holding full file in memory), stores relative path, triggers `BackgroundTasks`
 - `link_geometry(db, data: GeometryLinkRequest, current_user)`: validates path exists on server, creates `Geometry` row with `is_linked=True` and absolute `file_path`, triggers `BackgroundTasks`
 - `run_analysis()`: background task — `pending` → `analyzing` → `ready`/`error`; `is_linked=True` 時は `file_path` を絶対パスとしてそのまま使用、`is_linked=False` 時は `settings.upload_dir / file_path`
 - `update_geometry()`: uses `model_fields_set` — only updates `folder_id` when field is explicitly in request body
@@ -908,15 +911,17 @@ The Compute Engine derives `Computed` fields from STL geometry. Key calculations
 | Porous media coefficients | Apply user-input resistance values to matched porous parts |
 
 **Implementation rules for Compute Engine:**
-- Use `trimesh` + `numpy` only — already in `pyproject.toml`
-- Do NOT use `numpy-stl` or `scikit-learn` (used in concept_vam prototype but not in this stack)
-- STL files may be multi-solid ASCII format — parse by solid name
-- `trimesh.load()` must always pass `process=False` — skips normal recalculation, vertex deduplication, and BVH build (~20–40% faster for large vehicle STL files); normals are not needed for bbox/centroid analysis
+- Use `numpy` for XML assembly math — `trimesh` import remains but is NOT used in `analyze_stl`
+- Do NOT use `numpy-stl`, `scikit-learn`, or `trimesh.load()` in `analyze_stl` — use the internal streaming parser
+- **ASCII STL only**: binary STL raises `ValueError` immediately — users must convert to ASCII before uploading
+- STL files may be multi-solid ASCII format — streaming parser handles `solid`/`endsolid` blocks sequentially
+- `analyze_stl` never allocates vertex arrays — peak memory during analysis is O(number of parts), not O(file size)
+- Centroid = bounding box center `(min+max)/2` per axis — NOT vertex average
 - Wheel grouping: classify FR-LH / FR-RH / RR-LH / RR-RH by comparing part centroid to vehicle COG (x, y)
 - RPM calculation: `rpm = (inflow_velocity / wheel_circumference) × 60` — needs wheel radius from bbox
-- `analyze_stl(file_path, verbose=False)` — pass `verbose=True` to print step-by-step progress logs (used by `backend/test_compute_engine.py`)
+- `analyze_stl(file_path, verbose=False)` — pass `verbose=True` to print step-by-step progress logs (used by `backend/scripts/test_compute_engine.py`)
 
-**Test script**: `backend/test_compute_engine.py` — runs `analyze_stl()` standalone and prints vehicle bbox, dimensions, and per-part summary. Run with `uv run python test_compute_engine.py [<stl_path>]`. Auto-detects first STL in `data/uploads/geometries/` if no argument given. Saves full result to `test_compute_engine_result.json`.
+**Test script**: `backend/scripts/test_compute_engine.py` — runs `analyze_stl()` standalone and prints vehicle bbox, dimensions, and per-part summary. Run with `uv run python scripts/test_compute_engine.py [<stl_path>]`. Auto-detects first STL in `data/uploads/geometries/` if no argument given. Saves full result to `test_compute_engine_result.json`.
 
 ---
 

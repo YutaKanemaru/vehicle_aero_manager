@@ -104,13 +104,12 @@ def upload_geometry(
     # ファイル保存
     save_dir = _geometry_upload_dir(geometry.id)
     save_path = save_dir / (file.filename or "upload.stl")
-    content = file.file.read()
-
-    save_path.write_bytes(content)
+    with save_path.open("wb") as _f:
+        shutil.copyfileobj(file.file, _f, length=8 * 1024 * 1024)
 
     # 相対パスを保存（upload_dir からの相対）
     geometry.file_path = str(save_path.relative_to(settings.upload_dir))
-    geometry.file_size = len(content)
+    geometry.file_size = save_path.stat().st_size
 
     db.commit()
     db.refresh(geometry)

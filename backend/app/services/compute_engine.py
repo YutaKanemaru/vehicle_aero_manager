@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import math
+import struct
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,12 +23,147 @@ if TYPE_CHECKING:
     from app.ultrafluid.schema import UfxSolverDeck
 
 
+def _detect_stl_format(file_path: Path) -> str:
+    """
+    STL ファイルがアスキー形式かバイナリ形式かを判定する。
+
+    Returns: "ascii" | "binary"
+
+    判定ロジック:
+      1. 先頭5バイトが b"solid" でなければ → "binary"
+      2. b"solid" で始まる場合: ヘッダー後4バイトを uint32 として読み、
+         80 + 4 + n_triangles * 50 == file_size が成立すれば → "binary"
+         (バイナリ STL のヘッダーが偶然 "solid" で始まるケースに対応)
+      3. 上記を満たさなければ → "ascii"
+    """
+    file_size = file_path.stat().st_size
+    with file_path.open("rb") as f:
+        header = f.read(84)
+
+    if len(header) < 5:
+        raise ValueError("STL file is too small to be valid.")
+
+    if header[:5] != b"solid":
+        return "binary"
+
+    # "solid" で始まる場合 — バイナリの誤検出を排除
+    if len(header) >= 84:
+        n_triangles = struct.unpack("<I", header[80:84])[0]
+        expected_size = 80 + 4 + n_triangles * 50
+        if expected_size == file_size:
+            return "binary"
+
+    return "ascii"
+
+
+def _parse_stl_ascii_streaming(
+    file_path: Path,
+    verbose: bool = False,
+) -> dict[str, dict]:
+    """
+    ASCII STL をストリーミング解析してパーツ情報を返す。
+
+    頂点配列を一切メモリに保持しない。
+    各 solid ごとに min/max/sum/count のランニング統計のみ保持する。
+
+    Returns: {part_name: {"centroid", "bbox", "vertex_count", "face_count"}}
+    """
+    def log(msg: str) -> None:
+        if verbose:
+            print(msg)
+
+    part_info: dict[str, dict] = {}
+
+    # per-solid running stats
+    current_name: str | None = None
+    x_min = x_max = y_min = y_max = z_min = z_max = 0.0
+    vertex_count = 0
+    face_count = 0
+    solid_index = 0
+    initialized = False  # 最初の vertex が来るまで bbox を初期化するフラグ
+
+    with file_path.open("r", encoding="ascii", errors="replace") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            lower = line.lower()
+
+            if lower.startswith("solid"):
+                name_part = line[5:].strip()
+                current_name = name_part if name_part else file_path.stem
+                # 同名パーツが既にある場合はサフィックスを付与
+                base_name = current_name
+                suffix = 0
+                while current_name in part_info:
+                    suffix += 1
+                    current_name = f"{base_name}_{suffix}"
+                solid_index += 1
+                vertex_count = 0
+                face_count = 0
+                initialized = False
+                log(f"        Solid [{solid_index}]: {current_name}")
+
+            elif lower.startswith("facet normal"):
+                face_count += 1
+
+            elif lower.startswith("vertex"):
+                parts = line.split()
+                if len(parts) == 4:
+                    try:
+                        px, py, pz = float(parts[1]), float(parts[2]), float(parts[3])
+                    except ValueError:
+                        continue
+                    if not initialized:
+                        x_min = x_max = px
+                        y_min = y_max = py
+                        z_min = z_max = pz
+                        initialized = True
+                    else:
+                        if px < x_min: x_min = px
+                        if px > x_max: x_max = px
+                        if py < y_min: y_min = py
+                        if py > y_max: y_max = py
+                        if pz < z_min: z_min = pz
+                        if pz > z_max: z_max = pz
+                    vertex_count += 1
+
+            elif lower.startswith("endsolid") and current_name is not None:
+                if vertex_count == 0:
+                    # 空の solid はスキップ
+                    current_name = None
+                    continue
+                # バウンディングボックス中心を centroid として使用
+                centroid = [
+                    round((x_min + x_max) / 2.0, 6),
+                    round((y_min + y_max) / 2.0, 6),
+                    round((z_min + z_max) / 2.0, 6),
+                ]
+                part_info[current_name] = {
+                    "centroid": centroid,
+                    "bbox": {
+                        "x_min": float(x_min),
+                        "x_max": float(x_max),
+                        "y_min": float(y_min),
+                        "y_max": float(y_max),
+                        "z_min": float(z_min),
+                        "z_max": float(z_max),
+                    },
+                    "vertex_count": vertex_count,
+                    "face_count": face_count,
+                }
+                current_name = None
+
+    if not part_info:
+        raise ValueError("No valid solid definitions found in STL file.")
+
+    return part_info
+
+
 def analyze_stl(file_path: Path, verbose: bool = False) -> dict:
     """
     STL ファイルを解析してパーツ情報・車両 bbox を返す。
 
-    マルチソリッド ASCII STL（1 ファイルに複数 solid）を想定。
-    trimesh が Scene として読み込めた場合は各 solid を個別パーツとして扱う。
+    ASCII STL (マルチソリッド対応) のみサポート。
+    バイナリ STL が検出された場合は ValueError を発生させる。
 
     verbose=True にすると各ステップの進捗を print する。
     """
@@ -35,33 +171,27 @@ def analyze_stl(file_path: Path, verbose: bool = False) -> dict:
         if verbose:
             print(msg)
 
-    log(f"  [1/4] STL 読み込み中: {file_path.name}")
-    loaded = trimesh.load(str(file_path), force="scene", process=False)
+    log(f"  [1/3] フォーマット検出: {file_path.name}")
+    fmt = _detect_stl_format(file_path)
+    if fmt == "binary":
+        raise ValueError(
+            "Binary STL format is not supported. "
+            "Please convert the file to ASCII STL before uploading."
+        )
 
-    if isinstance(loaded, trimesh.Scene):
-        meshes: dict[str, trimesh.Trimesh] = dict(loaded.geometry)
-    elif isinstance(loaded, trimesh.Trimesh):
-        # single solid — original_filename をパーツ名にする
-        meshes = {file_path.stem: loaded}
-    else:
-        raise ValueError(f"Unsupported trimesh type: {type(loaded)}")
+    log(f"  [2/3] ASCII STL ストリーミング解析中...")
+    part_info = _parse_stl_ascii_streaming(file_path, verbose=verbose)
 
-    if not meshes:
-        raise ValueError("STL file contains no geometry")
-
-    log(f"  [2/4] {len(meshes)} パーツ検出")
-
-    # ─── 車両全体 bbox ──────────────────────────────────────────────────────
-    log("  [3/4] 車両全体 bbox 計算中...")
-    all_vertices = np.concatenate([m.vertices for m in meshes.values()], axis=0)
-
+    log(f"  [3/3] 車両全体 bbox 計算中 ({len(part_info)} parts)...")
+    # vehicle bbox: 全パーツの bbox を union — np.concatenate 不使用
+    all_bboxes = [p["bbox"] for p in part_info.values()]
     vehicle_bbox = {
-        "x_min": float(all_vertices[:, 0].min()),
-        "x_max": float(all_vertices[:, 0].max()),
-        "y_min": float(all_vertices[:, 1].min()),
-        "y_max": float(all_vertices[:, 1].max()),
-        "z_min": float(all_vertices[:, 2].min()),
-        "z_max": float(all_vertices[:, 2].max()),
+        "x_min": min(b["x_min"] for b in all_bboxes),
+        "x_max": max(b["x_max"] for b in all_bboxes),
+        "y_min": min(b["y_min"] for b in all_bboxes),
+        "y_max": max(b["y_max"] for b in all_bboxes),
+        "z_min": min(b["z_min"] for b in all_bboxes),
+        "z_max": max(b["z_max"] for b in all_bboxes),
     }
 
     vehicle_dimensions = {
@@ -70,30 +200,9 @@ def analyze_stl(file_path: Path, verbose: bool = False) -> dict:
         "height": round(float(vehicle_bbox["z_max"] - vehicle_bbox["z_min"]), 6),
     }
 
-    # ─── パーツ別情報 ────────────────────────────────────────────────────────
-    log(f"  [4/4] パーツ別情報を計算中 ({len(meshes)} parts)...")
-    part_info: dict[str, dict] = {}
-    for i, (name, mesh) in enumerate(meshes.items(), 1):
-        log(f"        [{i}/{len(meshes)}] {name}")
-        verts = mesh.vertices
-        centroid = verts.mean(axis=0)
-        part_info[name] = {
-            "centroid": [round(float(v), 6) for v in centroid],
-            "bbox": {
-                "x_min": float(verts[:, 0].min()),
-                "x_max": float(verts[:, 0].max()),
-                "y_min": float(verts[:, 1].min()),
-                "y_max": float(verts[:, 1].max()),
-                "z_min": float(verts[:, 2].min()),
-                "z_max": float(verts[:, 2].max()),
-            },
-            "vertex_count": int(len(verts)),
-            "face_count": int(len(mesh.faces)),
-        }
-
     log("  ✅ 解析完了")
     return {
-        "parts": list(meshes.keys()),
+        "parts": list(part_info.keys()),
         "vehicle_bbox": vehicle_bbox,
         "vehicle_dimensions": vehicle_dimensions,
         "part_info": part_info,
