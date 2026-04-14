@@ -1243,7 +1243,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                   </Group>
                   <Text size="xs" c="dimmed">CSV format per line: x_pos;y_pos;z_pos;description (no header)</Text>
                   {pf.points.map((_pt, pidx) => (
-                    <Paper key={pidx} withBorder p="xs" bg="gray.0">
+                    <Paper key={pidx} withBorder p="xs" bg="var(--mantine-color-default-hover)">
                       <Group justify="space-between" mb={4}>
                         <Text size="xs" fw={500}>Point #{pidx + 1}</Text>
                         <ActionIcon color="red" size="xs" variant="subtle"

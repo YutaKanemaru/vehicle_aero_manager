@@ -86,7 +86,7 @@ export function AssemblyGeometriesDrawer({ assembly, opened, onClose }: Props) {
           ) : (
             <Stack gap={4}>
               {(assembly.geometries as GeometryResponse[]).map((g) => (
-                <Group key={g.id} justify="space-between" p="xs" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 6 }}>
+                <Group key={g.id} justify="space-between" p="xs" style={{ border: "1px solid var(--mantine-color-default-border)", borderRadius: 6 }}>
                   <Box>
                     <Text size="sm">{g.name}</Text>
                     <Group gap={6}>
@@ -124,7 +124,7 @@ export function AssemblyGeometriesDrawer({ assembly, opened, onClose }: Props) {
               <ScrollArea h={240}>
                 <Stack gap={4}>
                   {availableToAdd.map((g: GeometryResponse) => (
-                    <Group key={g.id} p="xs" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 6 }}>
+                    <Group key={g.id} p="xs" style={{ border: "1px solid var(--mantine-color-default-border)", borderRadius: 6 }}>
                       <Checkbox
                         checked={selected.includes(g.id)}
                         onChange={(e) =>

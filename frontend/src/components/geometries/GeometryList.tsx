@@ -74,7 +74,7 @@ function AnalysisDetails({ geometry }: { geometry: GeometryResponse }) {
   const partNames = Object.keys(result.part_info);
 
   return (
-    <Box p="sm" bg="gray.0" style={{ borderRadius: 6 }}>
+    <Box p="sm" style={{ borderRadius: 6, backgroundColor: "var(--mantine-color-default-hover)" }}>
       <SimpleGrid cols={2} spacing="xs" mb="xs">
         <Box>
           <Text size="xs" c="dimmed">Vehicle bounding box</Text>
@@ -342,8 +342,8 @@ function FolderSection({
         justify="space-between"
         style={{
           cursor: "pointer",
-          backgroundColor: "var(--mantine-color-gray-0)",
-          borderBottom: opened ? "1px solid var(--mantine-color-gray-2)" : "none",
+          backgroundColor: "var(--mantine-color-default-hover)",
+          borderBottom: opened ? "1px solid var(--mantine-color-default-border)" : "none",
         }}
         onClick={toggle}
       >
