@@ -165,14 +165,11 @@ class TurbulenceGeneratorOption(BaseModel):
 class ComputeOption(BaseModel):
     """Controls which Computed blocks are generated. Config can override per-case.
 
-    NOTE: rotate_wheels and moving_ground were removed — they are now
-    derived from ground_mode in compute_engine.assemble_ufx_solver_deck():
-      static       → both False
-      full_moving   → both True
-      rotating_belt_* → both True
+    Removed flags (now auto-derived in compute_engine.assemble_ufx_solver_deck):
+      rotate_wheels / moving_ground → derived from ground_mode
+      porous_media   → derived from bool(template_settings.porous_coefficients)
+      turbulence_generator → derived from tg_cfg.enable_ground_tg | enable_body_tg
     """
-    porous_media: bool = True         # porous sources + box refinement for porous
-    turbulence_generator: bool = True # sources.turbulence (aero only)
     adjust_ride_height: bool = False  # ride height adjustment (Config can override)
 
 

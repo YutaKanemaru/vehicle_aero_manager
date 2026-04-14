@@ -683,14 +683,6 @@ export function TemplateSettingsForm({ form, simType }: Props) {
 
             {/* Compute options */}
             <Divider label="Compute options (defaults)" labelPosition="center" />
-            <Switch label="Porous media" {...form.getInputProps("compute_porous_media", { type: "checkbox" })} />
-            {hasTG(simType) && (
-              <Switch
-                label="Turbulence generator"
-                disabled={!form.values.tg_enable_ground && !form.values.tg_enable_body}
-                {...form.getInputProps("compute_turbulence_generator", { type: "checkbox" })}
-              />
-            )}
             <Switch label="Adjust ride height" {...form.getInputProps("compute_adjust_ride_height", { type: "checkbox" })} />
 
             {/* Porous media coefficients at template level */}

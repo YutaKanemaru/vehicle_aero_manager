@@ -803,7 +803,7 @@ def assemble_ufx_solver_deck(
     # ── Turbulence generators ─────────────────────────────────────────────
     turbulence_instances: list = []
     tg_extra_boxes: list = []
-    if is_aero and vbbox and so.compute.turbulence_generator:
+    if is_aero and vbbox and (tg_cfg.enable_ground_tg or tg_cfg.enable_body_tg):
         turbulence_instances, tg_extra_boxes = _build_tg_instances(
             sim_type, tg_cfg, vbbox, coarsest,
             no_slip_xmin, floor_dims,
@@ -890,7 +890,7 @@ def assemble_ufx_solver_deck(
 
     # ── Porous sources ────────────────────────────────────────────────────
     porous_instances: list = []
-    if so.compute.porous_media:
+    if template_settings.porous_coefficients:
         porous_coeff_map = {p.part_name: p for p in template_settings.porous_coefficients}
         for pname, pinfo in part_info.items():
             if not _matches_any(pname, tn.porous):

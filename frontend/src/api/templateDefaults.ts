@@ -67,8 +67,6 @@ export const templateDefaults = {
       },
     },
     compute: {
-      porous_media: true,
-      turbulence_generator: true,
       adjust_ride_height: false,
     },
   },

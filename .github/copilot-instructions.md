@@ -619,8 +619,7 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
       }
     },
     "compute": {
-      "porous_media": true,
-      "turbulence_generator": true, "adjust_ride_height": false
+      "adjust_ride_height": false
     }
   },
   "simulation_parameter": {
@@ -1021,10 +1020,10 @@ class TemplateSettings(BaseModel):
 **`SetupOption.compute`** (ComputeOption):
 ```python
 class ComputeOption(BaseModel):
-    # NOTE: rotate_wheels / moving_ground removed — derived from ground_mode
-    # in compute_engine.assemble_ufx_solver_deck()
-    porous_media: bool = True
-    turbulence_generator: bool = True  # Aero only
+    # All other flags removed — auto-derived in compute_engine:
+    #   rotate_wheels / moving_ground → from ground_mode
+    #   porous_media → from bool(template_settings.porous_coefficients)
+    #   turbulence_generator → from tg_cfg.enable_ground_tg | enable_body_tg
     adjust_ride_height: bool = False
 ```
 
@@ -1138,17 +1137,18 @@ def compute_porous_axis(part_info: dict) -> dict:
 ### Compute Flag Dependency Rules
 
 ```
+All flags except adjust_ride_height are auto-derived in compute_engine:
+
 rotate_wheels / moving_ground:
-  → REMOVED from ComputeOption — now derived from ground_mode in compute_engine:
-    static → both False
-    full_moving / rotating_belt_* → both True
+  → derived from ground_mode: static → False, otherwise → True
 
-porous_media = False
-  → sources.porous = []
-  → box_refinement_porous skipped
+porous_media:
+  → derived from bool(template_settings.porous_coefficients)
+  → empty list → no porous sources
 
-turbulence_generator = False
-  → sources.turbulence = []
+turbulence_generator:
+  → derived from tg_cfg.enable_ground_tg or tg_cfg.enable_body_tg
+  → both off → no TG instances
 ```
 
 ### Excel Settings Classification (from AUR_v1.2_EXT.xlsx / CX1_v1.2_GHN.xlsx)
