@@ -535,13 +535,16 @@ Ultrafluid XML file
 
 **Schemas** (`app/schemas/template.py`, `app/schemas/template_settings.py`)
 - `TemplateSettings`: 6-section Pydantic model (`setup_option`, `simulation_parameter`, `setup`, `output`, `target_names`, `porous_coefficients`)
-- `TemplateCreate`, `TemplateUpdate`, `TemplateVersionCreate`, `TemplateForkRequest` (requests)
+- `TemplateCreate`, `TemplateUpdate`, `TemplateVersionCreate`, `TemplateVersionUpdate`, `TemplateForkRequest` (requests)
+- `SettingsValidationError`, `SettingsValidateRequest`, `SettingsValidateResponse` — for JSON import validation
 - `TemplateResponse`, `TemplateVersionResponse` (responses — include `active_version`, `version_count`)
 - `@field_validator("settings", mode="before")` parses JSON string from DB automatically
 
 **Service** (`app/services/template_service.py`)
 - `list_templates`, `get_template`, `create_template`, `update_template`, `delete_template`
 - `list_versions`, `create_version`, `activate_version`
+- `update_version_settings(db, template_id, version_id, data: TemplateVersionUpdate, current_user)` — overwrites `settings` (and optionally `comment`) of an existing version **in-place**; no new version row created
+- `validate_settings(data: dict) -> SettingsValidateResponse` — validates raw dict via `TemplateSettings.model_validate()`; returns normalized settings on success
 - `fork_template` — copies active version settings to a new template
 - Permission check: `template.created_by == current_user.id OR current_user.is_admin`
 - `create_version` / `activate_version`: deactivates all existing versions before setting new active
@@ -552,13 +555,18 @@ Ultrafluid XML file
 |---|---|---|
 | `GET` | `/api/v1/templates/` | List all templates |
 | `POST` | `/api/v1/templates/` | Create template (creates v1 simultaneously) |
+| `POST` | `/api/v1/templates/validate-settings` | Validate raw settings dict; returns normalized or errors |
+| `GET` | `/api/v1/templates/presets/{sim_type}` | Return default `TemplateSettings` for a sim_type |
 | `GET` | `/api/v1/templates/{id}` | Get template with active version |
 | `PATCH` | `/api/v1/templates/{id}` | Update name/description |
 | `DELETE` | `/api/v1/templates/{id}` | Delete template + cascade versions |
 | `GET` | `/api/v1/templates/{id}/versions` | List all versions |
 | `POST` | `/api/v1/templates/{id}/versions` | Create new version (becomes active) |
+| `PATCH` | `/api/v1/templates/{id}/versions/{vid}` | **Edit version in-place** — overwrite settings without creating a new version |
 | `PATCH` | `/api/v1/templates/{id}/versions/{vid}/activate` | Activate specific version |
 | `POST` | `/api/v1/templates/{id}/fork` | Fork: copy active version to new template |
+
+**Route ordering rule**: `/validate-settings` and `/presets/{sim_type}` MUST be declared before `/{template_id}` to avoid routing conflicts.
 
 **Migration**: `alembic/versions/40849f49edd9_add_templates_and_template_versions.py`
 
@@ -566,24 +574,37 @@ Ultrafluid XML file
 
 **API layer** (`src/api/`)
 - `client.ts`: `get`, `post`, `put`, `patch`, `delete` wrappers; handles 204 No Content; exports `client` (primary) and `api` (backward-compat alias)
-- `templates.ts`: All 9 endpoints wrapped; all types from `schema.d.ts` (never manual)
+- `templates.ts`: All endpoints wrapped; all types from `schema.d.ts` (never manual); exports `TemplateVersionUpdate`, `SettingsValidateResponse`
 - `auth.ts` `UserResponse` + `stores/auth.ts` `User`: both include `is_admin: boolean` and `is_superadmin: boolean`
 
 **Components** (`src/components/templates/`)
 
 | File | Description |
 |---|---|
-| `TemplateList.tsx` | Table view with Versions / Fork / Delete action icons per row |
+| `TemplateList.tsx` | Table view with Versions / Edit (active version shortcut) / Fork / Export JSON / Delete action icons per row |
 | `TemplateCreateModal.tsx` | Full settings form for creating a new template — `size="90%"`, wraps `TemplateSettingsForm` with `generalContent` (Name / Description / Application / Version comment in the General tab) |
-| `TemplateVersionsDrawer.tsx` | Right-side drawer showing version history; contains New Version button (owner/admin only) and per-version 👁 / `</>` icons |
-| `TemplateVersionCreateModal.tsx` | Settings form pre-filled from active version; creates a new version — `size="90%"`, wraps `TemplateSettingsForm` with `generalContent` (Version comment in the General tab) |
+| `TemplateVersionsDrawer.tsx` | Right-side drawer showing version history; New Version button (owner/admin only); per-version 👁 / `</>` / ✏️ (edit, owner/admin) / ✓ (activate, owner/admin) icons |
+| `TemplateVersionCreateModal.tsx` | Settings form pre-filled from active version; creates a new version — `size="90%"`, wraps `TemplateSettingsForm`; includes "Load from JSON" file button |
+| `TemplateVersionEditModal.tsx` | Settings form pre-filled from the **specific version's** settings; submits `PATCH` to overwrite in-place — `size="90%"`, same structure as CreateModal but title shows "Edit Version vN"; includes "Load from JSON" file button |
 | `TemplateSettingsViewModal.tsx` | Read-only view of all settings — `size="90%"`, reuses `TemplateSettingsForm` with `readOnly` prop; `<fieldset disabled>` applied per-panel so tab navigation remains functional |
 | `TemplateForkModal.tsx` | Form to fork a template: enter new name, description, comment; copies active version settings |
+| `TemplateImportModal.tsx` | File drop → JSON.parse → `POST /validate-settings` → error table or create form (name, description, sim_type, comment) → `templatesApi.create()`; ValidationState: `idle \| loading \| syntax_error \| valid \| invalid` |
 
 **Permission model (frontend)**
 - Fork button: visible to all authenticated users
+- Export JSON button: visible to all authenticated users (when active_version exists)
+- Edit active version shortcut (TemplateList) / Edit button (TemplateVersionsDrawer): visible only when `user.id === template.created_by || user.is_admin`
 - Delete button: visible only when `user.id === template.created_by || user.is_admin`
 - New Version / Activate buttons: visible only when `user.id === template.created_by || user.is_admin`
+
+**JSON Export / Import**
+- Export: downloads active version settings as `{name}_v{N}_settings.json` (JSON stringify of `active_version.settings`)
+- Import: `TemplateImportModal` — validates via `POST /validate-settings` before allowing template creation; errors shown in a table
+- "Load from JSON" button in `TemplateVersionCreateModal` and `TemplateVersionEditModal` — populates the form with validated+normalized settings without creating anything yet
+
+**In-place edit vs New Version**
+- **Edit (in-place)**: `PATCH /versions/{vid}` — overwrites `settings` and optionally `comment` of an existing version row; version_number does NOT change; use when fixing a mistake
+- **New Version**: `POST /versions` — always creates a new row with next `version_number`, deactivates all others, becomes the active version; use when you want history
 
 ---
 
