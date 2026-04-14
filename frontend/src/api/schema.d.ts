@@ -924,6 +924,12 @@ export interface components {
             level: number;
             /** Box */
             box: number[];
+            /**
+             * Mode
+             * @default vehicle_bbox_factors
+             * @enum {string}
+             */
+            mode: "vehicle_bbox_factors" | "user_defined";
         };
         /**
          * BoxRefinementAroundParts
@@ -1934,6 +1940,36 @@ export interface components {
             bbox_source_box_name?: string | null;
             /** Bbox Source Parts */
             bbox_source_parts?: string[];
+            /**
+             * Bbox Offset Xmin
+             * @default 0
+             */
+            bbox_offset_xmin: number;
+            /**
+             * Bbox Offset Xmax
+             * @default 0
+             */
+            bbox_offset_xmax: number;
+            /**
+             * Bbox Offset Ymin
+             * @default 0
+             */
+            bbox_offset_ymin: number;
+            /**
+             * Bbox Offset Ymax
+             * @default 0
+             */
+            bbox_offset_ymax: number;
+            /**
+             * Bbox Offset Zmin
+             * @default 0
+             */
+            bbox_offset_zmin: number;
+            /**
+             * Bbox Offset Zmax
+             * @default 0
+             */
+            bbox_offset_zmax: number;
             /** Bbox */
             bbox?: number[] | null;
         };

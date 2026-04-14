@@ -1165,11 +1165,22 @@ def assemble_ufx_solver_deck(
                 or setup.meshing.part_box_refinement.get(pv_cfg.bbox_source_box_name)
             )
             if _box:
-                pv_bb = BoundingBox(
-                    x_min=_box.box[0], x_max=_box.box[1],
-                    y_min=_box.box[2], y_max=_box.box[3],
-                    z_min=_box.box[4], z_max=_box.box[5],
-                )
+                _box_mode = getattr(_box, "mode", "vehicle_bbox_factors")
+                if _box_mode == "user_defined":
+                    pv_bb = BoundingBox(
+                        x_min=_box.box[0], x_max=_box.box[1],
+                        y_min=_box.box[2], y_max=_box.box[3],
+                        z_min=_box.box[4], z_max=_box.box[5],
+                    )
+                elif vbbox:
+                    resolved = compute_domain_bbox(vbbox, _box.box, ground_z=ground_height)
+                    pv_bb = BoundingBox(**resolved)
+                else:
+                    pv_bb = BoundingBox(
+                        x_min=_box.box[0], x_max=_box.box[1],
+                        y_min=_box.box[2], y_max=_box.box[3],
+                        z_min=_box.box[4], z_max=_box.box[5],
+                    )
             else:
                 pv_bb = BoundingBox(**abs_bbox)
         elif pv_cfg.bbox_mode == "around_parts" and pv_cfg.bbox_source_parts and part_info:
@@ -1179,12 +1190,12 @@ def assemble_ufx_solver_deck(
             ]
             if matched:
                 pv_bb = BoundingBox(
-                    x_min=min(p["bbox"]["x_min"] for p in matched),
-                    x_max=max(p["bbox"]["x_max"] for p in matched),
-                    y_min=min(p["bbox"]["y_min"] for p in matched),
-                    y_max=max(p["bbox"]["y_max"] for p in matched),
-                    z_min=min(p["bbox"]["z_min"] for p in matched),
-                    z_max=max(p["bbox"]["z_max"] for p in matched),
+                    x_min=min(p["bbox"]["x_min"] for p in matched) - pv_cfg.bbox_offset_xmin,
+                    x_max=max(p["bbox"]["x_max"] for p in matched) + pv_cfg.bbox_offset_xmax,
+                    y_min=min(p["bbox"]["y_min"] for p in matched) - pv_cfg.bbox_offset_ymin,
+                    y_max=max(p["bbox"]["y_max"] for p in matched) + pv_cfg.bbox_offset_ymax,
+                    z_min=min(p["bbox"]["z_min"] for p in matched) - pv_cfg.bbox_offset_zmin,
+                    z_max=max(p["bbox"]["z_max"] for p in matched) + pv_cfg.bbox_offset_zmax,
                 )
             else:
                 pv_bb = BoundingBox(**abs_bbox)
@@ -1217,10 +1228,17 @@ def assemble_ufx_solver_deck(
         ))
 
     # ── Mesh refinement ───────────────────────────────────────────────────
-    # box_refinement: 相対乗数 → 車両 bbox を基準に絶対座標に変換
+    # box_refinement: modeに応じて変換 (vehicle_bbox_factors: 車両相対乗数、user_defined: 絶対座標m)
     box_instances = []
     for name, br in {**setup.meshing.box_refinement, **setup.meshing.part_box_refinement}.items():
-        if vbbox:
+        br_mode = getattr(br, "mode", "vehicle_bbox_factors")
+        if br_mode == "user_defined":
+            abs_box = {
+                "x_min": br.box[0], "x_max": br.box[1],
+                "y_min": br.box[2], "y_max": br.box[3],
+                "z_min": br.box[4], "z_max": br.box[5],
+            }
+        elif vbbox:
             abs_box = compute_domain_bbox(vbbox, br.box, ground_z=ground_height)
         else:
             abs_box = {

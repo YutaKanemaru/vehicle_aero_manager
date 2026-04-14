@@ -108,6 +108,7 @@ export const templateDefaults = {
             -0.2,
             1.5,
           ],
+          mode: "vehicle_bbox_factors",
         },
         Box_RL2: {
           level: 2,
@@ -119,6 +120,7 @@ export const templateDefaults = {
             -0.2,
             1,
           ],
+          mode: "vehicle_bbox_factors",
         },
         Box_RL3: {
           level: 3,
@@ -130,6 +132,7 @@ export const templateDefaults = {
             -0.2,
             0.75,
           ],
+          mode: "vehicle_bbox_factors",
         },
         Box_RL4: {
           level: 4,
@@ -141,6 +144,7 @@ export const templateDefaults = {
             -0.2,
             0.5,
           ],
+          mode: "vehicle_bbox_factors",
         },
         Box_RL5: {
           level: 5,
@@ -152,6 +156,7 @@ export const templateDefaults = {
             -0.2,
             0.25,
           ],
+          mode: "vehicle_bbox_factors",
         },
       },
       part_box_refinement: {},

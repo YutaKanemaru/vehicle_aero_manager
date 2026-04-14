@@ -232,6 +232,9 @@ class SimulationParameter(BaseModel):
 class BoxRefinement(BaseModel):
     level: int
     box: list[float] = Field(..., min_length=6, max_length=6)  # xmin,xmax,ymin,ymax,zmin,zmax
+    mode: Literal["vehicle_bbox_factors", "user_defined"] = "vehicle_bbox_factors"
+    # vehicle_bbox_factors: values are multipliers applied to vehicle dimensions (relative)
+    # user_defined: values are absolute coordinates in metres
 
 
 class BoxRefinementAroundParts(BaseModel):
@@ -335,6 +338,12 @@ class PartialVolumeOutputConfig(BaseModel):
     bbox_mode: Literal["from_meshing_box", "around_parts", "user_defined"] = "user_defined"
     bbox_source_box_name: str | None = None   # bbox_mode == "from_meshing_box"
     bbox_source_parts: list[str] = Field(default_factory=list)  # bbox_mode == "around_parts"
+    bbox_offset_xmin: float = 0.0   # m — extend beyond parts bbox in -X (around_parts only)
+    bbox_offset_xmax: float = 0.0   # m — extend beyond parts bbox in +X (around_parts only)
+    bbox_offset_ymin: float = 0.0   # m — extend beyond parts bbox in -Y (around_parts only)
+    bbox_offset_ymax: float = 0.0   # m — extend beyond parts bbox in +Y (around_parts only)
+    bbox_offset_zmin: float = 0.0   # m — extend beyond parts bbox in -Z (around_parts only)
+    bbox_offset_zmax: float = 0.0   # m — extend beyond parts bbox in +Z (around_parts only)
     bbox: list[float] | None = None           # [xmin,xmax,ymin,ymax,zmin,zmax] bbox_mode == "user_defined"
 
 

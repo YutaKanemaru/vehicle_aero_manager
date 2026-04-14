@@ -154,7 +154,13 @@ export interface PartialVolumeFormItem {
   bbox_mode: "from_meshing_box" | "around_parts" | "user_defined";
   bbox_source_box_name: string;
   bbox_source_parts: string;       // comma-separated
-  bbox: string;                    // "xmin,xmax,ymin,ymax,zmin,zmax"
+  bbox_offset_xmin: number;        // m — offset from parts bbox in -X (around_parts only)
+  bbox_offset_xmax: number;        // m — offset from parts bbox in +X
+  bbox_offset_ymin: number;        // m — offset from parts bbox in -Y
+  bbox_offset_ymax: number;        // m — offset from parts bbox in +Y
+  bbox_offset_zmin: number;        // m — offset from parts bbox in -Z
+  bbox_offset_zmax: number;        // m — offset from parts bbox in +Z
+  bbox: string;                    // "xmin,xmax,ymin,ymax,zmin,zmax" (user_defined only)
   output_variables: OutputVarsPartialVolume;
 }
 
@@ -233,8 +239,8 @@ export interface CustomRefinementFormItem {
 export interface BoxRefinementFormItem {
   name: string;
   level: number;
-  box_type: "absolute" | "around_parts";
-  // ─── absolute mode ───────────────────────────────────────────────
+  box_type: "vehicle_bbox_factors" | "around_parts" | "user_defined";
+  // ─── vehicle_bbox_factors / user_defined modes ───────────────────
   box_xmin: number;
   box_xmax: number;
   box_ymin: number;
@@ -355,7 +361,7 @@ export const FORM_DEFAULTS = {
     ([name, v]) => ({
       name,
       level: v.level,
-      box_type: "absolute" as const,
+      box_type: "vehicle_bbox_factors" as const,
       box_xmin: v.box[0], box_xmax: v.box[1],
       box_ymin: v.box[2], box_ymax: v.box[3],
       box_zmin: v.box[4], box_zmax: v.box[5],
@@ -579,7 +585,7 @@ export function valuesFromSettings(settings: any): FormValues {
     ).map(([name, v]: [string, any]) => ({
       name,
       level: v.level ?? 1,
-      box_type: "absolute" as const,
+      box_type: (v.mode === "user_defined" ? "user_defined" : "vehicle_bbox_factors") as BoxRefinementFormItem["box_type"],
       box_xmin: v.box?.[0] ?? 0,
       box_xmax: v.box?.[1] ?? 0,
       box_ymin: v.box?.[2] ?? 0,
@@ -639,6 +645,12 @@ export function valuesFromSettings(settings: any): FormValues {
     bbox_mode: pv.bbox_mode ?? "user_defined",
     bbox_source_box_name: pv.bbox_source_box_name ?? "",
     bbox_source_parts: joinList(pv.bbox_source_parts),
+    bbox_offset_xmin: pv.bbox_offset_xmin ?? 0.0,
+    bbox_offset_xmax: pv.bbox_offset_xmax ?? 0.0,
+    bbox_offset_ymin: pv.bbox_offset_ymin ?? 0.0,
+    bbox_offset_ymax: pv.bbox_offset_ymax ?? 0.0,
+    bbox_offset_zmin: pv.bbox_offset_zmin ?? 0.0,
+    bbox_offset_zmax: pv.bbox_offset_zmax ?? 0.0,
     bbox: bboxToStr(pv.bbox),
     output_variables: ovPV(pv.output_variables),
   }));
@@ -884,6 +896,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     } else {
       boxRefinementDict[item.name] = {
         level: item.level,
+        mode: item.box_type,
         box: [item.box_xmin, item.box_xmax, item.box_ymin, item.box_ymax, item.box_zmin, item.box_zmax],
       };
     }
@@ -924,6 +937,12 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     bbox_mode: pv.bbox_mode,
     bbox_source_box_name: pv.bbox_mode === "from_meshing_box" ? pv.bbox_source_box_name || null : null,
     bbox_source_parts: pv.bbox_mode === "around_parts" ? splitList(pv.bbox_source_parts) : [],
+    bbox_offset_xmin: pv.bbox_mode === "around_parts" ? pv.bbox_offset_xmin : 0.0,
+    bbox_offset_xmax: pv.bbox_mode === "around_parts" ? pv.bbox_offset_xmax : 0.0,
+    bbox_offset_ymin: pv.bbox_mode === "around_parts" ? pv.bbox_offset_ymin : 0.0,
+    bbox_offset_ymax: pv.bbox_mode === "around_parts" ? pv.bbox_offset_ymax : 0.0,
+    bbox_offset_zmin: pv.bbox_mode === "around_parts" ? pv.bbox_offset_zmin : 0.0,
+    bbox_offset_zmax: pv.bbox_mode === "around_parts" ? pv.bbox_offset_zmax : 0.0,
     bbox: pv.bbox_mode === "user_defined" ? strToBbox(pv.bbox) : null,
     output_variables: pv.output_variables,
   }));

@@ -301,6 +301,12 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
       bbox_mode: "user_defined",
       bbox_source_box_name: "",
       bbox_source_parts: "",
+      bbox_offset_xmin: 0.0,
+      bbox_offset_xmax: 0.0,
+      bbox_offset_ymin: 0.0,
+      bbox_offset_ymax: 0.0,
+      bbox_offset_zmin: 0.0,
+      bbox_offset_zmax: 0.0,
       bbox: "",
       output_variables: {
         pressure: false, pressure_std: false, pressure_var: false,
@@ -544,7 +550,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                   form.insertListItem("box_refinements", {
                     name: `Box_RL${form.values.box_refinements.length + 1}`,
                     level: form.values.box_refinements.length + 1,
-                    box_type: "absolute",
+                    box_type: "vehicle_bbox_factors",
                     box_xmin: 0, box_xmax: 0, box_ymin: 0, box_ymax: 0, box_zmin: 0, box_zmax: 0,
                     parts: "",
                     offset_xmin: 0.5, offset_xmax: 0.5,
@@ -574,8 +580,9 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                   <SegmentedControl
                     size="xs"
                     data={[
-                      { label: "Absolute coords", value: "absolute" },
-                      { label: "Around parts", value: "around_parts" },
+                      { label: "Vehicle BBox Factors", value: "vehicle_bbox_factors" },
+                      { label: "Around Parts", value: "around_parts" },
+                      { label: "User Defined (m)", value: "user_defined" },
                     ]}
                     {...form.getInputProps(`box_refinements.${idx}.box_type`)}
                   />
@@ -601,6 +608,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                   </Stack>
                 ) : (
                   <>
+                    <Text size="xs" c="dimmed" mb={4}>
+                      {item.box_type === "vehicle_bbox_factors"
+                        ? "× Vehicle dimensions (relative factors)"
+                        : "Absolute coordinates (m)"}
+                    </Text>
                     <SimpleGrid cols={3}>
                       <NumberInput label="X min" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_xmin`)} />
                       <NumberInput label="X max" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_xmax`)} />
@@ -1078,10 +1090,32 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                     {...form.getInputProps(`partial_volumes.${idx}.bbox_mode`)}
                   />
                   {pv.bbox_mode === "from_meshing_box" && (
-                    <TextInput label="Source box name" placeholder="e.g. Box_RL1" {...form.getInputProps(`partial_volumes.${idx}.bbox_source_box_name`)} />
+                    <Select
+                      label="Source box name"
+                      placeholder="Select box name"
+                      searchable
+                      clearable
+                      data={form.values.box_refinements
+                        .filter(b => b.box_type !== "around_parts" && b.name)
+                        .map(b => ({ value: b.name, label: `${b.name} (RL${b.level})` }))}
+                      {...form.getInputProps(`partial_volumes.${idx}.bbox_source_box_name`)}
+                    />
                   )}
                   {pv.bbox_mode === "around_parts" && (
-                    <TextInput label="Parts for bbox computation (comma-separated)" {...form.getInputProps(`partial_volumes.${idx}.bbox_source_parts`)} />
+                    <Stack gap="xs">
+                      <TextInput label="Parts for bbox computation (comma-separated)" {...form.getInputProps(`partial_volumes.${idx}.bbox_source_parts`)} />
+                      <Text size="xs" c="dimmed">Offset from parts bounding box (m)</Text>
+                      <SimpleGrid cols={3}>
+                        <NumberInput label="-X offset" decimalScale={3} step={0.05} {...form.getInputProps(`partial_volumes.${idx}.bbox_offset_xmin`)} />
+                        <NumberInput label="+X offset" decimalScale={3} step={0.05} {...form.getInputProps(`partial_volumes.${idx}.bbox_offset_xmax`)} />
+                        <NumberInput label="-Y offset" decimalScale={3} step={0.05} {...form.getInputProps(`partial_volumes.${idx}.bbox_offset_ymin`)} />
+                      </SimpleGrid>
+                      <SimpleGrid cols={3}>
+                        <NumberInput label="+Y offset" decimalScale={3} step={0.05} {...form.getInputProps(`partial_volumes.${idx}.bbox_offset_ymax`)} />
+                        <NumberInput label="-Z offset" decimalScale={3} step={0.05} {...form.getInputProps(`partial_volumes.${idx}.bbox_offset_zmin`)} />
+                        <NumberInput label="+Z offset" decimalScale={3} step={0.05} {...form.getInputProps(`partial_volumes.${idx}.bbox_offset_zmax`)} />
+                      </SimpleGrid>
+                    </Stack>
                   )}
                   {pv.bbox_mode === "user_defined" && (
                     <TextInput label="Bounding box (xmin,xmax,ymin,ymax,zmin,zmax)" placeholder="-5,15,-12,12,0,8" {...form.getInputProps(`partial_volumes.${idx}.bbox`)} />

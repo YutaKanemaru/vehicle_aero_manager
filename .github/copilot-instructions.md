@@ -1098,7 +1098,7 @@ def _aero_setup() -> Setup:
 **`MeshingSetup`** key fields:
 ```python
 class MeshingSetup(BaseModel):
-    box_refinement: dict[str, BoxRefinement]                   # absolute bbox, relative to vehicle
+    box_refinement: dict[str, BoxRefinement]                   # BoxRefinement.mode: "vehicle_bbox_factors" (×dims) | "user_defined" (abs m)
     part_box_refinement: dict[str, BoxRefinement]              # legacy (unused in current presets)
     part_based_box_refinement: dict[str, BoxRefinementAroundParts]  # bbox derived from part extents
     offset_refinement: dict[str, OffsetRefinement]
@@ -1110,12 +1110,12 @@ class MeshingSetup(BaseModel):
 class BoxRefinementAroundParts(BaseModel):
     level: int
     parts: list[str]
-    offset_xmin: float = 0.5   # multiplier × vehicle_length
-    offset_xmax: float = 0.5
-    offset_ymin: float = 0.5   # multiplier × vehicle_width
-    offset_ymax: float = 0.5
-    offset_zmin: float = 0.5   # multiplier × vehicle_height
-    offset_zmax: float = 0.5
+    offset_xmin: float = 0.5   # m — absolute distance beyond matched parts bbox in -X
+    offset_xmax: float = 0.5   # m — absolute distance beyond matched parts bbox in +X
+    offset_ymin: float = 0.5   # m — absolute distance beyond matched parts bbox in -Y
+    offset_ymax: float = 0.5   # m — absolute distance beyond matched parts bbox in +Y
+    offset_zmin: float = 0.5   # m — absolute distance beyond matched parts bbox in -Z
+    offset_zmax: float = 0.5   # m — absolute distance beyond matched parts bbox in +Z
 ```
 
 
@@ -1304,7 +1304,7 @@ interface CustomRefinementFormItem          { name, level, parts: string }
 interface PorousCoeffFormItem               { part_name, inertial_resistance, viscous_resistance }
 interface TriangleSplittingInstanceFormItem { name, active, max_absolute_edge_length, max_relative_edge_length, parts: string }
 interface PartialSurfaceFormItem    { name, include_parts, exclude_parts, baffle_export_option, output_variables, ... }
-interface PartialVolumeFormItem     { name, bbox_mode, bbox_source_box, bbox, output_variables, ... }
+interface PartialVolumeFormItem     { name, bbox_mode, bbox_source_box, bbox, bbox_offset_xmin/xmax/ymin/ymax/zmin/zmax, output_variables, ... }
 interface SectionCutFormItem        { name, axis_x/y/z, point_x/y/z, bbox, output_variables, ... }
 interface ProbeFileFormItem         { name, probe_type, radius, output_frequency, output_variables, points: ProbePointFormItem[] }
 interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
@@ -1322,7 +1322,7 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 |---|---|
 | General *(conditional)* | Rendered from `generalContent` prop — Name, Description, Application, Version comment |
 | Simulation Run Parameters | velocity, run time, averaging, mach factor, wall model, material |
-| Meshing | coarsest voxel, refinement levels, triangle splitting Switch (global ON/OFF) → when ON: max relative/absolute edge length inputs + per-part `triangle_splitting_instances` dynamic list (name/active/max_abs/max_rel/parts per row), **Add porous box refinement** Switch (adds a Box_RL6 around porous parts), box refinement dynamic list (each row: name/level + `SegmentedControl` for `box_type`: **absolute** [xmin/xmax/.../zmax coords] or **around_parts** [parts + per-axis offset factors]; "Restore defaults" sets list to `FORM_DEFAULTS.box_refinements`), offset refinement dynamic list ("Apply body defaults" recalculates RL7/RL6 distances from current voxel size using `FORM_DEFAULTS.offset_refinements`; GHN filters out RL7), custom refinement dynamic list |
+| Meshing | coarsest voxel, refinement levels, triangle splitting Switch (global ON/OFF) → when ON: max relative/absolute edge length inputs + per-part `triangle_splitting_instances` dynamic list (name/active/max_abs/max_rel/parts per row), **Add porous box refinement** Switch (adds a Box_RL6 around porous parts), box refinement dynamic list (each row: name/level + `SegmentedControl` for `box_type`: **vehicle_bbox_factors** [6 factor inputs relative to vehicle dims, hint "× Vehicle dimensions"] \| **around_parts** [parts string + 6 offset-m NumberInputs] \| **user_defined** [6 absolute-m coord inputs, hint "Absolute coordinates (m)"]; "Restore defaults" sets list to `FORM_DEFAULTS.box_refinements`), offset refinement dynamic list ("Apply body defaults" recalculates RL7/RL6 distances from current voxel size using `FORM_DEFAULTS.offset_refinements`; GHN filters out RL7), custom refinement dynamic list |
 | Boundary Conditions | **Flow Domain Configuration** section (ground height definition + domain bounding box factors / multipliers relative to vehicle size), then ground mode, belt config, BL suction, turbulence generator, porous coefficients (template defaults) dynamic list |
 | Output | full data format/coarsening, output variables checkboxes (full: 24 vars, surface: 15 vars), partial surface dynamic list (include/exclude/baffle/per-instance output vars), partial volume dynamic list (3 bbox_mode variants), section cuts dynamic list, **probe files dynamic list** (probe points, CSV import/export) |
 | Target Part Names | all `target_names` fields |
