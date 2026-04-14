@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Modal,
   TextInput,
@@ -11,12 +11,13 @@ import {
   ScrollArea,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { templatesApi, type TemplateCreate } from "../../api/templates";
 import {
   FORM_DEFAULTS,
   buildSettings,
+  valuesFromSettings,
 } from "../../hooks/useTemplateSettingsForm";
 import { TemplateSettingsForm } from "./TemplateSettingsForm";
 
@@ -25,39 +26,31 @@ interface Props {
   onClose: () => void;
 }
 
-// Preset defaults per sim_type
-const SIM_TYPE_PRESETS: Record<string, Partial<typeof FORM_DEFAULTS>> = {
-  aero: {
-    coarsest_voxel_size: 0.192,
-    number_of_resolution: 7,
-    triangle_splitting: true,
-    tg_enable_ground: true,
-    tg_enable_body: true,
-  },
-  ghn: {
-    coarsest_voxel_size: 0.256,
-    number_of_resolution: 9,
-    triangle_splitting: false,
-    tg_enable_ground: false,
-    tg_enable_body: false,
-  },
-  fan_noise: {
-    coarsest_voxel_size: 0.192,
-    number_of_resolution: 7,
-    triangle_splitting: true,
-    tg_enable_ground: false,
-    tg_enable_body: false,
-  },
-};
-
 export function TemplateCreateModal({ opened, onClose }: Props) {
   const queryClient = useQueryClient();
   const [simType, setSimType] = useState<"aero" | "ghn" | "fan_noise">("aero");
+  const [pendingPresetApply, setPendingPresetApply] = useState(false);
   const [nameValue, setNameValue] = useState("");
   const [descValue, setDescValue] = useState("");
   const [commentValue, setCommentValue] = useState("");
 
   const form = useForm({ initialValues: { ...FORM_DEFAULTS } });
+
+  // Fetch preset from backend whenever sim_type changes
+  const { data: presetData } = useQuery({
+    queryKey: ["template-preset", simType],
+    queryFn: () => templatesApi.getPreset(simType),
+    staleTime: Infinity, // presets are static — never refetch
+  });
+
+  // Apply the preset to the form only when the user explicitly changes sim_type
+  useEffect(() => {
+    if (pendingPresetApply && presetData) {
+      form.setValues(valuesFromSettings(presetData));
+      setPendingPresetApply(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPresetApply, presetData]);
 
   const mutation = useMutation({
     mutationFn: (data: TemplateCreate) => templatesApi.create(data),
@@ -66,6 +59,7 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
       notifications.show({ message: "Template created", color: "green" });
       form.reset();
       setSimType("aero");
+      setPendingPresetApply(false);
       setNameValue("");
       setDescValue("");
       setCommentValue("");
@@ -79,8 +73,7 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
   function handleSimTypeChange(value: string | null) {
     const t = (value ?? "aero") as "aero" | "ghn" | "fan_noise";
     setSimType(t);
-    const preset = SIM_TYPE_PRESETS[t] ?? {};
-    form.setValues({ ...form.values, ...preset });
+    setPendingPresetApply(true);
   }
 
   function handleSubmit(values: typeof form.values) {
@@ -100,6 +93,7 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
   function handleClose() {
     form.reset();
     setSimType("aero");
+    setPendingPresetApply(false);
     setNameValue("");
     setDescValue("");
     setCommentValue("");

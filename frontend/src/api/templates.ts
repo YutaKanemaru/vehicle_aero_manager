@@ -23,6 +23,9 @@ type TemplateVersionCreate =
 type TemplateForkRequest =
   paths["/api/v1/templates/{template_id}/fork"]["post"]["requestBody"]["content"]["application/json"];
 
+type TemplateSettingsPreset =
+  paths["/api/v1/templates/presets/{sim_type}"]["get"]["responses"]["200"]["content"]["application/json"];
+
 // Re-export for consumers
 export type {
   TemplateResponse,
@@ -31,6 +34,7 @@ export type {
   TemplateVersionResponse,
   TemplateVersionCreate,
   TemplateForkRequest,
+  TemplateSettingsPreset,
 };
 
 // ---------------------------------------------------------------------------
@@ -79,4 +83,7 @@ export const templatesApi = {
     is_hidden: boolean,
   ): Promise<TemplateResponse> =>
     client.patch(`/templates/${templateId}/hide`, { is_hidden }),
+
+  getPreset: (simType: string): Promise<TemplateSettingsPreset> =>
+    client.get(`/templates/presets/${simType}`),
 };

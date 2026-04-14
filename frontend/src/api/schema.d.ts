@@ -137,6 +137,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/templates/presets/{sim_type}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Preset
+         * @description Return a full TemplateSettings preset for the given sim_type.
+         *     Valid values: 'aero', 'ghn', 'fan_noise'.
+         */
+        get: operations["get_preset_api_v1_templates_presets__sim_type__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/templates/{template_id}": {
         parameters: {
             query?: never;
@@ -2898,6 +2919,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_preset_api_v1_templates_presets__sim_type__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sim_type: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateSettings-Output"];
                 };
             };
             /** @description Validation Error */

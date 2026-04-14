@@ -12,6 +12,7 @@ from app.schemas.template import (
     TemplateVersionResponse,
     TemplateForkRequest,
 )
+from app.schemas.template_settings import TemplateSettings, SIM_TYPE_PRESETS
 from app.services import template_service
 
 router = APIRouter()
@@ -55,6 +56,27 @@ def create_template(
 ):
     template = template_service.create_template(db, data, current_user)
     return _build_response(template)
+
+
+# ---------------------------------------------------------------------------
+# Presets — must be declared BEFORE /{template_id} to avoid routing conflict
+# ---------------------------------------------------------------------------
+
+@router.get("/presets/{sim_type}", response_model=TemplateSettings)
+def get_preset(
+    sim_type: str,
+    current_user: User = Depends(get_current_user),
+):
+    """Return a full TemplateSettings preset for the given sim_type.
+    Valid values: 'aero', 'ghn', 'fan_noise'.
+    """
+    preset = SIM_TYPE_PRESETS.get(sim_type)
+    if preset is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No preset for sim_type '{sim_type}'. Valid: {list(SIM_TYPE_PRESETS)}",
+        )
+    return preset
 
 
 @router.get("/{template_id}", response_model=TemplateResponse)

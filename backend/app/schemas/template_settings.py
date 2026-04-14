@@ -453,3 +453,48 @@ class TemplateSettings(BaseModel):
     output: OutputSettings = Field(default_factory=OutputSettings)
     target_names: TargetNames = Field(default_factory=TargetNames)
     porous_coefficients: list[PorousMedia] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Sim-type presets — full TemplateSettings instances with per-type defaults
+# ---------------------------------------------------------------------------
+
+def _ghn_preset() -> TemplateSettings:
+    """GHN preset: larger voxel, more resolution levels, no TG, static ground."""
+    return TemplateSettings(
+        simulation_parameter=SimulationParameter(
+            coarsest_voxel_size=0.256,
+            number_of_resolution=9,
+        ),
+        setup_option=SetupOption(
+            meshing=MeshingOption(triangle_splitting=False),
+            boundary_condition=BoundaryConditionOption(
+                ground=GroundConfig(ground_mode="static"),
+                turbulence_generator=TurbulenceGeneratorOption(
+                    enable_ground_tg=False,
+                    enable_body_tg=False,
+                ),
+            ),
+        ),
+    )
+
+
+def _fan_noise_preset() -> TemplateSettings:
+    """Fan noise preset: same mesh sizing as aero, TG disabled."""
+    return TemplateSettings(
+        setup_option=SetupOption(
+            boundary_condition=BoundaryConditionOption(
+                turbulence_generator=TurbulenceGeneratorOption(
+                    enable_ground_tg=False,
+                    enable_body_tg=False,
+                ),
+            ),
+        ),
+    )
+
+
+SIM_TYPE_PRESETS: dict[str, TemplateSettings] = {
+    "aero": TemplateSettings(),
+    "ghn": _ghn_preset(),
+    "fan_noise": _fan_noise_preset(),
+}
