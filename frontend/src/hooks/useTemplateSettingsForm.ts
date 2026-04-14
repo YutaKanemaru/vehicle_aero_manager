@@ -351,7 +351,7 @@ export const FORM_DEFAULTS = {
   bbox_zmin: D.setup.domain_bounding_box[4] as number,
   bbox_zmax: D.setup.domain_bounding_box[5] as number,
   // Box refinement dynamic list — sourced from D.setup.meshing.box_refinement
-  box_refinements: Object.entries(D.setup.meshing.box_refinement as Record<string, { level: number; box: number[] }>).map(
+  box_refinements: Object.entries(D.setup.meshing.box_refinement as unknown as Record<string, { level: number; box: number[] }>).map(
     ([name, v]) => ({
       name,
       level: v.level,
@@ -366,7 +366,7 @@ export const FORM_DEFAULTS = {
     })
   ) as BoxRefinementFormItem[],
   // Offset refinement dynamic list — sourced from D.setup.meshing.offset_refinement
-  offset_refinements: Object.entries(D.setup.meshing.offset_refinement as Record<string, { level: number; normal_distance: number; parts: string[] }>).map(
+  offset_refinements: Object.entries(D.setup.meshing.offset_refinement as unknown as Record<string, { level: number; normal_distance: number; parts: string[] }>).map(
     ([name, v]) => ({
       name,
       level: v.level,
