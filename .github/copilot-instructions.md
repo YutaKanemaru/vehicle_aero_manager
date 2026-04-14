@@ -600,8 +600,8 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
       "triangle_splitting_specify_part": false,
       "max_relative_edge_length": 9.0,
       "refinement_level_transition_layers": 8,
-      "domain_bounding_box_relative": true,
-      "box_offset_relative": true,
+      "domain_bounding_box_relative": true,  // always true — UI switch removed, hardcoded in buildSettings()
+      "box_offset_relative": true,            // always true — UI switch removed, hardcoded in buildSettings()
       "box_refinement_porous": true
     },
     "boundary_condition": {
@@ -1220,7 +1220,7 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 | General *(conditional)* | Rendered from `generalContent` prop — Name, Description, Application, Version comment |
 | Simulation Run Parameters | velocity, run time, averaging, mach factor, wall model, material |
 | Meshing | coarsest voxel, refinement levels, triangle splitting, offset refinement dynamic list, custom refinement dynamic list |
-| Boundary Conditions | ground mode, belt config, BL suction, turbulence generator, porous coefficients (template defaults) dynamic list |
+| Boundary Conditions | **Flow Domain Configuration** section (ground height definition + domain bounding box factors / multipliers relative to vehicle size), then ground mode, belt config, BL suction, turbulence generator, porous coefficients (template defaults) dynamic list |
 | Output | full data format/coarsening, output variables checkboxes (full: 24 vars, surface: 15 vars), partial surface dynamic list (include/exclude/baffle/per-instance output vars), partial volume dynamic list (3 bbox_mode variants), section cuts dynamic list, **probe files dynamic list** (probe points, CSV import/export) |
 | Target Part Names | all `target_names` fields |
 

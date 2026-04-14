@@ -483,33 +483,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
               </>
             )}
 
-            <Switch label="Domain bounding box defined relative to car size" {...form.getInputProps("domain_bounding_box_relative", { type: "checkbox" })} />
-            <Switch label="Box/offset refinement relative to car size" {...form.getInputProps("box_offset_relative", { type: "checkbox" })} />
             <Switch label="Add box refinement for porous media" {...form.getInputProps("box_refinement_porous", { type: "checkbox" })} />
-
-            <Divider label="Domain bounding box factors" labelPosition="center" />
-            <Group justify="flex-end">
-              <Button size="xs" variant="light" onClick={() => {
-                form.setFieldValue("bbox_xmin", -5);
-                form.setFieldValue("bbox_xmax", 10);
-                form.setFieldValue("bbox_ymin", -12);
-                form.setFieldValue("bbox_ymax", 12);
-                form.setFieldValue("bbox_zmin", 0);
-                form.setFieldValue("bbox_zmax", 20);
-              }}>
-                Restore defaults
-              </Button>
-            </Group>
-            <SimpleGrid cols={3}>
-              <NumberInput label="X min factor" step={0.5} {...form.getInputProps("bbox_xmin")} />
-              <NumberInput label="X max factor" step={0.5} {...form.getInputProps("bbox_xmax")} />
-              <NumberInput label="Y min factor" step={0.5} {...form.getInputProps("bbox_ymin")} />
-            </SimpleGrid>
-            <SimpleGrid cols={3}>
-              <NumberInput label="Y max factor" step={0.5} {...form.getInputProps("bbox_ymax")} />
-              <NumberInput label="Z min factor" step={0.5} {...form.getInputProps("bbox_zmin")} />
-              <NumberInput label="Z max factor" step={0.5} {...form.getInputProps("bbox_zmax")} />
-            </SimpleGrid>
 
             {/* Box refinement dynamic list */}
             <Divider label="Box Refinement (relative to vehicle size)" labelPosition="center" />
@@ -627,6 +601,8 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
       {/* ── Boundary Conditions ───────────────────────────────────────── */}
       <Tabs.Panel value="bc" pt="md">
         <PW><Stack gap="sm">
+            {/* ── Flow Domain Configuration ── */}
+            <Divider label="Flow Domain Configuration" labelPosition="center" />
             {/* Ground height */}
             <Select
               label="Ground height definition"
@@ -648,6 +624,31 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                 {...form.getInputProps("ground_height_offset_from_geom_zMin")}
               />
             )}
+
+            <Divider label="Domain bounding box factors (multipliers relative to vehicle size)" labelPosition="center" />
+            <Group justify="flex-end">
+              <Button size="xs" variant="light" onClick={() => {
+                form.setFieldValue("bbox_xmin", -5);
+                form.setFieldValue("bbox_xmax", 10);
+                form.setFieldValue("bbox_ymin", -12);
+                form.setFieldValue("bbox_ymax", 12);
+                form.setFieldValue("bbox_zmin", 0);
+                form.setFieldValue("bbox_zmax", 20);
+              }}>
+                Restore defaults
+              </Button>
+            </Group>
+            <SimpleGrid cols={3}>
+              <NumberInput label="X min factor" step={0.5} {...form.getInputProps("bbox_xmin")} />
+              <NumberInput label="X max factor" step={0.5} {...form.getInputProps("bbox_xmax")} />
+              <NumberInput label="Y min factor" step={0.5} {...form.getInputProps("bbox_ymin")} />
+            </SimpleGrid>
+            <SimpleGrid cols={3}>
+              <NumberInput label="Y max factor" step={0.5} {...form.getInputProps("bbox_ymax")} />
+              <NumberInput label="Z min factor" step={0.5} {...form.getInputProps("bbox_zmin")} />
+              <NumberInput label="Z max factor" step={0.5} {...form.getInputProps("bbox_zmax")} />
+            </SimpleGrid>
+            <Divider />
 
             <Switch label="Ground patch active" {...form.getInputProps("ground_patch_active", { type: "checkbox" })} />
 

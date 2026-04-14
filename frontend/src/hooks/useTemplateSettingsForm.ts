@@ -323,8 +323,6 @@ export const FORM_DEFAULTS = {
   triangle_splitting_specify_part: D.setup_option.meshing.triangle_splitting_specify_part,
   max_relative_edge_length: D.setup_option.meshing.max_relative_edge_length,
   refinement_level_transition_layers: D.setup_option.meshing.refinement_level_transition_layers,
-  domain_bounding_box_relative: D.setup_option.meshing.domain_bounding_box_relative,
-  box_offset_relative: D.setup_option.meshing.box_offset_relative,
   box_refinement_porous: D.setup_option.meshing.box_refinement_porous,
   // Domain bounding box multipliers — sourced from D.setup.domain_bounding_box
   bbox_xmin: D.setup.domain_bounding_box[0] as number,
@@ -672,8 +670,6 @@ export function valuesFromSettings(settings: any): FormValues {
     triangle_splitting_specify_part: m.triangle_splitting_specify_part ?? FORM_DEFAULTS.triangle_splitting_specify_part,
     max_relative_edge_length: m.max_relative_edge_length ?? FORM_DEFAULTS.max_relative_edge_length,
     refinement_level_transition_layers: m.refinement_level_transition_layers ?? FORM_DEFAULTS.refinement_level_transition_layers,
-    domain_bounding_box_relative: m.domain_bounding_box_relative ?? FORM_DEFAULTS.domain_bounding_box_relative,
-    box_offset_relative: m.box_offset_relative ?? FORM_DEFAULTS.box_offset_relative,
     box_refinement_porous: m.box_refinement_porous ?? FORM_DEFAULTS.box_refinement_porous,
     bbox_xmin: bbox[0] ?? FORM_DEFAULTS.bbox_xmin,
     bbox_xmax: bbox[1] ?? FORM_DEFAULTS.bbox_xmax,
@@ -898,8 +894,8 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
         triangle_splitting_specify_part: values.triangle_splitting_specify_part,
         max_relative_edge_length: values.max_relative_edge_length,
         refinement_level_transition_layers: values.refinement_level_transition_layers,
-        domain_bounding_box_relative: values.domain_bounding_box_relative,
-        box_offset_relative: values.box_offset_relative,
+        domain_bounding_box_relative: true,
+        box_offset_relative: true,
         box_refinement_porous: values.box_refinement_porous,
       },
       boundary_condition: {
