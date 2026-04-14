@@ -24,6 +24,7 @@ interface Props {
   version: TemplateVersionResponse;
   templateName: string;
   simType: string;
+  description?: string;
 }
 
 export function TemplateSettingsViewModal({
@@ -32,9 +33,31 @@ export function TemplateSettingsViewModal({
   version,
   templateName,
   simType,
+  description,
 }: Props) {
-  const sp = version.settings?.simulation_parameter;
-  const so = version.settings?.setup_option;
+  const form = useForm({
+    initialValues: version.settings
+      ? valuesFromSettings(version.settings)
+      : { ...FORM_DEFAULTS },
+  });
+
+  useEffect(() => {
+    if (opened) {
+      form.setValues(
+        version.settings
+          ? valuesFromSettings(version.settings)
+          : { ...FORM_DEFAULTS }
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opened, version]);
+
+  const simTypeLabel =
+    simType === "aero"
+      ? "External Aerodynamics"
+      : simType === "ghn"
+      ? "Greenhouse Noise (GHN)"
+      : "Fan Noise";
 
   return (
     <Modal
@@ -54,139 +77,39 @@ export function TemplateSettingsViewModal({
       }
       size="90%"
     >
-      <Stack>
-        <Tabs defaultValue="sim">
-          <Tabs.List>
-            <Tabs.Tab value="sim">Simulation Parameters</Tabs.Tab>
-            <Tabs.Tab value="meshing">Meshing Options</Tabs.Tab>
-            <Tabs.Tab value="bc">Boundary Conditions</Tabs.Tab>
-          </Tabs.List>
-
-          <Tabs.Panel value="sim" pt="md">
-            <SimpleGrid cols={2} spacing="sm">
-              <NumberInput
-                label="Inflow velocity (m/s)"
-                value={sp?.inflow_velocity ?? 0}
-                decimalScale={2}
-                disabled
-              />
-              <NumberInput
-                label="Temperature (°C)"
-                value={sp?.temperature ?? 0}
-                decimalScale={1}
-                disabled
-              />
-              <NumberInput
-                label="Density (kg/m³)"
-                value={sp?.density ?? 0}
-                decimalScale={4}
-                disabled
-              />
-              <NumberInput
-                label="Dynamic viscosity"
-                value={sp?.dynamic_viscosity ?? 0}
-                decimalScale={8}
-                disabled
-              />
-              <NumberInput
-                label="Coarsest voxel size (m)"
-                value={sp?.coarsest_voxel_size ?? 0}
-                decimalScale={4}
-                disabled
-              />
-              <NumberInput
-                label="Resolution levels (N)"
-                value={sp?.number_of_resolution ?? 0}
-                disabled
-              />
-              <NumberInput
-                label="Mach factor"
-                value={sp?.mach_factor ?? 0}
-                decimalScale={1}
-                disabled
-              />
-              <NumberInput
-                label="Ramp-up iterations"
-                value={sp?.num_ramp_up_iter ?? 0}
-                disabled
-              />
-              <NumberInput
-                label="Simulation time (s)"
-                value={sp?.simulation_time ?? 0}
-                decimalScale={1}
-                disabled
-              />
-              <NumberInput
-                label="Specific gas constant (J/kg·K)"
-                value={sp?.specific_gas_constant ?? 0}
-                decimalScale={2}
-                disabled
-              />
-            </SimpleGrid>
-            {version.comment && (
-              <Text size="sm" c="dimmed" mt="sm">
-                Note: {version.comment}
-              </Text>
-            )}
-          </Tabs.Panel>
-
-          <Tabs.Panel value="meshing" pt="md">
-            <Stack gap="xs">
-              <Switch
-                label="Triangle splitting"
-                checked={so?.meshing?.triangle_splitting ?? false}
-                disabled
-              />
-              <Switch
-                label="Domain bbox relative to vehicle"
-                checked={so?.meshing?.domain_bounding_box_relative ?? false}
-                disabled
-              />
-              <Switch
-                label="Box/offset sizes relative"
-                checked={so?.meshing?.box_offset_relative ?? false}
-                disabled
-              />
-              <Switch
-                label="Porous box refinement"
-                checked={so?.meshing?.box_refinement_porous ?? false}
-                disabled
-              />
-            </Stack>
-          </Tabs.Panel>
-
-          <Tabs.Panel value="bc" pt="md">
-            <Stack gap="xs">
-              <Switch
-                label="Moving ground"
-                checked={(so?.boundary_condition?.ground?.ground_mode ?? "static") !== "static"}
-                disabled
-              />
-              <Switch
-                label="Overset wheels"
-                checked={so?.boundary_condition?.ground?.overset_wheels ?? false}
-                disabled
-              />
-              <NumberInput
-                label="Ground height offset (m)"
-                value={so?.boundary_condition?.ground?.ground_height_offset_from_geom_zMin ?? 0}
-                decimalScale={4}
-                disabled
-              />
-              <Switch
-                label="Body turbulence generator"
-                checked={so?.boundary_condition?.turbulence_generator?.enable_body_tg ?? false}
-                disabled
-              />
-              <Switch
-                label="Ground turbulence generator"
-                checked={so?.boundary_condition?.turbulence_generator?.enable_ground_tg ?? false}
-                disabled
-              />
-            </Stack>
-          </Tabs.Panel>
-        </Tabs>
-      </Stack>
+        <ScrollArea h="calc(100vh - 160px)" pr="md">
+          <TemplateSettingsForm
+            form={form}
+            simType={simType}
+            readOnly
+            generalContent={
+              <Stack gap="sm">
+                <TextInput label="Name" value={templateName} readOnly />
+                {description && (
+                  <Textarea label="Description" value={description} readOnly />
+                )}
+                <Select
+                  label="Application"
+                  value={simType}
+                  data={[
+                    { value: "aero", label: "External Aerodynamics" },
+                    { value: "ghn", label: "Greenhouse Noise (GHN)" },
+                    { value: "fan_noise", label: "Fan Noise" },
+                  ]}
+                  readOnly
+                />
+                <TextInput
+                  label="Version comment"
+                  value={version.comment ?? ""}
+                  readOnly
+                />
+                <Text size="xs" c="dimmed">
+                  Application: <strong>{simTypeLabel}</strong> · Read-only view
+                </Text>
+              </Stack>
+            }
+          />
+        </ScrollArea>
     </Modal>
   );
 }

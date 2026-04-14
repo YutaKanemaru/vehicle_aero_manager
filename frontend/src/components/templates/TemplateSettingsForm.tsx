@@ -46,6 +46,7 @@ interface Props {
   form: UseFormReturnType<FormValues>;
   simType: string;
   generalContent?: ReactNode;
+  readOnly?: boolean;
 }
 
 const isAero = (t: string) => t === "aero" || t === "fan_noise";
@@ -232,7 +233,7 @@ function getBodyOffsetDefaults(
 // Main form component
 // ============================================================
 
-export function TemplateSettingsForm({ form, simType, generalContent }: Props) {
+export function TemplateSettingsForm({ form, simType, generalContent, readOnly }: Props) {
   const gm = form.values.ground_mode;
   const isBelt5 = gm === "rotating_belt_5";
   const isBelt1 = gm === "rotating_belt_1";
@@ -393,6 +394,14 @@ export function TemplateSettingsForm({ form, simType, generalContent }: Props) {
     form.setFieldValue(`probe_files.${idx}.output_variables.${varName}`, val);
   };
 
+  const PW = readOnly
+    ? ({ children }: { children: ReactNode }) => (
+        <fieldset disabled style={{ border: "none", padding: 0, margin: 0 }}>
+          {children}
+        </fieldset>
+      )
+    : ({ children }: { children: ReactNode }) => <>{children}</>;
+
   return (
     <Tabs defaultValue={generalContent ? "general" : "sim"}>
       <Tabs.List>
@@ -405,12 +414,12 @@ export function TemplateSettingsForm({ form, simType, generalContent }: Props) {
       </Tabs.List>
       {generalContent && (
         <Tabs.Panel value="general" pt="md">
-          {generalContent}
+          <PW>{generalContent}</PW>
         </Tabs.Panel>
       )}
       {/* ── Simulation Run Parameters ──────────────────────────────── */}
       <Tabs.Panel value="sim" pt="md">
-          <Stack gap="xs">
+        <PW><Stack gap="xs">
             <SimpleGrid cols={2}>
               <NumberInput label="Run time (s)" {...form.getInputProps("simulation_time")} />
               <NumberInput label="Start averaging time (s)" {...form.getInputProps("start_averaging_time")} />
@@ -443,12 +452,12 @@ export function TemplateSettingsForm({ form, simType, generalContent }: Props) {
             {form.values.simulation_time_with_FP && (
               <NumberInput label="Flow passages" {...form.getInputProps("simulation_time_FP")} />
             )}
-          </Stack>
+          </Stack></PW>
       </Tabs.Panel>
 
       {/* ── Meshing ──────────────────────────────────────────────────── */}
       <Tabs.Panel value="meshing" pt="md">
-          <Stack gap="xs">
+        <PW><Stack gap="xs">
             <SimpleGrid cols={2}>
               <NumberInput
                 label="Coarsest voxel size (m)"
@@ -612,12 +621,12 @@ export function TemplateSettingsForm({ form, simType, generalContent }: Props) {
                 <TextInput label="Parts (comma-separated)" placeholder="Part_A, Part_B" {...form.getInputProps(`custom_refinements.${idx}.parts`)} />
               </Paper>
             ))}
-          </Stack>
+          </Stack></PW>
       </Tabs.Panel>
 
       {/* ── Boundary Conditions ───────────────────────────────────────── */}
       <Tabs.Panel value="bc" pt="md">
-          <Stack gap="sm">
+        <PW><Stack gap="sm">
             {/* Ground height */}
             <Select
               label="Ground height definition"
@@ -798,12 +807,12 @@ export function TemplateSettingsForm({ form, simType, generalContent }: Props) {
                 </SimpleGrid>
               </Paper>
             ))}
-          </Stack>
+          </Stack></PW>
       </Tabs.Panel>
 
       {/* ── Output ───────────────────────────────────────────────────── */}
       <Tabs.Panel value="output" pt="md">
-          <Stack gap="sm">
+        <PW><Stack gap="sm">
             {/* Full data */}
             <Divider label="Full data output" labelPosition="center" />
             <SimpleGrid cols={2}>
@@ -1201,12 +1210,12 @@ export function TemplateSettingsForm({ form, simType, generalContent }: Props) {
                 </Stack>
               </Paper>
             ))}
-          </Stack>
+          </Stack></PW>
       </Tabs.Panel>
 
       {/* ── Target Part Names ─────────────────────────────────────────── */}
       <Tabs.Panel value="targets" pt="md">
-          <Stack gap="xs">
+        <PW><Stack gap="xs">
             <Text size="xs" c="dimmed">
               Use comma-separated substrings/prefixes that match part names in the STL.
             </Text>
@@ -1239,7 +1248,7 @@ export function TemplateSettingsForm({ form, simType, generalContent }: Props) {
             <TextInput label="Baffle parts" placeholder="_Baffle_" {...form.getInputProps("tn_baffle")} />
             <TextInput label="Car bounding box parts" placeholder="Body_" {...form.getInputProps("tn_car_bounding_box")} />
             <TextInput label="Wind tunnel parts (excluded from forces + offset refinement)" placeholder="WindTunnel_" {...form.getInputProps("tn_windtunnel")} />
-          </Stack>
+          </Stack></PW>
       </Tabs.Panel>
     </Tabs>
   );

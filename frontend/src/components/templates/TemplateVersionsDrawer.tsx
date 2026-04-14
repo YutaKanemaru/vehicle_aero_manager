@@ -181,6 +181,7 @@ export function TemplateVersionsDrawer({ template, onClose }: Props) {
           version={viewingVersion}
           templateName={template.name}
           simType={template.sim_type}
+          description={template.description ?? undefined}
         />
       )}
     </>

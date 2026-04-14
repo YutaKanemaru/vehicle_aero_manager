@@ -571,10 +571,10 @@ Ultrafluid XML file
 | File | Description |
 |---|---|
 | `TemplateList.tsx` | Table view with Versions / Fork / Delete action icons per row |
-| `TemplateCreateModal.tsx` | Full settings form for creating a new template |
+| `TemplateCreateModal.tsx` | Full settings form for creating a new template — `size="90%"`, wraps `TemplateSettingsForm` with `generalContent` (Name / Description / Application / Version comment in the General tab) |
 | `TemplateVersionsDrawer.tsx` | Right-side drawer showing version history; contains New Version button (owner/admin only) and per-version 👁 / `</>` icons |
-| `TemplateVersionCreateModal.tsx` | Settings form pre-filled from active version; creates a new version |
-| `TemplateSettingsViewModal.tsx` | Read-only (disabled) settings form for inspecting any version's parameters |
+| `TemplateVersionCreateModal.tsx` | Settings form pre-filled from active version; creates a new version — `size="90%"`, wraps `TemplateSettingsForm` with `generalContent` (Version comment in the General tab) |
+| `TemplateSettingsViewModal.tsx` | Read-only view of all settings — `size="90%"`, reuses `TemplateSettingsForm` with `readOnly` prop; `<fieldset disabled>` applied per-panel so tab navigation remains functional |
 | `TemplateForkModal.tsx` | Form to fork a template: enter new name, description, comment; copies active version settings |
 
 **Permission model (frontend)**
@@ -1207,15 +1207,21 @@ interface ProbeFileFormItem         { name, probe_type, radius, output_frequency
 interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 ```
 
-`TemplateSettingsForm.tsx` accordion sections:
+**Props:**
+- `form: UseFormReturnType<FormValues>` — Mantine form instance
+- `simType: string` — `"aero"` / `"ghn"` / `"fan_noise"`
+- `generalContent?: ReactNode` — when provided, a **General** tab is prepended as the first tab (used by Create/Version/View modals to embed Name/Description/Application/comment fields)
+- `readOnly?: boolean` — when `true`, wraps each `Tabs.Panel` content in `<fieldset disabled>` so all inputs are disabled; `Tabs.List` (tab buttons) is **not** wrapped and remains clickable
 
-| Accordion | Contents |
+`TemplateSettingsForm.tsx` tab sections:
+
+| Tab | Contents |
 |---|---|
+| General *(conditional)* | Rendered from `generalContent` prop — Name, Description, Application, Version comment |
 | Simulation Run Parameters | velocity, run time, averaging, mach factor, wall model, material |
 | Meshing | coarsest voxel, refinement levels, triangle splitting, offset refinement dynamic list, custom refinement dynamic list |
 | Boundary Conditions | ground mode, belt config, BL suction, turbulence generator, porous coefficients (template defaults) dynamic list |
 | Output | full data format/coarsening, output variables checkboxes (full: 24 vars, surface: 15 vars), partial surface dynamic list (include/exclude/baffle/per-instance output vars), partial volume dynamic list (3 bbox_mode variants), section cuts dynamic list, **probe files dynamic list** (probe points, CSV import/export) |
-| Aero Coefficients | reference area/length, coefficients along axis |
 | Target Part Names | all `target_names` fields |
 
 ---
