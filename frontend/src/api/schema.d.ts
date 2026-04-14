@@ -621,6 +621,56 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AeroCoefficientsConfig
+         * @description Aero force/moment coefficient output settings (aero sim_type only).
+         */
+        AeroCoefficientsConfig: {
+            /**
+             * Reference Area Auto
+             * @default true
+             */
+            reference_area_auto: boolean;
+            /** Reference Area */
+            reference_area?: number | null;
+            /**
+             * Reference Length Auto
+             * @default true
+             */
+            reference_length_auto: boolean;
+            /** Reference Length */
+            reference_length?: number | null;
+            /**
+             * Coefficients Along Axis Active
+             * @default false
+             */
+            coefficients_along_axis_active: boolean;
+            /**
+             * Num Sections X
+             * @default 100
+             */
+            num_sections_x: number;
+            /**
+             * Num Sections Y
+             * @default 0
+             */
+            num_sections_y: number;
+            /**
+             * Num Sections Z
+             * @default 0
+             */
+            num_sections_z: number;
+            /**
+             * Export Bounds Active
+             * @default true
+             */
+            export_bounds_active: boolean;
+            /**
+             * Export Bounds Exclude Domain Parts
+             * @default true
+             */
+            export_bounds_exclude_domain_parts: boolean;
+        };
         /** AnalysisResult */
         AnalysisResult: {
             /** Parts */
@@ -725,28 +775,66 @@ export interface components {
             /** Folder Id */
             folder_id?: string | null;
         };
-        /** BeltOption */
-        BeltOption: {
+        /** BLSuctionConfig */
+        BLSuctionConfig: {
             /**
-             * Opt Belt System
+             * Apply
              * @default true
              */
-            opt_belt_system: boolean;
+            apply: boolean;
+            /** No Slip Xmin Pos */
+            no_slip_xmin_pos?: number | null;
             /**
-             * Num Belts
-             * @default 5
-             */
-            num_belts: number;
-            /**
-             * Include Wheel Belt Forces
+             * No Slip Xmin From Belt Xmin
              * @default true
              */
-            include_wheel_belt_forces: boolean;
+            no_slip_xmin_from_belt_xmin: boolean;
+            /**
+             * Bl Xmin Offset
+             * @default 0
+             */
+            bl_xmin_offset: number;
+        };
+        /**
+         * Belt1Config
+         * @description Configuration for single-belt system.
+         */
+        Belt1Config: {
+            belt_size?: components["schemas"]["BeltSize"];
+        };
+        /**
+         * Belt5Config
+         * @description Configuration for 5-belt system (2 front, 2 rear, 1 center).
+         */
+        Belt5Config: {
             /**
              * Wheel Belt Location Auto
              * @default true
              */
             wheel_belt_location_auto: boolean;
+            narrow_car_fallback?: components["schemas"]["NarrowCarFallback"];
+            /**
+             * Center Belt Position
+             * @default at_wheelbase_center
+             * @enum {string}
+             */
+            center_belt_position: "at_wheelbase_center" | "user_specified";
+            /** Center Belt X Pos */
+            center_belt_x_pos?: number | null;
+            belt_size_wheel?: components["schemas"]["BeltSize"];
+            belt_size_center?: components["schemas"]["BeltSize"];
+            /**
+             * Include Wheel Belt Forces
+             * @default true
+             */
+            include_wheel_belt_forces: boolean;
+        };
+        /** BeltSize */
+        BeltSize: {
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
         };
         /** Body_upload_geometry_api_v1_geometries__post */
         Body_upload_geometry_api_v1_geometries__post: {
@@ -759,22 +847,14 @@ export interface components {
             /** File */
             file: string;
         };
-        /** BoundaryConditionInput */
-        BoundaryConditionInput: {
-            /** Belts */
-            belts?: {
-                [key: string]: unknown;
-            };
-            /**
-             * Boundary Layer Suction Xpos
-             * @default -1.1
-             */
-            boundary_layer_suction_xpos: number;
+        /** BoundaryConditionOption */
+        "BoundaryConditionOption-Input": {
+            ground?: components["schemas"]["GroundConfig-Input"];
+            turbulence_generator?: components["schemas"]["TurbulenceGeneratorOption"];
         };
         /** BoundaryConditionOption */
-        BoundaryConditionOption: {
-            ground?: components["schemas"]["GroundOption"];
-            belt?: components["schemas"]["BeltOption"];
+        "BoundaryConditionOption-Output": {
+            ground?: components["schemas"]["GroundConfig-Output"];
             turbulence_generator?: components["schemas"]["TurbulenceGeneratorOption"];
         };
         /** BoxRefinement */
@@ -980,6 +1060,63 @@ export interface components {
             /** Changed Fields */
             changed_fields: components["schemas"]["DiffField"][];
         };
+        /**
+         * FullDataOutputConfig
+         * @description Full-volume and surface data output configuration.
+         */
+        FullDataOutputConfig: {
+            /** Output Start Time */
+            output_start_time?: number | null;
+            /** Output Interval */
+            output_interval?: number | null;
+            /**
+             * File Format Ensight
+             * @default false
+             */
+            file_format_ensight: boolean;
+            /**
+             * File Format H3D
+             * @default true
+             */
+            file_format_h3d: boolean;
+            /**
+             * Output Coarsening Active
+             * @default false
+             */
+            output_coarsening_active: boolean;
+            /**
+             * Coarsest Target Refinement Level
+             * @default 3
+             */
+            coarsest_target_refinement_level: number;
+            /**
+             * Coarsen By Num Refinement Levels
+             * @default 0
+             */
+            coarsen_by_num_refinement_levels: number;
+            /**
+             * Merge Output
+             * @default true
+             */
+            merge_output: boolean;
+            /**
+             * Delete Unmerged
+             * @default true
+             */
+            delete_unmerged: boolean;
+            output_variables_full?: components["schemas"]["OutputVariablesFull"];
+            output_variables_surface?: components["schemas"]["OutputVariablesSurface"];
+            /**
+             * Bbox Mode
+             * @default from_meshing_box
+             * @enum {string}
+             */
+            bbox_mode: "from_meshing_box" | "user_defined";
+            /** Bbox Source Box Name */
+            bbox_source_box_name?: string | null;
+            /** Bbox */
+            bbox?: number[] | null;
+        };
         /** GeometryFolderCreate */
         GeometryFolderCreate: {
             /** Name */
@@ -1075,28 +1212,101 @@ export interface components {
             /** Folder Id */
             folder_id?: string | null;
         };
-        /** GroundOption */
-        GroundOption: {
+        /**
+         * GroundConfig
+         * @description Ground and wheel boundary condition settings.
+         *
+         *     ground_mode is External Aero specific. For ghn / fan_noise:
+         *       - wheels are always static (no-slip, no rotation)
+         *       - ground is static
+         *       - overset_wheels is ignored
+         *       - belt configs are ignored
+         *       Only bl_suction and ground_patch_active apply.
+         */
+        "GroundConfig-Input": {
             /**
-             * Moving Ground
+             * Ground Height Mode
+             * @default from_geometry
+             * @enum {string}
+             */
+            ground_height_mode: "from_geometry" | "absolute";
+            /**
+             * Ground Height Absolute
+             * @default 0
+             */
+            ground_height_absolute: number;
+            /**
+             * Ground Mode
+             * @default rotating_belt_5
+             * @enum {string}
+             */
+            ground_mode: "static" | "rotating_belt_1" | "rotating_belt_5" | "full_moving";
+            /**
+             * Overset Wheels
              * @default true
              */
-            moving_ground: boolean;
+            overset_wheels: boolean;
             /**
-             * No Slip Static Ground Patch
+             * Ground Patch Active
              * @default true
              */
-            no_slip_static_ground_patch: boolean;
+            ground_patch_active: boolean;
+            bl_suction?: components["schemas"]["BLSuctionConfig"];
+            belt5?: components["schemas"]["Belt5Config"];
+            belt1?: components["schemas"]["Belt1Config"];
             /**
-             * Ground Zmin Auto
+             * Apply Static Ground Refinement
              * @default true
              */
-            ground_zmin_auto: boolean;
+            apply_static_ground_refinement: boolean;
+        };
+        /**
+         * GroundConfig
+         * @description Ground and wheel boundary condition settings.
+         *
+         *     ground_mode is External Aero specific. For ghn / fan_noise:
+         *       - wheels are always static (no-slip, no rotation)
+         *       - ground is static
+         *       - overset_wheels is ignored
+         *       - belt configs are ignored
+         *       Only bl_suction and ground_patch_active apply.
+         */
+        "GroundConfig-Output": {
             /**
-             * Boundary Layer Suction Position From Belt Xmin
+             * Ground Height Mode
+             * @default from_geometry
+             * @enum {string}
+             */
+            ground_height_mode: "from_geometry" | "absolute";
+            /**
+             * Ground Height Absolute
+             * @default 0
+             */
+            ground_height_absolute: number;
+            /**
+             * Ground Mode
+             * @default rotating_belt_5
+             * @enum {string}
+             */
+            ground_mode: "static" | "rotating_belt_1" | "rotating_belt_5" | "full_moving";
+            /**
+             * Overset Wheels
              * @default true
              */
-            boundary_layer_suction_position_from_belt_xmin: boolean;
+            overset_wheels: boolean;
+            /**
+             * Ground Patch Active
+             * @default true
+             */
+            ground_patch_active: boolean;
+            bl_suction?: components["schemas"]["BLSuctionConfig"];
+            belt5?: components["schemas"]["Belt5Config"];
+            belt1?: components["schemas"]["Belt1Config"];
+            /**
+             * Apply Static Ground Refinement
+             * @default true
+             */
+            apply_static_ground_refinement: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1117,6 +1327,21 @@ export interface components {
              * @default true
              */
             triangle_splitting: boolean;
+            /**
+             * Triangle Splitting Specify Part
+             * @default false
+             */
+            triangle_splitting_specify_part: boolean;
+            /**
+             * Max Relative Edge Length
+             * @default 9
+             */
+            max_relative_edge_length: number;
+            /**
+             * Refinement Level Transition Layers
+             * @default 8
+             */
+            refinement_level_transition_layers: number;
             /**
              * Domain Bounding Box Relative
              * @default true
@@ -1152,6 +1377,22 @@ export interface components {
                 [key: string]: components["schemas"]["CustomRefinement"];
             };
         };
+        /**
+         * NarrowCarFallback
+         * @description Prevent wheel belts from crossing/overlapping on narrow cars.
+         */
+        NarrowCarFallback: {
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Min Belt Gap
+             * @default 0.3
+             */
+            min_belt_gap: number;
+        };
         /** OffsetRefinement */
         OffsetRefinement: {
             /** Level */
@@ -1160,6 +1401,239 @@ export interface components {
             normal_distance: number;
             /** Parts */
             parts?: string[];
+        };
+        /** OutputSettings */
+        "OutputSettings-Input": {
+            full_data?: components["schemas"]["FullDataOutputConfig"];
+            /** Partial Surfaces */
+            partial_surfaces?: components["schemas"]["PartialSurfaceOutputConfig"][];
+            /** Partial Volumes */
+            partial_volumes?: components["schemas"]["PartialVolumeOutputConfig"][];
+            aero_coefficients?: components["schemas"]["AeroCoefficientsConfig"];
+            /** Section Cuts */
+            section_cuts?: components["schemas"]["SectionCutConfig"][];
+            /** Probe Files */
+            probe_files?: components["schemas"]["ProbeFileConfig"][];
+        };
+        /** OutputSettings */
+        "OutputSettings-Output": {
+            full_data?: components["schemas"]["FullDataOutputConfig"];
+            /** Partial Surfaces */
+            partial_surfaces?: components["schemas"]["PartialSurfaceOutputConfig"][];
+            /** Partial Volumes */
+            partial_volumes?: components["schemas"]["PartialVolumeOutputConfig"][];
+            aero_coefficients?: components["schemas"]["AeroCoefficientsConfig"];
+            /** Section Cuts */
+            section_cuts?: components["schemas"]["SectionCutConfig"][];
+            /** Probe Files */
+            probe_files?: components["schemas"]["ProbeFileConfig"][];
+        };
+        /**
+         * OutputVariablesFull
+         * @description Variables for full-volume output.
+         */
+        OutputVariablesFull: {
+            /**
+             * Pressure
+             * @default false
+             */
+            pressure: boolean;
+            /**
+             * Surface Normal
+             * @default false
+             */
+            surface_normal: boolean;
+            /**
+             * Pressure Std
+             * @default false
+             */
+            pressure_std: boolean;
+            /**
+             * Pressure Var
+             * @default false
+             */
+            pressure_var: boolean;
+            /**
+             * Time Avg Pressure
+             * @default false
+             */
+            time_avg_pressure: boolean;
+            /**
+             * Time Avg Velocity
+             * @default false
+             */
+            time_avg_velocity: boolean;
+            /**
+             * Time Avg Wall Shear Stress
+             * @default false
+             */
+            time_avg_wall_shear_stress: boolean;
+            /**
+             * Mesh Data
+             * @default false
+             */
+            mesh_data: boolean;
+            /**
+             * Velocity
+             * @default false
+             */
+            velocity: boolean;
+            /**
+             * Velocity Magnitude
+             * @default false
+             */
+            velocity_magnitude: boolean;
+            /**
+             * Wall Shear Stress
+             * @default false
+             */
+            wall_shear_stress: boolean;
+            /**
+             * Window Avg Pressure
+             * @default false
+             */
+            window_avg_pressure: boolean;
+            /**
+             * Window Avg Velocity
+             * @default false
+             */
+            window_avg_velocity: boolean;
+            /**
+             * Window Avg Wall Shear Stress
+             * @default false
+             */
+            window_avg_wall_shear_stress: boolean;
+            /**
+             * Mesh Displacement
+             * @default false
+             */
+            mesh_displacement: boolean;
+            /**
+             * Vorticity
+             * @default false
+             */
+            vorticity: boolean;
+            /**
+             * Vorticity Magnitude
+             * @default false
+             */
+            vorticity_magnitude: boolean;
+            /**
+             * Lambda 1
+             * @default false
+             */
+            lambda_1: boolean;
+            /**
+             * Lambda 2
+             * @default false
+             */
+            lambda_2: boolean;
+            /**
+             * Lambda 3
+             * @default false
+             */
+            lambda_3: boolean;
+            /**
+             * Q Criterion
+             * @default false
+             */
+            q_criterion: boolean;
+            /**
+             * Temperature
+             * @default false
+             */
+            temperature: boolean;
+            /**
+             * Time Avg Temperature
+             * @default false
+             */
+            time_avg_temperature: boolean;
+            /**
+             * Window Avg Temperature
+             * @default false
+             */
+            window_avg_temperature: boolean;
+        };
+        /**
+         * OutputVariablesSurface
+         * @description Variables for surface output (subset of full).
+         */
+        OutputVariablesSurface: {
+            /**
+             * Pressure
+             * @default false
+             */
+            pressure: boolean;
+            /**
+             * Surface Normal
+             * @default false
+             */
+            surface_normal: boolean;
+            /**
+             * Pressure Std
+             * @default false
+             */
+            pressure_std: boolean;
+            /**
+             * Pressure Var
+             * @default false
+             */
+            pressure_var: boolean;
+            /**
+             * Time Avg Pressure
+             * @default false
+             */
+            time_avg_pressure: boolean;
+            /**
+             * Time Avg Wall Shear Stress
+             * @default false
+             */
+            time_avg_wall_shear_stress: boolean;
+            /**
+             * Velocity
+             * @default false
+             */
+            velocity: boolean;
+            /**
+             * Velocity Magnitude
+             * @default false
+             */
+            velocity_magnitude: boolean;
+            /**
+             * Wall Shear Stress
+             * @default false
+             */
+            wall_shear_stress: boolean;
+            /**
+             * Window Avg Pressure
+             * @default false
+             */
+            window_avg_pressure: boolean;
+            /**
+             * Window Avg Wall Shear Stress
+             * @default false
+             */
+            window_avg_wall_shear_stress: boolean;
+            /**
+             * Mesh Displacement
+             * @default false
+             */
+            mesh_displacement: boolean;
+            /**
+             * Temperature
+             * @default false
+             */
+            temperature: boolean;
+            /**
+             * Time Avg Temperature
+             * @default false
+             */
+            time_avg_temperature: boolean;
+            /**
+             * Window Avg Temperature
+             * @default false
+             */
+            window_avg_temperature: boolean;
         };
         /** PartInfo */
         PartInfo: {
@@ -1174,6 +1648,287 @@ export interface components {
             /** Face Count */
             face_count: number;
         };
+        /**
+         * PartialSurfaceOutputConfig
+         * @description Partial surface export configuration (one instance).
+         */
+        PartialSurfaceOutputConfig: {
+            /**
+             * Name
+             * @default partial_surface
+             */
+            name: string;
+            /** Output Start Time */
+            output_start_time?: number | null;
+            /** Output Interval */
+            output_interval?: number | null;
+            /**
+             * File Format Ensight
+             * @default false
+             */
+            file_format_ensight: boolean;
+            /**
+             * File Format H3D
+             * @default true
+             */
+            file_format_h3d: boolean;
+            /**
+             * Merge Output
+             * @default true
+             */
+            merge_output: boolean;
+            /**
+             * Delete Unmerged
+             * @default true
+             */
+            delete_unmerged: boolean;
+            /** Include Parts */
+            include_parts?: string[];
+            /** Exclude Parts */
+            exclude_parts?: string[];
+            output_variables?: components["schemas"]["PartialSurfaceOutputVariables"];
+            /** Baffle Export Option */
+            baffle_export_option?: ("front_only" | "back_only" | "both") | null;
+        };
+        /** PartialSurfaceOutputVariables */
+        PartialSurfaceOutputVariables: {
+            /**
+             * Pressure
+             * @default false
+             */
+            pressure: boolean;
+            /**
+             * Pressure Std
+             * @default false
+             */
+            pressure_std: boolean;
+            /**
+             * Pressure Var
+             * @default false
+             */
+            pressure_var: boolean;
+            /**
+             * Time Avg Pressure
+             * @default false
+             */
+            time_avg_pressure: boolean;
+            /**
+             * Window Avg Pressure
+             * @default false
+             */
+            window_avg_pressure: boolean;
+            /**
+             * Velocity
+             * @default false
+             */
+            velocity: boolean;
+            /**
+             * Velocity Magnitude
+             * @default false
+             */
+            velocity_magnitude: boolean;
+            /**
+             * Wall Shear Stress
+             * @default false
+             */
+            wall_shear_stress: boolean;
+            /**
+             * Time Avg Wall Shear Stress
+             * @default false
+             */
+            time_avg_wall_shear_stress: boolean;
+            /**
+             * Window Avg Wall Shear Stress
+             * @default false
+             */
+            window_avg_wall_shear_stress: boolean;
+            /**
+             * Surface Normal
+             * @default false
+             */
+            surface_normal: boolean;
+            /**
+             * Mesh Displacement
+             * @default false
+             */
+            mesh_displacement: boolean;
+            /**
+             * Temperature
+             * @default false
+             */
+            temperature: boolean;
+            /**
+             * Time Avg Temperature
+             * @default false
+             */
+            time_avg_temperature: boolean;
+            /**
+             * Window Avg Temperature
+             * @default false
+             */
+            window_avg_temperature: boolean;
+        };
+        /**
+         * PartialVolumeOutputConfig
+         * @description Partial volume export configuration (one instance).
+         */
+        PartialVolumeOutputConfig: {
+            /**
+             * Name
+             * @default partial_volume
+             */
+            name: string;
+            /** Output Start Time */
+            output_start_time?: number | null;
+            /** Output Interval */
+            output_interval?: number | null;
+            /**
+             * File Format Ensight
+             * @default false
+             */
+            file_format_ensight: boolean;
+            /**
+             * File Format H3D
+             * @default true
+             */
+            file_format_h3d: boolean;
+            /**
+             * Output Coarsening Active
+             * @default false
+             */
+            output_coarsening_active: boolean;
+            /**
+             * Coarsest Target Refinement Level
+             * @default 3
+             */
+            coarsest_target_refinement_level: number;
+            /**
+             * Coarsen By Num Refinement Levels
+             * @default 0
+             */
+            coarsen_by_num_refinement_levels: number;
+            /**
+             * Merge Output
+             * @default true
+             */
+            merge_output: boolean;
+            /**
+             * Delete Unmerged
+             * @default true
+             */
+            delete_unmerged: boolean;
+            output_variables?: components["schemas"]["PartialVolumeOutputVariables"];
+            /**
+             * Bbox Mode
+             * @default user_defined
+             * @enum {string}
+             */
+            bbox_mode: "from_meshing_box" | "around_parts" | "user_defined";
+            /** Bbox Source Box Name */
+            bbox_source_box_name?: string | null;
+            /** Bbox Source Parts */
+            bbox_source_parts?: string[];
+            /** Bbox */
+            bbox?: number[] | null;
+        };
+        /** PartialVolumeOutputVariables */
+        PartialVolumeOutputVariables: {
+            /**
+             * Pressure
+             * @default false
+             */
+            pressure: boolean;
+            /**
+             * Pressure Std
+             * @default false
+             */
+            pressure_std: boolean;
+            /**
+             * Pressure Var
+             * @default false
+             */
+            pressure_var: boolean;
+            /**
+             * Time Avg Pressure
+             * @default false
+             */
+            time_avg_pressure: boolean;
+            /**
+             * Window Avg Pressure
+             * @default false
+             */
+            window_avg_pressure: boolean;
+            /**
+             * Velocity
+             * @default false
+             */
+            velocity: boolean;
+            /**
+             * Velocity Magnitude
+             * @default false
+             */
+            velocity_magnitude: boolean;
+            /**
+             * Time Avg Velocity
+             * @default false
+             */
+            time_avg_velocity: boolean;
+            /**
+             * Window Avg Velocity
+             * @default false
+             */
+            window_avg_velocity: boolean;
+            /**
+             * Mesh Displacement
+             * @default false
+             */
+            mesh_displacement: boolean;
+            /**
+             * Vorticity
+             * @default false
+             */
+            vorticity: boolean;
+            /**
+             * Vorticity Magnitude
+             * @default false
+             */
+            vorticity_magnitude: boolean;
+            /**
+             * Lambda 1
+             * @default false
+             */
+            lambda_1: boolean;
+            /**
+             * Lambda 2
+             * @default false
+             */
+            lambda_2: boolean;
+            /**
+             * Lambda 3
+             * @default false
+             */
+            lambda_3: boolean;
+            /**
+             * Q Criterion
+             * @default false
+             */
+            q_criterion: boolean;
+            /**
+             * Temperature
+             * @default false
+             */
+            temperature: boolean;
+            /**
+             * Time Avg Temperature
+             * @default false
+             */
+            time_avg_temperature: boolean;
+            /**
+             * Window Avg Temperature
+             * @default false
+             */
+            window_avg_temperature: boolean;
+        };
         /** PorousMedia */
         PorousMedia: {
             /** Part Name */
@@ -1182,6 +1937,118 @@ export interface components {
             inertial_resistance: number;
             /** Viscous Resistance */
             viscous_resistance: number;
+        };
+        /**
+         * ProbeFileConfig
+         * @description Configuration for one <probe_file_instance>.
+         */
+        ProbeFileConfig: {
+            /**
+             * Name
+             * @default probe
+             */
+            name: string;
+            /**
+             * Probe Type
+             * @default volume
+             */
+            probe_type: string;
+            /**
+             * Radius
+             * @default 0
+             */
+            radius: number;
+            /**
+             * Output Frequency
+             * @default 1
+             */
+            output_frequency: number;
+            /**
+             * Output Start Iteration
+             * @default 0
+             */
+            output_start_iteration: number;
+            /**
+             * Scientific Notation
+             * @default true
+             */
+            scientific_notation: boolean;
+            /**
+             * Output Precision
+             * @default 7
+             */
+            output_precision: number;
+            output_variables?: components["schemas"]["ProbeFileOutputVariables"];
+            /** Points */
+            points?: components["schemas"]["ProbePointConfig"][];
+        };
+        /**
+         * ProbeFileOutputVariables
+         * @description Output variables for a probe_file_instance. None = use solver default.
+         */
+        ProbeFileOutputVariables: {
+            /** Pressure */
+            pressure?: boolean | null;
+            /** Time Avg Pressure */
+            time_avg_pressure?: boolean | null;
+            /** Window Avg Pressure */
+            window_avg_pressure?: boolean | null;
+            /** Cp */
+            cp?: boolean | null;
+            /** Velocity */
+            velocity?: boolean | null;
+            /** Time Avg Velocity */
+            time_avg_velocity?: boolean | null;
+            /** Window Avg Velocity */
+            window_avg_velocity?: boolean | null;
+            /** Velocity Magnitude */
+            velocity_magnitude?: boolean | null;
+            /** Time Avg Velocity Magnitude */
+            time_avg_velocity_magnitude?: boolean | null;
+            /** Window Avg Velocity Magnitude */
+            window_avg_velocity_magnitude?: boolean | null;
+            /** Wall Shear Stress */
+            wall_shear_stress?: boolean | null;
+            /** Time Avg Wall Shear Stress */
+            time_avg_wall_shear_stress?: boolean | null;
+            /** Window Avg Wall Shear Stress */
+            window_avg_wall_shear_stress?: boolean | null;
+            /** Density */
+            density?: boolean | null;
+            /** Time Avg Density */
+            time_avg_density?: boolean | null;
+            /** Window Avg Density */
+            window_avg_density?: boolean | null;
+            /** Pressure Std */
+            pressure_std?: boolean | null;
+            /** Pressure Var */
+            pressure_var?: boolean | null;
+        };
+        /**
+         * ProbePointConfig
+         * @description Single probe location for CSV export/import (x;y;z;description format).
+         */
+        ProbePointConfig: {
+            /**
+             * X Pos
+             * @default 0
+             */
+            x_pos: number;
+            /**
+             * Y Pos
+             * @default 0
+             */
+            y_pos: number;
+            /**
+             * Z Pos
+             * @default 0
+             */
+            z_pos: number;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
         };
         /** RunCreate */
         RunCreate: {
@@ -1224,6 +2091,180 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * SectionCutConfig
+         * @description Section cut output configuration (one instance).
+         */
+        SectionCutConfig: {
+            /**
+             * Name
+             * @default section_cut
+             */
+            name: string;
+            /** Output Start Time */
+            output_start_time?: number | null;
+            /** Output Interval */
+            output_interval?: number | null;
+            /**
+             * File Format Ensight
+             * @default false
+             */
+            file_format_ensight: boolean;
+            /**
+             * File Format H3D
+             * @default true
+             */
+            file_format_h3d: boolean;
+            /**
+             * Merge Output
+             * @default true
+             */
+            merge_output: boolean;
+            /**
+             * Delete Unmerged
+             * @default true
+             */
+            delete_unmerged: boolean;
+            /**
+             * Triangulation
+             * @default false
+             */
+            triangulation: boolean;
+            /**
+             * Axis X
+             * @default 0
+             */
+            axis_x: number;
+            /**
+             * Axis Y
+             * @default 0
+             */
+            axis_y: number;
+            /**
+             * Axis Z
+             * @default 1
+             */
+            axis_z: number;
+            /**
+             * Point X
+             * @default 0
+             */
+            point_x: number;
+            /**
+             * Point Y
+             * @default 0
+             */
+            point_y: number;
+            /**
+             * Point Z
+             * @default 0
+             */
+            point_z: number;
+            /** Bbox */
+            bbox?: number[];
+            output_variables?: components["schemas"]["SectionCutOutputVariables"];
+        };
+        /**
+         * SectionCutOutputVariables
+         * @description Output variables specific to section cut (high-frequency transient).
+         */
+        SectionCutOutputVariables: {
+            /**
+             * Pressure
+             * @default false
+             */
+            pressure: boolean;
+            /**
+             * Pressure Std
+             * @default false
+             */
+            pressure_std: boolean;
+            /**
+             * Pressure Var
+             * @default false
+             */
+            pressure_var: boolean;
+            /**
+             * Time Avg Pressure
+             * @default false
+             */
+            time_avg_pressure: boolean;
+            /**
+             * Window Avg Pressure
+             * @default false
+             */
+            window_avg_pressure: boolean;
+            /**
+             * Velocity
+             * @default false
+             */
+            velocity: boolean;
+            /**
+             * Velocity Magnitude
+             * @default false
+             */
+            velocity_magnitude: boolean;
+            /**
+             * Time Avg Velocity
+             * @default false
+             */
+            time_avg_velocity: boolean;
+            /**
+             * Window Avg Velocity
+             * @default false
+             */
+            window_avg_velocity: boolean;
+            /**
+             * Mesh Displacement
+             * @default false
+             */
+            mesh_displacement: boolean;
+            /**
+             * Vorticity
+             * @default false
+             */
+            vorticity: boolean;
+            /**
+             * Vorticity Magnitude
+             * @default false
+             */
+            vorticity_magnitude: boolean;
+            /**
+             * Lambda 1
+             * @default false
+             */
+            lambda_1: boolean;
+            /**
+             * Lambda 2
+             * @default false
+             */
+            lambda_2: boolean;
+            /**
+             * Lambda 3
+             * @default false
+             */
+            lambda_3: boolean;
+            /**
+             * Q Criterion
+             * @default false
+             */
+            q_criterion: boolean;
+            /**
+             * Temperature
+             * @default false
+             */
+            temperature: boolean;
+            /**
+             * Time Avg Temperature
+             * @default false
+             */
+            time_avg_temperature: boolean;
+            /**
+             * Window Avg Temperature
+             * @default false
+             */
+            window_avg_temperature: boolean;
+        };
         /** Setup */
         "Setup-Input": {
             /**
@@ -1239,7 +2280,6 @@ export interface components {
              */
             domain_bounding_box: number[];
             meshing?: components["schemas"]["MeshingSetup"];
-            boundary_condition_input?: components["schemas"]["BoundaryConditionInput"];
         };
         /** Setup */
         "Setup-Output": {
@@ -1256,20 +2296,19 @@ export interface components {
              */
             domain_bounding_box: number[];
             meshing?: components["schemas"]["MeshingSetup"];
-            boundary_condition_input?: components["schemas"]["BoundaryConditionInput"];
         };
         /** SetupOption */
         "SetupOption-Input": {
             simulation?: components["schemas"]["SimulationOption"];
             meshing?: components["schemas"]["MeshingOption"];
-            boundary_condition?: components["schemas"]["BoundaryConditionOption"];
+            boundary_condition?: components["schemas"]["BoundaryConditionOption-Input"];
             compute?: components["schemas"]["ComputeOption"];
         };
         /** SetupOption */
         "SetupOption-Output": {
             simulation?: components["schemas"]["SimulationOption"];
             meshing?: components["schemas"]["MeshingOption"];
-            boundary_condition?: components["schemas"]["BoundaryConditionOption"];
+            boundary_condition?: components["schemas"]["BoundaryConditionOption-Output"];
             compute?: components["schemas"]["ComputeOption"];
         };
         /** SimulationOption */
@@ -1323,10 +2362,10 @@ export interface components {
              */
             num_ramp_up_iter: number;
             /**
-             * Finest Resolution Size
-             * @default 0.0015
+             * Coarsest Voxel Size
+             * @default 0.192
              */
-            finest_resolution_size: number;
+            coarsest_voxel_size: number;
             /**
              * Number Of Resolution
              * @default 7
@@ -1352,10 +2391,6 @@ export interface components {
              * @default 0.3
              */
             avg_window_size: number;
-            /** Output Start Time */
-            output_start_time?: number | null;
-            /** Output Interval Time */
-            output_interval_time?: number | null;
             /**
              * Yaw Angle
              * @default 0
@@ -1418,6 +2453,11 @@ export interface components {
              * @default
              */
             overset_rr_rh: string;
+            /**
+             * Tire Roughness
+             * @default 0
+             */
+            tire_roughness: number;
         };
         /** TemplateCreate */
         TemplateCreate: {
@@ -1482,6 +2522,7 @@ export interface components {
             setup_option?: components["schemas"]["SetupOption-Input"];
             simulation_parameter?: components["schemas"]["SimulationParameter"];
             setup?: components["schemas"]["Setup-Input"];
+            output?: components["schemas"]["OutputSettings-Input"];
             target_names?: components["schemas"]["TargetNames"];
             /** Porous Coefficients */
             porous_coefficients?: components["schemas"]["PorousMedia"][];
@@ -1491,6 +2532,7 @@ export interface components {
             setup_option?: components["schemas"]["SetupOption-Output"];
             simulation_parameter?: components["schemas"]["SimulationParameter"];
             setup?: components["schemas"]["Setup-Output"];
+            output?: components["schemas"]["OutputSettings-Output"];
             target_names?: components["schemas"]["TargetNames"];
             /** Porous Coefficients */
             porous_coefficients?: components["schemas"]["PorousMedia"][];
@@ -1544,15 +2586,35 @@ export interface components {
         /** TurbulenceGeneratorOption */
         TurbulenceGeneratorOption: {
             /**
-             * Activate Body Tg
+             * Enable Ground Tg
              * @default true
              */
-            activate_body_tg: boolean;
+            enable_ground_tg: boolean;
             /**
-             * Activate Ground Tg
+             * Enable Body Tg
              * @default true
              */
-            activate_ground_tg: boolean;
+            enable_body_tg: boolean;
+            /**
+             * Ground Tg Num Eddies
+             * @default 800
+             */
+            ground_tg_num_eddies: number;
+            /**
+             * Ground Tg Intensity
+             * @default 0.05
+             */
+            ground_tg_intensity: number;
+            /**
+             * Body Tg Num Eddies
+             * @default 800
+             */
+            body_tg_num_eddies: number;
+            /**
+             * Body Tg Intensity
+             * @default 0.01
+             */
+            body_tg_intensity: number;
         };
         /** UpdateRoleRequest */
         UpdateRoleRequest: {

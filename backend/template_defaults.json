@@ -1,0 +1,198 @@
+{
+  "setup_option": {
+    "simulation": {
+      "temperature_degree": true,
+      "simulation_time_with_FP": false
+    },
+    "meshing": {
+      "triangle_splitting": true,
+      "triangle_splitting_specify_part": false,
+      "max_relative_edge_length": 9.0,
+      "refinement_level_transition_layers": 8,
+      "domain_bounding_box_relative": true,
+      "box_offset_relative": true,
+      "box_refinement_porous": true
+    },
+    "boundary_condition": {
+      "ground": {
+        "ground_height_mode": "from_geometry",
+        "ground_height_absolute": 0.0,
+        "ground_mode": "rotating_belt_5",
+        "overset_wheels": true,
+        "ground_patch_active": true,
+        "bl_suction": {
+          "apply": true,
+          "no_slip_xmin_pos": null,
+          "no_slip_xmin_from_belt_xmin": true,
+          "bl_xmin_offset": 0.0
+        },
+        "belt5": {
+          "wheel_belt_location_auto": true,
+          "narrow_car_fallback": {
+            "enabled": false,
+            "min_belt_gap": 0.3
+          },
+          "center_belt_position": "at_wheelbase_center",
+          "center_belt_x_pos": null,
+          "belt_size_wheel": {
+            "x": 0.4,
+            "y": 0.3
+          },
+          "belt_size_center": {
+            "x": 0.4,
+            "y": 0.3
+          },
+          "include_wheel_belt_forces": true
+        },
+        "belt1": {
+          "belt_size": {
+            "x": 0.4,
+            "y": 1.2
+          }
+        },
+        "apply_static_ground_refinement": true
+      },
+      "turbulence_generator": {
+        "enable_ground_tg": true,
+        "enable_body_tg": true,
+        "ground_tg_num_eddies": 800,
+        "ground_tg_intensity": 0.05,
+        "body_tg_num_eddies": 800,
+        "body_tg_intensity": 0.01
+      }
+    },
+    "compute": {
+      "rotate_wheels": true,
+      "porous_media": true,
+      "turbulence_generator": true,
+      "moving_ground": true,
+      "adjust_ride_height": false
+    }
+  },
+  "simulation_parameter": {
+    "inflow_velocity": 38.88,
+    "density": 1.2041,
+    "dynamic_viscosity": 1.8194e-05,
+    "temperature": 20.0,
+    "specific_gas_constant": 287.05,
+    "mach_factor": 2.0,
+    "num_ramp_up_iter": 200,
+    "coarsest_voxel_size": 0.192,
+    "number_of_resolution": 7,
+    "simulation_time": 2.0,
+    "simulation_time_FP": 30.0,
+    "start_averaging_time": 1.5,
+    "avg_window_size": 0.3,
+    "yaw_angle": 0.0
+  },
+  "setup": {
+    "domain_bounding_box": [
+      -5.0,
+      15.0,
+      -12.0,
+      12.0,
+      0.0,
+      20.0
+    ],
+    "meshing": {
+      "box_refinement": {},
+      "part_box_refinement": {},
+      "offset_refinement": {},
+      "custom_refinement": {}
+    }
+  },
+  "output": {
+    "full_data": {
+      "output_start_time": null,
+      "output_interval": null,
+      "file_format_ensight": false,
+      "file_format_h3d": true,
+      "output_coarsening_active": false,
+      "coarsest_target_refinement_level": 3,
+      "coarsen_by_num_refinement_levels": 0,
+      "merge_output": true,
+      "delete_unmerged": true,
+      "output_variables_full": {
+        "pressure": false,
+        "surface_normal": false,
+        "pressure_std": false,
+        "pressure_var": false,
+        "time_avg_pressure": false,
+        "time_avg_velocity": false,
+        "time_avg_wall_shear_stress": false,
+        "mesh_data": false,
+        "velocity": false,
+        "velocity_magnitude": false,
+        "wall_shear_stress": false,
+        "window_avg_pressure": false,
+        "window_avg_velocity": false,
+        "window_avg_wall_shear_stress": false,
+        "mesh_displacement": false,
+        "vorticity": false,
+        "vorticity_magnitude": false,
+        "lambda_1": false,
+        "lambda_2": false,
+        "lambda_3": false,
+        "q_criterion": false,
+        "temperature": false,
+        "time_avg_temperature": false,
+        "window_avg_temperature": false
+      },
+      "output_variables_surface": {
+        "pressure": false,
+        "surface_normal": false,
+        "pressure_std": false,
+        "pressure_var": false,
+        "time_avg_pressure": false,
+        "time_avg_wall_shear_stress": false,
+        "velocity": false,
+        "velocity_magnitude": false,
+        "wall_shear_stress": false,
+        "window_avg_pressure": false,
+        "window_avg_wall_shear_stress": false,
+        "mesh_displacement": false,
+        "temperature": false,
+        "time_avg_temperature": false,
+        "window_avg_temperature": false
+      },
+      "bbox_mode": "from_meshing_box",
+      "bbox_source_box_name": null,
+      "bbox": null
+    },
+    "partial_surfaces": [],
+    "partial_volumes": [],
+    "aero_coefficients": {
+      "reference_area_auto": true,
+      "reference_area": null,
+      "reference_length_auto": true,
+      "reference_length": null,
+      "coefficients_along_axis_active": false,
+      "num_sections_x": 100,
+      "num_sections_y": 0,
+      "num_sections_z": 0,
+      "export_bounds_active": true,
+      "export_bounds_exclude_domain_parts": true
+    },
+    "section_cuts": [],
+    "probe_files": []
+  },
+  "target_names": {
+    "wheel": [],
+    "rim": [],
+    "porous": [],
+    "car_bounding_box": [],
+    "baffle": [],
+    "triangle_splitting": [],
+    "windtunnel": [],
+    "wheel_tire_fr_lh": "",
+    "wheel_tire_fr_rh": "",
+    "wheel_tire_rr_lh": "",
+    "wheel_tire_rr_rh": "",
+    "overset_fr_lh": "",
+    "overset_fr_rh": "",
+    "overset_rr_lh": "",
+    "overset_rr_rh": "",
+    "tire_roughness": 0.0
+  },
+  "porous_coefficients": []
+}
