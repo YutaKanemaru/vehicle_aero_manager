@@ -53,6 +53,22 @@ const isAero = (t: string) => t === "aero" || t === "fan_noise";
 const hasWheels = (t: string) => t === "aero";
 const hasTG = (t: string) => t === "aero";
 
+/**
+ * Wraps children in a disabled <fieldset> when `disabled` is true.
+ * Must be defined OUTSIDE TemplateSettingsForm to avoid being recreated on
+ * every render (which would cause inputs to unmount and lose focus).
+ */
+function PanelWrapper({ disabled, children }: { disabled?: boolean; children: ReactNode }) {
+  if (disabled) {
+    return (
+      <fieldset disabled style={{ border: "none", padding: 0, margin: 0 }}>
+        {children}
+      </fieldset>
+    );
+  }
+  return <>{children}</>;
+}
+
 // ---- Output Variables Grids --------------------------------------------------
 
 function OvRow({
@@ -394,13 +410,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
     form.setFieldValue(`probe_files.${idx}.output_variables.${varName}`, val);
   };
 
-  const PW = readOnly
-    ? ({ children }: { children: ReactNode }) => (
-        <fieldset disabled style={{ border: "none", padding: 0, margin: 0 }}>
-          {children}
-        </fieldset>
-      )
-    : ({ children }: { children: ReactNode }) => <>{children}</>;
+
 
   return (
     <Tabs defaultValue={generalContent ? "general" : "sim"}>
@@ -414,12 +424,12 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
       </Tabs.List>
       {generalContent && (
         <Tabs.Panel value="general" pt="md">
-          <PW>{generalContent}</PW>
+          <PanelWrapper disabled={readOnly}>{generalContent}</PanelWrapper>
         </Tabs.Panel>
       )}
       {/* ── Simulation Run Parameters ──────────────────────────────── */}
       <Tabs.Panel value="sim" pt="md">
-        <PW><Stack gap="xs">
+        <PanelWrapper disabled={readOnly}><Stack gap="xs">
             <SimpleGrid cols={2}>
               <NumberInput label="Run time (s)" {...form.getInputProps("simulation_time")} />
               <NumberInput label="Start averaging time (s)" {...form.getInputProps("start_averaging_time")} />
@@ -452,12 +462,12 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
             {form.values.simulation_time_with_FP && (
               <NumberInput label="Flow passages" {...form.getInputProps("simulation_time_FP")} />
             )}
-          </Stack></PW>
+          </Stack></PanelWrapper>
       </Tabs.Panel>
 
       {/* ── Meshing ──────────────────────────────────────────────────── */}
       <Tabs.Panel value="meshing" pt="md">
-        <PW><Stack gap="xs">
+        <PanelWrapper disabled={readOnly}><Stack gap="xs">
             <SimpleGrid cols={2}>
               <NumberInput
                 label="Coarsest voxel size (m)"
@@ -595,12 +605,12 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                 <TextInput label="Parts (comma-separated)" placeholder="Part_A, Part_B" {...form.getInputProps(`custom_refinements.${idx}.parts`)} />
               </Paper>
             ))}
-          </Stack></PW>
+          </Stack></PanelWrapper>
       </Tabs.Panel>
 
       {/* ── Boundary Conditions ───────────────────────────────────────── */}
       <Tabs.Panel value="bc" pt="md">
-        <PW><Stack gap="sm">
+        <PanelWrapper disabled={readOnly}><Stack gap="sm">
             {/* ── Flow Domain Configuration ── */}
             <Divider label="Flow Domain Configuration" labelPosition="center" />
             {/* Ground height */}
@@ -808,12 +818,12 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                 </SimpleGrid>
               </Paper>
             ))}
-          </Stack></PW>
+          </Stack></PanelWrapper>
       </Tabs.Panel>
 
       {/* ── Output ───────────────────────────────────────────────────── */}
       <Tabs.Panel value="output" pt="md">
-        <PW><Stack gap="sm">
+        <PanelWrapper disabled={readOnly}><Stack gap="sm">
             {/* Full data */}
             <Divider label="Full data output" labelPosition="center" />
             <SimpleGrid cols={2}>
@@ -1211,12 +1221,12 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                 </Stack>
               </Paper>
             ))}
-          </Stack></PW>
+          </Stack></PanelWrapper>
       </Tabs.Panel>
 
       {/* ── Target Part Names ─────────────────────────────────────────── */}
       <Tabs.Panel value="targets" pt="md">
-        <PW><Stack gap="xs">
+        <PanelWrapper disabled={readOnly}><Stack gap="xs">
             <Text size="xs" c="dimmed">
               Use comma-separated substrings/prefixes that match part names in the STL.
             </Text>
@@ -1249,7 +1259,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
             <TextInput label="Baffle parts" placeholder="_Baffle_" {...form.getInputProps("tn_baffle")} />
             <TextInput label="Car bounding box parts" placeholder="Body_" {...form.getInputProps("tn_car_bounding_box")} />
             <TextInput label="Wind tunnel parts (excluded from forces + offset refinement)" placeholder="WindTunnel_" {...form.getInputProps("tn_windtunnel")} />
-          </Stack></PW>
+          </Stack></PanelWrapper>
       </Tabs.Panel>
     </Tabs>
   );
