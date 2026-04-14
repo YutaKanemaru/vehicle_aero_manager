@@ -43,6 +43,7 @@ import type {
   OutputVarsPartialVolume,
   OutputVarsSectionCut,
 } from "../../hooks/useTemplateSettingsForm";
+import { FORM_DEFAULTS } from "../../hooks/useTemplateSettingsForm";
 
 interface Props {
   form: UseFormReturnType<FormValues>;
@@ -219,34 +220,8 @@ function OvSCGrid({
 
 // ---- Box refinement defaults (shared between aero & GHN) -------------------
 
-function getBoxRefinementDefaults(): BoxRefinementFormItem[] {
-  const extra = { box_type: "absolute" as const, parts: "", offset_xmin: 0.5, offset_xmax: 0.5, offset_ymin: 0.5, offset_ymax: 0.5, offset_zmin: 0.5, offset_zmax: 0.5 };
-  return [
-    { name: "Box_RL1", level: 1, box_xmin: -1,   box_xmax: 3,   box_ymin: -1,    box_ymax: 1,    box_zmin: -0.2, box_zmax: 1.5,  ...extra },
-    { name: "Box_RL2", level: 2, box_xmin: -0.5, box_xmax: 1.5, box_ymin: -0.75, box_ymax: 0.75, box_zmin: -0.2, box_zmax: 1,    ...extra },
-    { name: "Box_RL3", level: 3, box_xmin: -0.3, box_xmax: 1,   box_ymin: -0.5,  box_ymax: 0.5,  box_zmin: -0.2, box_zmax: 0.75, ...extra },
-    { name: "Box_RL4", level: 4, box_xmin: -0.2, box_xmax: 0.6, box_ymin: -0.3,  box_ymax: 0.3,  box_zmin: -0.2, box_zmax: 0.5,  ...extra },
-    { name: "Box_RL5", level: 5, box_xmin: -0.1, box_xmax: 0.3, box_ymin: -0.15, box_ymax: 0.15, box_zmin: -0.2, box_zmax: 0.25, ...extra },
-  ];
-}
-
-function getBodyOffsetDefaults(
-  coarsest: number,
-  simType: string
-): OffsetRefinementFormItem[] {
-  const rl6Dist = coarsest * Math.pow(0.5, 6) * 12;
-  const rl7Dist = coarsest * Math.pow(0.5, 7) * 8;
-  if (simType === "aero" || simType === "fan_noise") {
-    return [
-      { name: "Body_Offset_ALL_RL7", level: 7, normal_distance: rl7Dist, parts: "" },
-      { name: "Body_Offset_ALL_RL6", level: 6, normal_distance: rl6Dist, parts: "" },
-    ];
-  }
-  // GHN
-  return [
-    { name: "Body_Offset_ALL_RL6", level: 6, normal_distance: rl6Dist, parts: "" },
-  ];
-}
+// Box and offset defaults are sourced from FORM_DEFAULTS (generated from backend SIM_TYPE_PRESETS).
+// Do NOT add hardcoded numeric defaults here — update backend _aero_setup() instead.
 
 // ============================================================
 // Main form component
@@ -269,7 +244,17 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
     } as OffsetRefinementFormItem);
 
   const applyOffsetDefaults = () => {
-    const defaults = getBodyOffsetDefaults(form.values.coarsest_voxel_size, simType);
+    // Recalculate distances from the current voxel size; names/levels come from FORM_DEFAULTS.
+    // GHN has no RL7 — filter it out.
+    const defaults = FORM_DEFAULTS.offset_refinements
+      .filter((d) => simType !== "ghn" || d.level < 7)
+      .map((d) => {
+        const multiplier = d.level === 7 ? 8 : 12;
+        return {
+          ...d,
+          normal_distance: form.values.coarsest_voxel_size * Math.pow(0.5, d.level) * multiplier,
+        };
+      });
     // Remove existing defaults by name, then prepend
     const existing = form.values.offset_refinements.filter(
       (o) => !defaults.some((d) => d.name === o.name)
@@ -547,7 +532,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
               <Text size="sm" fw={500}>Box refinement zones ({form.values.box_refinements.length})</Text>
               <Group gap="xs">
                 <Button size="xs" variant="light" onClick={() => {
-                  const defaults = getBoxRefinementDefaults();
+                  const defaults = FORM_DEFAULTS.box_refinements;
                   const existing = form.values.box_refinements.filter(
                     (b) => !defaults.some((d) => d.name === b.name)
                   );

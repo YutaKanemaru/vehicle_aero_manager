@@ -350,10 +350,30 @@ export const FORM_DEFAULTS = {
   bbox_ymax: D.setup.domain_bounding_box[3] as number,
   bbox_zmin: D.setup.domain_bounding_box[4] as number,
   bbox_zmax: D.setup.domain_bounding_box[5] as number,
-  // Box refinement dynamic list — relative factors like domain_bounding_box
-  box_refinements: [] as BoxRefinementFormItem[],
-  // Offset refinement dynamic list
-  offset_refinements: [] as OffsetRefinementFormItem[],
+  // Box refinement dynamic list — sourced from D.setup.meshing.box_refinement
+  box_refinements: Object.entries(D.setup.meshing.box_refinement as Record<string, { level: number; box: number[] }>).map(
+    ([name, v]) => ({
+      name,
+      level: v.level,
+      box_type: "absolute" as const,
+      box_xmin: v.box[0], box_xmax: v.box[1],
+      box_ymin: v.box[2], box_ymax: v.box[3],
+      box_zmin: v.box[4], box_zmax: v.box[5],
+      parts: "",
+      offset_xmin: 0.5, offset_xmax: 0.5,
+      offset_ymin: 0.5, offset_ymax: 0.5,
+      offset_zmin: 0.5, offset_zmax: 0.5,
+    })
+  ) as BoxRefinementFormItem[],
+  // Offset refinement dynamic list — sourced from D.setup.meshing.offset_refinement
+  offset_refinements: Object.entries(D.setup.meshing.offset_refinement as Record<string, { level: number; normal_distance: number; parts: string[] }>).map(
+    ([name, v]) => ({
+      name,
+      level: v.level,
+      normal_distance: v.normal_distance,
+      parts: Array.isArray(v.parts) ? v.parts.join(", ") : "",
+    })
+  ) as OffsetRefinementFormItem[],
   // Custom refinement dynamic list
   custom_refinements: [] as CustomRefinementFormItem[],
 

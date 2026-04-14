@@ -468,10 +468,32 @@ class TargetNames(BaseModel):
 # Root settings schema
 # ---------------------------------------------------------------------------
 
+def _aero_setup() -> Setup:
+    """Default meshing setup for aero/fan_noise: 5 box zones + 2 offset layers."""
+    _coarse = 0.192  # default coarsest_voxel_size
+    _rl6_dist = _coarse * (0.5 ** 6) * 12   # = 0.036 m
+    _rl7_dist = _coarse * (0.5 ** 7) * 8    # = 0.012 m
+    return Setup(
+        meshing=MeshingSetup(
+            box_refinement={
+                "Box_RL1": BoxRefinement(level=1, box=[-1.0,  3.0,   -1.0,   1.0,   -0.2, 1.5 ]),
+                "Box_RL2": BoxRefinement(level=2, box=[-0.5,  1.5,   -0.75,  0.75,  -0.2, 1.0 ]),
+                "Box_RL3": BoxRefinement(level=3, box=[-0.3,  1.0,   -0.5,   0.5,   -0.2, 0.75]),
+                "Box_RL4": BoxRefinement(level=4, box=[-0.2,  0.6,   -0.3,   0.3,   -0.2, 0.5 ]),
+                "Box_RL5": BoxRefinement(level=5, box=[-0.1,  0.3,   -0.15,  0.15,  -0.2, 0.25]),
+            },
+            offset_refinement={
+                "Body_Offset_ALL_RL7": OffsetRefinement(level=7, normal_distance=_rl7_dist, parts=[]),
+                "Body_Offset_ALL_RL6": OffsetRefinement(level=6, normal_distance=_rl6_dist, parts=[]),
+            },
+        )
+    )
+
+
 class TemplateSettings(BaseModel):
     setup_option: SetupOption = Field(default_factory=SetupOption)
     simulation_parameter: SimulationParameter = Field(default_factory=SimulationParameter)
-    setup: Setup = Field(default_factory=Setup)
+    setup: Setup = Field(default_factory=_aero_setup)
     output: OutputSettings = Field(default_factory=OutputSettings)
     target_names: TargetNames = Field(default_factory=TargetNames)
     porous_coefficients: list[PorousMedia] = Field(default_factory=list)

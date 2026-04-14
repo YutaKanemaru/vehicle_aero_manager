@@ -97,10 +97,77 @@ export const templateDefaults = {
       20,
     ],
     meshing: {
-      box_refinement: {},
+      box_refinement: {
+        Box_RL1: {
+          level: 1,
+          box: [
+            -1,
+            3,
+            -1,
+            1,
+            -0.2,
+            1.5,
+          ],
+        },
+        Box_RL2: {
+          level: 2,
+          box: [
+            -0.5,
+            1.5,
+            -0.75,
+            0.75,
+            -0.2,
+            1,
+          ],
+        },
+        Box_RL3: {
+          level: 3,
+          box: [
+            -0.3,
+            1,
+            -0.5,
+            0.5,
+            -0.2,
+            0.75,
+          ],
+        },
+        Box_RL4: {
+          level: 4,
+          box: [
+            -0.2,
+            0.6,
+            -0.3,
+            0.3,
+            -0.2,
+            0.5,
+          ],
+        },
+        Box_RL5: {
+          level: 5,
+          box: [
+            -0.1,
+            0.3,
+            -0.15,
+            0.15,
+            -0.2,
+            0.25,
+          ],
+        },
+      },
       part_box_refinement: {},
       part_based_box_refinement: {},
-      offset_refinement: {},
+      offset_refinement: {
+        Body_Offset_ALL_RL7: {
+          level: 7,
+          normal_distance: 0.012,
+          parts: [],
+        },
+        Body_Offset_ALL_RL6: {
+          level: 6,
+          normal_distance: 0.036000000000000004,
+          parts: [],
+        },
+      },
       custom_refinement: {},
     },
   },

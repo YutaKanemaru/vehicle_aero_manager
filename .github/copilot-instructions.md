@@ -310,6 +310,14 @@ Rules:
 export const templateDefaults = {
   simulation_parameter: { inflow_velocity: 38.88, density: 1.2041, ... },
   setup_option: { meshing: { coarsest_voxel_size: 0.192, ... }, ... },
+  setup: {
+    domain_bounding_box: [-5, 10, -12, 12, 0, 20],
+    meshing: {
+      box_refinement: { Box_RL1: { level: 1, box: [-1, 3, -1, 1, -0.2, 1.5] }, ... },
+      offset_refinement: { Body_Offset_ALL_RL7: { level: 7, normal_distance: 0.012, parts: [] }, ... },
+      ...
+    },
+  },
   ...
 } as const;
 ```
@@ -321,6 +329,11 @@ export const templateDefaults = {
 This means there is now a **single source of truth** for all default values: the Pydantic schema. No manual synchronization required.
 
 **When a Pydantic default changes:** run `npm run generate-api` → `templateDefaults.ts` regenerates → `FORM_DEFAULTS` and `valuesFromSettings()` both update automatically.
+
+**`FORM_DEFAULTS` meshing list fields** (built at import time from `D.setup.meshing.*`):
+- `box_refinements` — built via `Object.entries(D.setup.meshing.box_refinement)` → populated from `_aero_setup()` in `template_settings.py`
+- `offset_refinements` — built via `Object.entries(D.setup.meshing.offset_refinement)` → populated from `_aero_setup()`
+- These are no longer hardcoded in `TemplateSettingsForm.tsx` — to change defaults, update `_aero_setup()` and re-run `npm run generate-api`
 
 **Fields that remain hardcoded in `FORM_DEFAULTS`** (no Pydantic equivalent):
 - `fd_bbox_xmin/xmax/ymin/ymax/zmin/zmax` — form-specific UI bbox when `full_data.bbox` is null
@@ -666,12 +679,23 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
     "yaw_angle": 0.0
   },
   "setup": {
-    "domain_bounding_box": [-5, 15, -12, 12, 0, 20],
+    "domain_bounding_box": [-5, 10, -12, 12, 0, 20],  // vehicle-relative multipliers
     "meshing": {
-      "box_refinement": { "Box_RL1": {"level": 1, "box": [...]}, ... },
-      "part_box_refinement": {},
-      "offset_refinement": { "Body_RL7": {"level": 7, "normal_distance": 0.192, "parts": []}, ... },
-      "custom_refinement": {}
+      // Keyed dicts — name is the key, value holds level + geometry
+      "box_refinement": {
+        "Box_RL1": {"level": 1, "box": [-1, 3, -1, 1, -0.2, 1.5]},
+        "Box_RL2": {"level": 2, "box": [-0.5, 1.5, -0.75, 0.75, -0.2, 1.0]},
+        // ... Box_RL3 / RL4 / RL5 (defaults defined in _aero_setup())
+      },
+      "part_box_refinement": {},     // legacy (unused in current presets)
+      "part_based_box_refinement": { // box defined by parts + per-axis offset factors
+        "Box_Porous_RL6": {"level": 6, "parts": ["Porous_"], "offset_xmin": 0.5, "offset_xmax": 0.5, ...}
+      },
+      "offset_refinement": {
+        "Body_Offset_ALL_RL7": {"level": 7, "normal_distance": 0.012, "parts": []},
+        "Body_Offset_ALL_RL6": {"level": 6, "normal_distance": 0.036, "parts": []}
+      },
+      "custom_refinement": {}        // GHN only
     }
   },
   "output": {
@@ -1043,11 +1067,57 @@ class ConfigurationSettings(BaseModel):
 class TemplateSettings(BaseModel):
     setup_option:          SetupOption
     simulation_parameter:  SimulationParameter
-    setup:                 Setup
+    setup:                 Setup = Field(default_factory=_aero_setup)  # NOT Setup()
     output:                OutputSettings
     target_names:          TargetNames
     porous_coefficients:   list[PorousMedia] = []
 ```
+
+**`_aero_setup()` — aero default meshing setup** (defined before `TemplateSettings`):
+```python
+def _aero_setup() -> Setup:
+    """Default meshing setup for aero/fan_noise: 5 box zones + 2 offset layers.
+    Used as default_factory for TemplateSettings.setup.
+    To change defaults: update this function and run npm run generate-api."""
+    _coarse = 0.192  # default coarsest_voxel_size
+    return Setup(meshing=MeshingSetup(
+        box_refinement={
+            "Box_RL1": BoxRefinement(level=1, box=[-1.0, 3.0, -1.0, 1.0, -0.2, 1.5]),
+            "Box_RL2": BoxRefinement(level=2, box=[-0.5, 1.5, -0.75, 0.75, -0.2, 1.0]),
+            "Box_RL3": BoxRefinement(level=3, box=[-0.3, 1.0, -0.5, 0.5, -0.2, 0.75]),
+            "Box_RL4": BoxRefinement(level=4, box=[-0.2, 0.6, -0.3, 0.3, -0.2, 0.5]),
+            "Box_RL5": BoxRefinement(level=5, box=[-0.1, 0.3, -0.15, 0.15, -0.2, 0.25]),
+        },
+        offset_refinement={
+            "Body_Offset_ALL_RL7": OffsetRefinement(level=7, normal_distance=0.012, parts=[]),
+            "Body_Offset_ALL_RL6": OffsetRefinement(level=6, normal_distance=0.036, parts=[]),
+        },
+    ))
+```
+
+**`MeshingSetup`** key fields:
+```python
+class MeshingSetup(BaseModel):
+    box_refinement: dict[str, BoxRefinement]                   # absolute bbox, relative to vehicle
+    part_box_refinement: dict[str, BoxRefinement]              # legacy (unused in current presets)
+    part_based_box_refinement: dict[str, BoxRefinementAroundParts]  # bbox derived from part extents
+    offset_refinement: dict[str, OffsetRefinement]
+    custom_refinement: dict[str, CustomRefinement]             # GHN only
+```
+
+**`BoxRefinementAroundParts`** — box defined by part extents + per-axis offsets:
+```python
+class BoxRefinementAroundParts(BaseModel):
+    level: int
+    parts: list[str]
+    offset_xmin: float = 0.5   # multiplier × vehicle_length
+    offset_xmax: float = 0.5
+    offset_ymin: float = 0.5   # multiplier × vehicle_width
+    offset_ymax: float = 0.5
+    offset_zmin: float = 0.5   # multiplier × vehicle_height
+    offset_zmax: float = 0.5
+```
+
 
 **`SetupOption.compute`** (ComputeOption):
 ```python
@@ -1252,7 +1322,7 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 |---|---|
 | General *(conditional)* | Rendered from `generalContent` prop — Name, Description, Application, Version comment |
 | Simulation Run Parameters | velocity, run time, averaging, mach factor, wall model, material |
-| Meshing | coarsest voxel, refinement levels, triangle splitting Switch (global ON/OFF) → when ON: max relative/absolute edge length inputs + per-part `triangle_splitting_instances` dynamic list (name/active/max_abs/max_rel/parts per row), box refinement porous Switch, box refinement dynamic list, offset refinement dynamic list, custom refinement dynamic list |
+| Meshing | coarsest voxel, refinement levels, triangle splitting Switch (global ON/OFF) → when ON: max relative/absolute edge length inputs + per-part `triangle_splitting_instances` dynamic list (name/active/max_abs/max_rel/parts per row), **Add porous box refinement** Switch (adds a Box_RL6 around porous parts), box refinement dynamic list (each row: name/level + `SegmentedControl` for `box_type`: **absolute** [xmin/xmax/.../zmax coords] or **around_parts** [parts + per-axis offset factors]; "Restore defaults" sets list to `FORM_DEFAULTS.box_refinements`), offset refinement dynamic list ("Apply body defaults" recalculates RL7/RL6 distances from current voxel size using `FORM_DEFAULTS.offset_refinements`; GHN filters out RL7), custom refinement dynamic list |
 | Boundary Conditions | **Flow Domain Configuration** section (ground height definition + domain bounding box factors / multipliers relative to vehicle size), then ground mode, belt config, BL suction, turbulence generator, porous coefficients (template defaults) dynamic list |
 | Output | full data format/coarsening, output variables checkboxes (full: 24 vars, surface: 15 vars), partial surface dynamic list (include/exclude/baffle/per-instance output vars), partial volume dynamic list (3 bbox_mode variants), section cuts dynamic list, **probe files dynamic list** (probe points, CSV import/export) |
 | Target Part Names | all `target_names` fields |
@@ -1295,6 +1365,7 @@ uv add <package-name>
 7. **Do not skip ahead to future steps** — implement features in the order defined in the Implementation Phases.
 8. **Do not use `class Config` in Pydantic models** — use `model_config = ConfigDict(...)`.
 9. **Do not use Japanese (or any non-English language) in user-facing UI text** — all labels, buttons, messages, and tooltips must be in English.
+10. **Do not hardcode numeric defaults in `TemplateSettingsForm.tsx` or other UI components** — all form defaults must originate from `SIM_TYPE_PRESETS` / `_aero_setup()` in `backend/app/schemas/template_settings.py`, propagate through `npm run generate-api` → `templateDefaults.ts`, and be consumed via `FORM_DEFAULTS` in `useTemplateSettingsForm.ts`. To change a default: update the Pydantic model/preset, run `npm run generate-api`.
 
 ---
 
