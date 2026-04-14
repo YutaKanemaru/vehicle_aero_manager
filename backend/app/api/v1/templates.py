@@ -11,6 +11,8 @@ from app.schemas.template import (
     TemplateVersionCreate,
     TemplateVersionResponse,
     TemplateForkRequest,
+    SettingsValidateRequest,
+    SettingsValidateResponse,
 )
 from app.schemas.template_settings import TemplateSettings, SIM_TYPE_PRESETS
 from app.services import template_service
@@ -56,6 +58,19 @@ def create_template(
 ):
     template = template_service.create_template(db, data, current_user)
     return _build_response(template)
+
+
+# ---------------------------------------------------------------------------
+# Validate settings — must be declared BEFORE /{template_id}
+# ---------------------------------------------------------------------------
+
+@router.post("/validate-settings", response_model=SettingsValidateResponse)
+def validate_settings(
+    body: SettingsValidateRequest,
+    _: User = Depends(get_current_user),
+):
+    """Validate a raw settings dict against the TemplateSettings Pydantic schema."""
+    return template_service.validate_settings(body.settings)
 
 
 # ---------------------------------------------------------------------------

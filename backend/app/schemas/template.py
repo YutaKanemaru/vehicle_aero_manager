@@ -36,6 +36,25 @@ class TemplateForkRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Settings validation
+# ---------------------------------------------------------------------------
+
+class SettingsValidationError(BaseModel):
+    field: str
+    message: str
+
+
+class SettingsValidateRequest(BaseModel):
+    settings: dict
+
+
+class SettingsValidateResponse(BaseModel):
+    valid: bool
+    errors: list[SettingsValidationError] = []
+    normalized: dict | None = None  # Pydantic-normalized settings (valid=True only)
+
+
+# ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------
 

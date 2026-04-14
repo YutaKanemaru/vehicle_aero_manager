@@ -26,6 +26,12 @@ type TemplateForkRequest =
 type TemplateSettingsPreset =
   paths["/api/v1/templates/presets/{sim_type}"]["get"]["responses"]["200"]["content"]["application/json"];
 
+type SettingsValidateRequest =
+  paths["/api/v1/templates/validate-settings"]["post"]["requestBody"]["content"]["application/json"];
+
+type SettingsValidateResponse =
+  paths["/api/v1/templates/validate-settings"]["post"]["responses"]["200"]["content"]["application/json"];
+
 // Re-export for consumers
 export type {
   TemplateResponse,
@@ -35,6 +41,7 @@ export type {
   TemplateVersionCreate,
   TemplateForkRequest,
   TemplateSettingsPreset,
+  SettingsValidateResponse,
 };
 
 // ---------------------------------------------------------------------------
@@ -86,4 +93,7 @@ export const templatesApi = {
 
   getPreset: (simType: string): Promise<TemplateSettingsPreset> =>
     client.get(`/templates/presets/${simType}`),
+
+  validateSettings: (settings: Record<string, unknown>): Promise<SettingsValidateResponse> =>
+    client.post("/templates/validate-settings", { settings }),
 };

@@ -137,6 +137,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/templates/validate-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate Settings
+         * @description Validate a raw settings dict against the TemplateSettings Pydantic schema.
+         */
+        post: operations["validate_settings_api_v1_templates_validate_settings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/templates/presets/{sim_type}": {
         parameters: {
             query?: never;
@@ -2283,6 +2303,34 @@ export interface components {
              */
             window_avg_temperature: boolean;
         };
+        /** SettingsValidateRequest */
+        SettingsValidateRequest: {
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            };
+        };
+        /** SettingsValidateResponse */
+        SettingsValidateResponse: {
+            /** Valid */
+            valid: boolean;
+            /**
+             * Errors
+             * @default []
+             */
+            errors: components["schemas"]["SettingsValidationError"][];
+            /** Normalized */
+            normalized?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** SettingsValidationError */
+        SettingsValidationError: {
+            /** Field */
+            field: string;
+            /** Message */
+            message: string;
+        };
         /** Setup */
         "Setup-Input": {
             /**
@@ -2941,6 +2989,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_settings_api_v1_templates_validate_settings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsValidateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsValidateResponse"];
                 };
             };
             /** @description Validation Error */

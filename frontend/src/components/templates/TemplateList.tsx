@@ -10,19 +10,34 @@ import {
   Stack,
   Title,
 } from "@mantine/core";
-import { IconPlus, IconTrash, IconVersions, IconGitFork, IconEye, IconEyeOff } from "@tabler/icons-react";
+import { IconPlus, IconTrash, IconVersions, IconGitFork, IconEye, IconEyeOff, IconDownload, IconUpload } from "@tabler/icons-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { templatesApi, type TemplateResponse } from "../../api/templates";
 import { TemplateCreateModal } from "./TemplateCreateModal";
 import { TemplateVersionsDrawer } from "./TemplateVersionsDrawer";
 import { TemplateForkModal } from "./TemplateForkModal";
+import { TemplateImportModal } from "./TemplateImportModal";
 import { useAuthStore } from "../../stores/auth";
+
+function downloadSettingsJson(template: TemplateResponse) {
+  const settings = template.active_version?.settings;
+  if (!settings) return;
+  const json = JSON.stringify(settings, null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${template.name.replace(/\s+/g, "_")}_v${template.active_version?.version_number}_settings.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export function TemplateList() {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateResponse | null>(null);
   const [forkTarget, setForkTarget] = useState<TemplateResponse | null>(null);
 
@@ -99,6 +114,17 @@ export function TemplateList() {
                 <IconGitFork size={16} />
               </ActionIcon>
             </Tooltip>
+            {t.active_version && (
+              <Tooltip label="Export active version as JSON">
+                <ActionIcon
+                  variant="subtle"
+                  color="blue"
+                  onClick={() => downloadSettingsJson(t)}
+                >
+                  <IconDownload size={16} />
+                </ActionIcon>
+              </Tooltip>
+            )}
           {user?.is_admin && (
             <Tooltip label={t.is_hidden ? "Show template" : "Hide template"}>
               <ActionIcon
@@ -134,9 +160,18 @@ export function TemplateList() {
     <Stack>
       <Group justify="space-between">
         <Title order={3}>Templates</Title>
-        <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateOpen(true)}>
-          New Template
-        </Button>
+        <Group gap="xs">
+          <Button
+            variant="outline"
+            leftSection={<IconUpload size={16} />}
+            onClick={() => setImportOpen(true)}
+          >
+            Import from JSON
+          </Button>
+          <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateOpen(true)}>
+            New Template
+          </Button>
+        </Group>
       </Group>
 
       {isLoading ? (
@@ -162,6 +197,11 @@ export function TemplateList() {
       <TemplateCreateModal
         opened={createOpen}
         onClose={() => setCreateOpen(false)}
+      />
+
+      <TemplateImportModal
+        opened={importOpen}
+        onClose={() => setImportOpen(false)}
       />
 
       {selectedTemplate && (

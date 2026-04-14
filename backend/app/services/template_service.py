@@ -1,15 +1,43 @@
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import select, update, func
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.template import Template, TemplateVersion
 from app.models.user import User
-from app.schemas.template import TemplateCreate, TemplateUpdate, TemplateVersionCreate, TemplateForkRequest
+from app.schemas.template import (
+    TemplateCreate, TemplateUpdate, TemplateVersionCreate, TemplateForkRequest,
+    SettingsValidateResponse, SettingsValidationError,
+)
+from app.schemas.template_settings import TemplateSettings
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Settings validation
+# ---------------------------------------------------------------------------
+
+def validate_settings(data: dict) -> SettingsValidateResponse:
+    """Validate raw dict against TemplateSettings schema using Pydantic."""
+    try:
+        normalized = TemplateSettings.model_validate(data)
+        return SettingsValidateResponse(
+            valid=True,
+            normalized=normalized.model_dump(mode="json"),
+        )
+    except ValidationError as e:
+        errors = [
+            SettingsValidationError(
+                field=".".join(str(loc) for loc in err["loc"]),
+                message=err["msg"],
+            )
+            for err in e.errors()
+        ]
+        return SettingsValidateResponse(valid=False, errors=errors)
+
 
 def _check_owner_or_admin(template: Template, current_user: User) -> None:
     if template.created_by != current_user.id and not current_user.is_admin:
