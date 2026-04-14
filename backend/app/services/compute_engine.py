@@ -172,13 +172,19 @@ def compute_moment_reference_origin(wheel_kinematics_map: dict) -> dict:
 # Compute domain bbox
 # ---------------------------------------------------------------------------
 
-def compute_domain_bbox(vehicle_bbox: dict, multipliers: list[float]) -> dict:
+def compute_domain_bbox(
+    vehicle_bbox: dict,
+    multipliers: list[float],
+    ground_z: float | None = None,
+) -> dict:
     """
     車両 bbox に 6 つの相対倍率を掛けて絶対的な計算領域 bbox を返す。
 
     multipliers: [x_min_mult, x_max_mult, y_min_mult, y_max_mult, z_min_mult, z_max_mult]
-    車両 COG を基準に X/Y 方向へ展開、Z は vehicle z_min 基準。
+    車両 COG を基準に X/Y 方向へ展開。
+    Z は ground_z を基準に展開。ground_z が None の場合は vehicle_bbox["z_min"] を使用。
     """
+    gz = ground_z if ground_z is not None else vehicle_bbox["z_min"]
     cx = (vehicle_bbox["x_min"] + vehicle_bbox["x_max"]) / 2
     cy = (vehicle_bbox["y_min"] + vehicle_bbox["y_max"]) / 2
     length = vehicle_bbox["x_max"] - vehicle_bbox["x_min"]
@@ -192,8 +198,8 @@ def compute_domain_bbox(vehicle_bbox: dict, multipliers: list[float]) -> dict:
         "x_max": cx + x_max_m * length,
         "y_min": cy + y_min_m * width,
         "y_max": cy + y_max_m * width,
-        "z_min": vehicle_bbox["z_min"] + z_min_m * height,
-        "z_max": vehicle_bbox["z_min"] + z_max_m * height,
+        "z_min": gz + z_min_m * height,
+        "z_max": gz + z_max_m * height,
     }
 
 
@@ -570,19 +576,21 @@ def _build_tg_instances(
     TurbulenceInstance: type,
     TurbulencePoint: type,
     TurbulenceBoundingBox: type,
+    ground_height: float | None = None,
 ) -> tuple[list, list]:
     """
     Turbulence generator インスタンスと、body TG 用 box refinement を生成する。
 
     sim_type == "aero" のときのみ有効。
     setup_script_ext_aero_2026_v1.99.py のロジックに従う。
+    ground_height: 解決済み ground 高度 (m)。None の場合は vbbox["z_min"] を使用。
 
     Returns: (tg_instances, extra_box_instances)
     """
     if sim_type != "aero":
         return [], []
 
-    ground_height = vbbox["z_min"]
+    ground_height = ground_height if ground_height is not None else vbbox["z_min"]
     car_length_x = vbbox["x_max"] - vbbox["x_min"]
     car_length_y = vbbox["y_max"] - vbbox["y_min"]
     car_length_z = vbbox["z_max"] - vbbox["z_min"]
@@ -705,18 +713,20 @@ def assemble_ufx_solver_deck(
     # parameter_preset: fan_noise のときのみ "fan_noise"、それ以外 "default"
     parameter_preset = "fan_noise" if sim_type == "fan_noise" else "default"
 
-    # ── Domain bounding box ───────────────────────────────────────────────
-    if vbbox:
-        abs_bbox = compute_domain_bbox(vbbox, setup.domain_bounding_box)
-    else:
-        abs_bbox = {"x_min": -10.0, "x_max": 30.0, "y_min": -15.0, "y_max": 15.0, "z_min": 0.0, "z_max": 8.0}
-    domain_bb = BoundingBox(**abs_bbox)
-
-    # Ground height: absolute value or from geometry z_min
+    # ── Ground height — domain bbox の Z アンカーとして先に解決 ───────────
+    # absolute: ユーザー指定の絶対 z 値
+    # from_geometry: STL の z_min + オフセット (デフォルト 0.0)
     if gc.ground_height_mode == "absolute":
         ground_height = gc.ground_height_absolute
     else:
-        ground_height = vbbox.get("z_min", 0.0)
+        ground_height = vbbox.get("z_min", 0.0) + gc.ground_height_offset_from_geom_zMin
+
+    # ── Domain bounding box ───────────────────────────────────────────────
+    if vbbox:
+        abs_bbox = compute_domain_bbox(vbbox, setup.domain_bounding_box, ground_z=ground_height)
+    else:
+        abs_bbox = {"x_min": -10.0, "x_max": 30.0, "y_min": -15.0, "y_max": 15.0, "z_min": 0.0, "z_max": 8.0}
+    domain_bb = BoundingBox(**abs_bbox)
 
     # ── Yaw 방향 ──────────────────────────────────────────────────────────
     yaw_rad = math.radians(yaw_angle)
@@ -792,6 +802,7 @@ def assemble_ufx_solver_deck(
             no_slip_xmin, floor_dims,
             BoundingBox, BoxInstance,
             TurbulenceInstance, TurbulencePoint, TurbulenceBoundingBox,
+            ground_height=ground_height,
         )
 
     # ── Wall BCs ──────────────────────────────────────────────────────────

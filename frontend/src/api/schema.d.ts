@@ -1236,6 +1236,11 @@ export interface components {
              */
             ground_height_absolute: number;
             /**
+             * Ground Height Offset From Geom Zmin
+             * @default 0
+             */
+            ground_height_offset_from_geom_zMin: number;
+            /**
              * Ground Mode
              * @default rotating_belt_5
              * @enum {string}
@@ -1283,6 +1288,11 @@ export interface components {
              * @default 0
              */
             ground_height_absolute: number;
+            /**
+             * Ground Height Offset From Geom Zmin
+             * @default 0
+             */
+            ground_height_offset_from_geom_zMin: number;
             /**
              * Ground Mode
              * @default rotating_belt_5

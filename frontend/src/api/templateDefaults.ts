@@ -21,6 +21,7 @@ export const templateDefaults = {
       ground: {
         ground_height_mode: "from_geometry",
         ground_height_absolute: 0,
+        ground_height_offset_from_geom_zMin: 0,
         ground_mode: "rotating_belt_5",
         overset_wheels: true,
         ground_patch_active: true,

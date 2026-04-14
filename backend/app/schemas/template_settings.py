@@ -115,6 +115,8 @@ class GroundConfig(BaseModel):
     # Ground height definition
     ground_height_mode: Literal["from_geometry", "absolute"] = "from_geometry"
     ground_height_absolute: float = 0.0  # m — used when ground_height_mode == "absolute"
+    # from_geometry 時に STL z_min に加算するオフセット (m)。例: +0.01 の場合 ground_height = z_min + 0.01
+    ground_height_offset_from_geom_zMin: float = 0.0
 
     # aero: one of 4 exclusive modes
     ground_mode: Literal[

@@ -330,6 +330,7 @@ export const FORM_DEFAULTS = {
   // ── Boundary conditions — ground ──────────────────────────────────────
   ground_height_mode: D.setup_option.boundary_condition.ground.ground_height_mode as "from_geometry" | "absolute",
   ground_height_absolute: D.setup_option.boundary_condition.ground.ground_height_absolute,
+  ground_height_offset_from_geom_zMin: D.setup_option.boundary_condition.ground.ground_height_offset_from_geom_zMin,
   ground_patch_active: D.setup_option.boundary_condition.ground.ground_patch_active,
   ground_mode: D.setup_option.boundary_condition.ground.ground_mode as
     | "static" | "rotating_belt_1" | "rotating_belt_5" | "full_moving",
@@ -662,6 +663,7 @@ export function valuesFromSettings(settings: any): FormValues {
 
     ground_height_mode: gc.ground_height_mode ?? FORM_DEFAULTS.ground_height_mode,
     ground_height_absolute: gc.ground_height_absolute ?? FORM_DEFAULTS.ground_height_absolute,
+    ground_height_offset_from_geom_zMin: gc.ground_height_offset_from_geom_zMin ?? FORM_DEFAULTS.ground_height_offset_from_geom_zMin,
     ground_patch_active: gc.ground_patch_active ?? FORM_DEFAULTS.ground_patch_active,
     ground_mode: gc.ground_mode ?? FORM_DEFAULTS.ground_mode,
     overset_wheels: gc.overset_wheels ?? FORM_DEFAULTS.overset_wheels,
@@ -874,6 +876,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
         ground: {
           ground_height_mode: values.ground_height_mode,
           ground_height_absolute: values.ground_height_absolute,
+          ground_height_offset_from_geom_zMin: values.ground_height_offset_from_geom_zMin,
           ground_mode: values.ground_mode,
           overset_wheels: values.overset_wheels,
           ground_patch_active: values.ground_patch_active,

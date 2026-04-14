@@ -547,6 +547,15 @@ export function TemplateSettingsForm({ form, simType }: Props) {
             {form.values.ground_height_mode === "absolute" && (
               <NumberInput label="Ground height, absolute z (m)" step={0.01} {...form.getInputProps("ground_height_absolute")} />
             )}
+            {form.values.ground_height_mode === "from_geometry" && (
+              <NumberInput
+                label="Ground height offset from geometry z_min (m)"
+                description="ground_height = STL z_min + offset  (e.g. 0.01 for 10 mm above z_min)"
+                step={0.001}
+                decimalScale={4}
+                {...form.getInputProps("ground_height_offset_from_geom_zMin")}
+              />
+            )}
 
             <Switch label="Ground patch active" {...form.getInputProps("ground_patch_active", { type: "checkbox" })} />
 
