@@ -925,6 +925,50 @@ export interface components {
             /** Box */
             box: number[];
         };
+        /**
+         * BoxRefinementAroundParts
+         * @description Box refinement defined relative to matched parts' bounding box.
+         *     Compute Engine resolves this to absolute coordinates at XML generation time.
+         */
+        BoxRefinementAroundParts: {
+            /**
+             * Level
+             * @default 1
+             */
+            level: number;
+            /** Parts */
+            parts: string[];
+            /**
+             * Offset Xmin
+             * @default 0.5
+             */
+            offset_xmin: number;
+            /**
+             * Offset Xmax
+             * @default 0.5
+             */
+            offset_xmax: number;
+            /**
+             * Offset Ymin
+             * @default 0.5
+             */
+            offset_ymin: number;
+            /**
+             * Offset Ymax
+             * @default 0.5
+             */
+            offset_ymax: number;
+            /**
+             * Offset Zmin
+             * @default 0.5
+             */
+            offset_zmin: number;
+            /**
+             * Offset Zmax
+             * @default 0.5
+             */
+            offset_zmax: number;
+        };
         /** CaseCreate */
         CaseCreate: {
             /** Name */
@@ -1425,6 +1469,10 @@ export interface components {
             /** Part Box Refinement */
             part_box_refinement?: {
                 [key: string]: components["schemas"]["BoxRefinement"];
+            };
+            /** Part Based Box Refinement */
+            part_based_box_refinement?: {
+                [key: string]: components["schemas"]["BoxRefinementAroundParts"];
             };
             /** Offset Refinement */
             offset_refinement?: {

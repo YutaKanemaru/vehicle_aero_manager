@@ -13,6 +13,7 @@ import {
   Group,
   NumberInput,
   Paper,
+  SegmentedControl,
   Select,
   SimpleGrid,
   Stack,
@@ -219,12 +220,13 @@ function OvSCGrid({
 // ---- Box refinement defaults (shared between aero & GHN) -------------------
 
 function getBoxRefinementDefaults(): BoxRefinementFormItem[] {
+  const extra = { box_type: "absolute" as const, parts: "", offset_xmin: 0.5, offset_xmax: 0.5, offset_ymin: 0.5, offset_ymax: 0.5, offset_zmin: 0.5, offset_zmax: 0.5 };
   return [
-    { name: "Box_RL1", level: 1, box_xmin: -1, box_xmax: 3, box_ymin: -1, box_ymax: 1, box_zmin: -0.2, box_zmax: 1.5 },
-    { name: "Box_RL2", level: 2, box_xmin: -0.5, box_xmax: 1.5, box_ymin: -0.75, box_ymax: 0.75, box_zmin: -0.2, box_zmax: 1 },
-    { name: "Box_RL3", level: 3, box_xmin: -0.3, box_xmax: 1, box_ymin: -0.5, box_ymax: 0.5, box_zmin: -0.2, box_zmax: 0.75 },
-    { name: "Box_RL4", level: 4, box_xmin: -0.2, box_xmax: 0.6, box_ymin: -0.3, box_ymax: 0.3, box_zmin: -0.2, box_zmax: 0.5 },
-    { name: "Box_RL5", level: 5, box_xmin: -0.1, box_xmax: 0.3, box_ymin: -0.15, box_ymax: 0.15, box_zmin: -0.2, box_zmax: 0.25 },
+    { name: "Box_RL1", level: 1, box_xmin: -1,   box_xmax: 3,   box_ymin: -1,    box_ymax: 1,    box_zmin: -0.2, box_zmax: 1.5,  ...extra },
+    { name: "Box_RL2", level: 2, box_xmin: -0.5, box_xmax: 1.5, box_ymin: -0.75, box_ymax: 0.75, box_zmin: -0.2, box_zmax: 1,    ...extra },
+    { name: "Box_RL3", level: 3, box_xmin: -0.3, box_xmax: 1,   box_ymin: -0.5,  box_ymax: 0.5,  box_zmin: -0.2, box_zmax: 0.75, ...extra },
+    { name: "Box_RL4", level: 4, box_xmin: -0.2, box_xmax: 0.6, box_ymin: -0.3,  box_ymax: 0.3,  box_zmin: -0.2, box_zmax: 0.5,  ...extra },
+    { name: "Box_RL5", level: 5, box_xmin: -0.1, box_xmax: 0.3, box_ymin: -0.15, box_ymax: 0.15, box_zmin: -0.2, box_zmax: 0.25, ...extra },
   ];
 }
 
@@ -538,10 +540,9 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
               </Stack>
             )}
 
-            <Switch label="Add box refinement for porous media" {...form.getInputProps("box_refinement_porous", { type: "checkbox" })} />
-
             {/* Box refinement dynamic list */}
             <Divider label="Box Refinement (relative to vehicle size)" labelPosition="center" />
+            <Switch label="Add box refinement for porous media" {...form.getInputProps("box_refinement_porous", { type: "checkbox" })} />
             <Group justify="space-between">
               <Text size="sm" fw={500}>Box refinement zones ({form.values.box_refinements.length})</Text>
               <Group gap="xs">
@@ -558,14 +559,19 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                   form.insertListItem("box_refinements", {
                     name: `Box_RL${form.values.box_refinements.length + 1}`,
                     level: form.values.box_refinements.length + 1,
+                    box_type: "absolute",
                     box_xmin: 0, box_xmax: 0, box_ymin: 0, box_ymax: 0, box_zmin: 0, box_zmax: 0,
+                    parts: "",
+                    offset_xmin: 0.5, offset_xmax: 0.5,
+                    offset_ymin: 0.5, offset_ymax: 0.5,
+                    offset_zmin: 0.5, offset_zmax: 0.5,
                   } as BoxRefinementFormItem)
                 }>
                   Add
                 </Button>
               </Group>
             </Group>
-            {form.values.box_refinements.map((_, idx) => (
+            {form.values.box_refinements.map((item, idx) => (
               <Paper key={idx} withBorder p="xs">
                 <Group justify="space-between" mb={4}>
                   <Badge size="sm" variant="outline">Box {idx + 1}</Badge>
@@ -574,20 +580,54 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                     <IconTrash size={14} />
                   </ActionIcon>
                 </Group>
-                <SimpleGrid cols={2}>
+                <SimpleGrid cols={2} mb={6}>
                   <TextInput label="Name" {...form.getInputProps(`box_refinements.${idx}.name`)} />
                   <NumberInput label="Refinement level" {...form.getInputProps(`box_refinements.${idx}.level`)} />
                 </SimpleGrid>
-                <SimpleGrid cols={3}>
-                  <NumberInput label="X min" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_xmin`)} />
-                  <NumberInput label="X max" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_xmax`)} />
-                  <NumberInput label="Y min" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_ymin`)} />
-                </SimpleGrid>
-                <SimpleGrid cols={3}>
-                  <NumberInput label="Y max" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_ymax`)} />
-                  <NumberInput label="Z min" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_zmin`)} />
-                  <NumberInput label="Z max" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_zmax`)} />
-                </SimpleGrid>
+                <Box mb={6}>
+                  <Text size="xs" c="dimmed" mb={4}>Box type</Text>
+                  <SegmentedControl
+                    size="xs"
+                    data={[
+                      { label: "Absolute coords", value: "absolute" },
+                      { label: "Around parts", value: "around_parts" },
+                    ]}
+                    {...form.getInputProps(`box_refinements.${idx}.box_type`)}
+                  />
+                </Box>
+                {item.box_type === "around_parts" ? (
+                  <Stack gap={6}>
+                    <TextInput
+                      label="Parts (comma-separated patterns)"
+                      placeholder="Wheel_, Body_"
+                      {...form.getInputProps(`box_refinements.${idx}.parts`)}
+                    />
+                    <Text size="xs" c="dimmed">Offset from parts bounding box (m)</Text>
+                    <SimpleGrid cols={3}>
+                      <NumberInput label="-X offset" decimalScale={3} step={0.05} {...form.getInputProps(`box_refinements.${idx}.offset_xmin`)} />
+                      <NumberInput label="+X offset" decimalScale={3} step={0.05} {...form.getInputProps(`box_refinements.${idx}.offset_xmax`)} />
+                      <NumberInput label="-Y offset" decimalScale={3} step={0.05} {...form.getInputProps(`box_refinements.${idx}.offset_ymin`)} />
+                    </SimpleGrid>
+                    <SimpleGrid cols={3}>
+                      <NumberInput label="+Y offset" decimalScale={3} step={0.05} {...form.getInputProps(`box_refinements.${idx}.offset_ymax`)} />
+                      <NumberInput label="-Z offset" decimalScale={3} step={0.05} {...form.getInputProps(`box_refinements.${idx}.offset_zmin`)} />
+                      <NumberInput label="+Z offset" decimalScale={3} step={0.05} {...form.getInputProps(`box_refinements.${idx}.offset_zmax`)} />
+                    </SimpleGrid>
+                  </Stack>
+                ) : (
+                  <>
+                    <SimpleGrid cols={3}>
+                      <NumberInput label="X min" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_xmin`)} />
+                      <NumberInput label="X max" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_xmax`)} />
+                      <NumberInput label="Y min" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_ymin`)} />
+                    </SimpleGrid>
+                    <SimpleGrid cols={3}>
+                      <NumberInput label="Y max" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_ymax`)} />
+                      <NumberInput label="Z min" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_zmin`)} />
+                      <NumberInput label="Z max" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_zmax`)} />
+                    </SimpleGrid>
+                  </>
+                )}
               </Paper>
             ))}
 

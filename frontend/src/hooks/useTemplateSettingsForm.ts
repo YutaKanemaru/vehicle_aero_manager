@@ -233,12 +233,22 @@ export interface CustomRefinementFormItem {
 export interface BoxRefinementFormItem {
   name: string;
   level: number;
+  box_type: "absolute" | "around_parts";
+  // ─── absolute mode ───────────────────────────────────────────────
   box_xmin: number;
   box_xmax: number;
   box_ymin: number;
   box_ymax: number;
   box_zmin: number;
   box_zmax: number;
+  // ─── around_parts mode ───────────────────────────────────────────
+  parts: string;               // comma-separated part name patterns
+  offset_xmin: number;         // m — extend beyond parts bbox in -X
+  offset_xmax: number;         // m — extend beyond parts bbox in +X
+  offset_ymin: number;         // m — extend beyond parts bbox in -Y
+  offset_ymax: number;         // m — extend beyond parts bbox in +Y
+  offset_zmin: number;         // m — extend beyond parts bbox in -Z
+  offset_zmax: number;         // m — extend beyond parts bbox in +Z
 }
 
 export interface PorousCoeffFormItem {
@@ -543,18 +553,40 @@ export function valuesFromSettings(settings: any): FormValues {
     level: v.level ?? 7,
     parts: joinList(v.parts),
   }));
-  const boxRefinements: BoxRefinementFormItem[] = Object.entries(
-    meshingSetup.box_refinement ?? {}
-  ).map(([name, v]: [string, any]) => ({
-    name,
-    level: v.level ?? 1,
-    box_xmin: v.box?.[0] ?? 0,
-    box_xmax: v.box?.[1] ?? 0,
-    box_ymin: v.box?.[2] ?? 0,
-    box_ymax: v.box?.[3] ?? 0,
-    box_zmin: v.box?.[4] ?? 0,
-    box_zmax: v.box?.[5] ?? 0,
-  }));
+  const boxRefinements: BoxRefinementFormItem[] = [
+    ...Object.entries(
+      meshingSetup.box_refinement ?? {}
+    ).map(([name, v]: [string, any]) => ({
+      name,
+      level: v.level ?? 1,
+      box_type: "absolute" as const,
+      box_xmin: v.box?.[0] ?? 0,
+      box_xmax: v.box?.[1] ?? 0,
+      box_ymin: v.box?.[2] ?? 0,
+      box_ymax: v.box?.[3] ?? 0,
+      box_zmin: v.box?.[4] ?? 0,
+      box_zmax: v.box?.[5] ?? 0,
+      parts: "",
+      offset_xmin: 0.5, offset_xmax: 0.5,
+      offset_ymin: 0.5, offset_ymax: 0.5,
+      offset_zmin: 0.5, offset_zmax: 0.5,
+    })),
+    ...Object.entries(
+      meshingSetup.part_based_box_refinement ?? {}
+    ).map(([name, v]: [string, any]) => ({
+      name,
+      level: v.level ?? 1,
+      box_type: "around_parts" as const,
+      box_xmin: 0, box_xmax: 0, box_ymin: 0, box_ymax: 0, box_zmin: 0, box_zmax: 0,
+      parts: joinList(v.parts),
+      offset_xmin: v.offset_xmin ?? 0.5,
+      offset_xmax: v.offset_xmax ?? 0.5,
+      offset_ymin: v.offset_ymin ?? 0.5,
+      offset_ymax: v.offset_ymax ?? 0.5,
+      offset_zmin: v.offset_zmin ?? 0.5,
+      offset_zmax: v.offset_zmax ?? 0.5,
+    })),
+  ];
 
   // Partial surfaces, volumes, section cuts
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -813,14 +845,28 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     };
   }
 
-  // Build box refinement dict from form list
+  // Build box refinement dicts from form list (split by box_type)
   const boxRefinementDict: Record<string, object> = {};
+  const partBasedBoxRefinementDict: Record<string, object> = {};
   for (const item of values.box_refinements) {
     if (!item.name) continue;
-    boxRefinementDict[item.name] = {
-      level: item.level,
-      box: [item.box_xmin, item.box_xmax, item.box_ymin, item.box_ymax, item.box_zmin, item.box_zmax],
-    };
+    if (item.box_type === "around_parts") {
+      partBasedBoxRefinementDict[item.name] = {
+        level: item.level,
+        parts: splitList(item.parts),
+        offset_xmin: item.offset_xmin,
+        offset_xmax: item.offset_xmax,
+        offset_ymin: item.offset_ymin,
+        offset_ymax: item.offset_ymax,
+        offset_zmin: item.offset_zmin,
+        offset_zmax: item.offset_zmax,
+      };
+    } else {
+      boxRefinementDict[item.name] = {
+        level: item.level,
+        box: [item.box_xmin, item.box_xmax, item.box_ymin, item.box_ymax, item.box_zmin, item.box_zmax],
+      };
+    }
   }
 
   // Preserve box_refinement from existing (not editable in form yet)
@@ -986,6 +1032,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
       meshing: {
         box_refinement: boxRefinementDict,
         part_box_refinement: existingMeshing.part_box_refinement ?? {},
+        part_based_box_refinement: partBasedBoxRefinementDict,
         offset_refinement: offsetRefinementDict,
         custom_refinement: customRefinementDict,
       },

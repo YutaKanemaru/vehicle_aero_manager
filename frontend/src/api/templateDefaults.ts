@@ -99,6 +99,7 @@ export const templateDefaults = {
     meshing: {
       box_refinement: {},
       part_box_refinement: {},
+      part_based_box_refinement: {},
       offset_refinement: {},
       custom_refinement: {},
     },

@@ -1233,6 +1233,28 @@ def assemble_ufx_solver_deck(
             refinement_level=br.level,
             bounding_box=BoundingBox(**abs_box),
         ))
+
+    # part_based_box_refinement: パーツ bbox の union + オフセット → 絶対座標
+    for name, pbr in setup.meshing.part_based_box_refinement.items():
+        matched = [pname for pname in part_info if _matches_any(pname, pbr.parts)]
+        if not matched:
+            continue  # パターンにマッチするパーツがない場合はスキップ
+        px_min = min(part_info[p]["bbox"]["x_min"] for p in matched) - pbr.offset_xmin
+        px_max = max(part_info[p]["bbox"]["x_max"] for p in matched) + pbr.offset_xmax
+        py_min = min(part_info[p]["bbox"]["y_min"] for p in matched) - pbr.offset_ymin
+        py_max = max(part_info[p]["bbox"]["y_max"] for p in matched) + pbr.offset_ymax
+        pz_min = min(part_info[p]["bbox"]["z_min"] for p in matched) - pbr.offset_zmin
+        pz_max = max(part_info[p]["bbox"]["z_max"] for p in matched) + pbr.offset_zmax
+        box_instances.append(BoxInstance(
+            name=name,
+            refinement_level=pbr.level,
+            bounding_box=BoundingBox(
+                x_min=px_min, x_max=px_max,
+                y_min=py_min, y_max=py_max,
+                z_min=pz_min, z_max=pz_max,
+            ),
+        ))
+
     box_instances += ground_box_instances + tg_extra_boxes
 
     offset_instances = [

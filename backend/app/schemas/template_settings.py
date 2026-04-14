@@ -234,6 +234,20 @@ class BoxRefinement(BaseModel):
     box: list[float] = Field(..., min_length=6, max_length=6)  # xmin,xmax,ymin,ymax,zmin,zmax
 
 
+class BoxRefinementAroundParts(BaseModel):
+    """Box refinement defined relative to matched parts' bounding box.
+    Compute Engine resolves this to absolute coordinates at XML generation time.
+    """
+    level: int = 1
+    parts: list[str]                    # part name patterns (substring match)
+    offset_xmin: float = 0.5            # m — extend beyond matched bbox in -X direction
+    offset_xmax: float = 0.5            # m — extend beyond matched bbox in +X direction
+    offset_ymin: float = 0.5            # m — extend beyond matched bbox in -Y direction
+    offset_ymax: float = 0.5            # m — extend beyond matched bbox in +Y direction
+    offset_zmin: float = 0.5            # m — extend beyond matched bbox in -Z direction
+    offset_zmax: float = 0.5            # m — extend beyond matched bbox in +Z direction
+
+
 class OffsetRefinement(BaseModel):
     level: int
     normal_distance: float
@@ -248,6 +262,7 @@ class CustomRefinement(BaseModel):
 class MeshingSetup(BaseModel):
     box_refinement: dict[str, BoxRefinement] = Field(default_factory=dict)
     part_box_refinement: dict[str, BoxRefinement] = Field(default_factory=dict)
+    part_based_box_refinement: dict[str, BoxRefinementAroundParts] = Field(default_factory=dict)
     offset_refinement: dict[str, OffsetRefinement] = Field(default_factory=dict)
     custom_refinement: dict[str, CustomRefinement] = Field(default_factory=dict)
 
