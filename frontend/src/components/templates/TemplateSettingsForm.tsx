@@ -479,15 +479,13 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
               />
               <NumberInput label="Number of refinement levels" {...form.getInputProps("number_of_resolution")} />
             </SimpleGrid>
-            <SimpleGrid cols={2}>
-              <NumberInput label="Refinement level transition layers" {...form.getInputProps("refinement_level_transition_layers")} />
-              <NumberInput label="Max relative edge length" step={0.5} {...form.getInputProps("max_relative_edge_length")} />
-            </SimpleGrid>
+            <NumberInput label="Refinement level transition layers" {...form.getInputProps("refinement_level_transition_layers")} />
 
             <Switch label="Triangle splitting" {...form.getInputProps("triangle_splitting", { type: "checkbox" })} />
             {form.values.triangle_splitting && (
               <Stack gap="xs" pl="sm">
                 <SimpleGrid cols={2}>
+                  <NumberInput label="Max relative edge length" step={0.5} {...form.getInputProps("max_relative_edge_length")} />
                   <NumberInput
                     label="Max absolute edge length (m)"
                     description="0 = disabled (use relative only)"

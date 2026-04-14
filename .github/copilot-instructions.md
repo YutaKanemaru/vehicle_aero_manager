@@ -418,9 +418,12 @@ The root element is `<uFX_solver_deck>`. Key sub-structures:
     <triangle_plinth>             # bool
     <surface_mesh_optimization>
       <triangle_splitting>
-        <active>                  # bool
-        <max_absolute_edge_length>
-        <max_relative_edge_length>
+        <active>                  # bool — global ON/OFF
+        <max_absolute_edge_length>  # float — global limit (0 = disabled)
+        <max_relative_edge_length>  # float — global limit
+        <triangle_splitting_instance>[]  # optional per-part overrides
+          <name>, <active>, <max_absolute_edge_length>, <max_relative_edge_length>
+          <parts><name>[]
     <domain_part>
       <export_mesh>               # bool
       <domain_part_instance>[]    # name, location ("z_min" etc.), bounding_range
@@ -597,12 +600,15 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
     },
     "meshing": {
       "triangle_splitting": true,
-      "triangle_splitting_specify_part": false,
+      "max_absolute_edge_length": 0.0,
       "max_relative_edge_length": 9.0,
       "refinement_level_transition_layers": 8,
       "domain_bounding_box_relative": true,  // always true — UI switch removed, hardcoded in buildSettings()
       "box_offset_relative": true,            // always true — UI switch removed, hardcoded in buildSettings()
-      "box_refinement_porous": true
+      "box_refinement_porous": true,
+      "triangle_splitting_instances": [       // optional per-part overrides
+        { "name": "TS_Body", "active": true, "max_absolute_edge_length": 0.0, "max_relative_edge_length": 5.0, "parts": ["Body_"] }
+      ]
     },
     "boundary_condition": {
       "ground": {
@@ -684,7 +690,7 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
   "target_names": {
     "wheel": ["Wheel_"], "rim": ["_Spokes_"],
     "porous": ["Porous_Media_"], "car_bounding_box": [""],
-    "baffle": ["_Baffle_"], "triangle_splitting": [""],
+    "baffle": ["_Baffle_"],
     "windtunnel": [], "wheel_tire_fr_lh": "", "wheel_tire_fr_rh": "",
     "wheel_tire_rr_lh": "", "wheel_tire_rr_rh": "",
     "overset_fr_lh": "", "overset_fr_rh": "", "overset_rr_lh": "", "overset_rr_rh": "",
@@ -1202,9 +1208,10 @@ turbulence_generator:
 
 Form state is managed by `src/hooks/useTemplateSettingsForm.ts` (`useTemplateSettingsForm` hook). Key interfaces:
 ```typescript
-interface OffsetRefinementFormItem  { name, level, normal_distance, parts: string }
-interface CustomRefinementFormItem  { name, level, parts: string }
-interface PorousCoeffFormItem       { part_name, inertial_resistance, viscous_resistance }
+interface OffsetRefinementFormItem          { name, level, normal_distance, parts: string }
+interface CustomRefinementFormItem          { name, level, parts: string }
+interface PorousCoeffFormItem               { part_name, inertial_resistance, viscous_resistance }
+interface TriangleSplittingInstanceFormItem { name, active, max_absolute_edge_length, max_relative_edge_length, parts: string }
 interface PartialSurfaceFormItem    { name, include_parts, exclude_parts, baffle_export_option, output_variables, ... }
 interface PartialVolumeFormItem     { name, bbox_mode, bbox_source_box, bbox, output_variables, ... }
 interface SectionCutFormItem        { name, axis_x/y/z, point_x/y/z, bbox, output_variables, ... }
@@ -1224,7 +1231,7 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 |---|---|
 | General *(conditional)* | Rendered from `generalContent` prop — Name, Description, Application, Version comment |
 | Simulation Run Parameters | velocity, run time, averaging, mach factor, wall model, material |
-| Meshing | coarsest voxel, refinement levels, triangle splitting, offset refinement dynamic list, custom refinement dynamic list |
+| Meshing | coarsest voxel, refinement levels, triangle splitting Switch (global ON/OFF) → when ON: max relative/absolute edge length inputs + per-part `triangle_splitting_instances` dynamic list (name/active/max_abs/max_rel/parts per row), box refinement porous Switch, box refinement dynamic list, offset refinement dynamic list, custom refinement dynamic list |
 | Boundary Conditions | **Flow Domain Configuration** section (ground height definition + domain bounding box factors / multipliers relative to vehicle size), then ground mode, belt config, BL suction, turbulence generator, porous coefficients (template defaults) dynamic list |
 | Output | full data format/coarsening, output variables checkboxes (full: 24 vars, surface: 15 vars), partial surface dynamic list (include/exclude/baffle/per-instance output vars), partial volume dynamic list (3 bbox_mode variants), section cuts dynamic list, **probe files dynamic list** (probe points, CSV import/export) |
 | Target Part Names | all `target_names` fields |
