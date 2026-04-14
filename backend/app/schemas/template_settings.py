@@ -36,14 +36,23 @@ class SimulationOption(BaseModel):
 # setup_option — meshing
 # ---------------------------------------------------------------------------
 
+class TriangleSplittingInstanceConfig(BaseModel):
+    name: str
+    active: bool = True
+    max_absolute_edge_length: float = 0.0
+    max_relative_edge_length: float = 9.0
+    parts: list[str] = Field(default_factory=list)
+
+
 class MeshingOption(BaseModel):
     triangle_splitting: bool = True
-    triangle_splitting_specify_part: bool = False  # True: only parts in target_names.triangle_splitting
+    max_absolute_edge_length: float = 0.0
     max_relative_edge_length: float = 9.0
     refinement_level_transition_layers: int = 8
     domain_bounding_box_relative: bool = True  # bbox multipliers relative to car dimensions
     box_offset_relative: bool = True
     box_refinement_porous: bool = True
+    triangle_splitting_instances: list[TriangleSplittingInstanceConfig] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -425,8 +434,6 @@ class TargetNames(BaseModel):
     porous: list[str] = Field(default_factory=list)
     car_bounding_box: list[str] = Field(default_factory=list)
     baffle: list[str] = Field(default_factory=list)
-    # triangle_splitting: used when meshing.triangle_splitting_specify_part=True
-    triangle_splitting: list[str] = Field(default_factory=list)
     # windtunnel: excluded from offset refinement (unless manually specified) + passive parts
     windtunnel: list[str] = Field(default_factory=list)
     # Individual tyre part name patterns — required for OSM + belt auto-position (aero only)

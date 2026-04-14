@@ -35,6 +35,7 @@ import type {
   ProbeFileFormItem,
   ProbeFileOutputVars,
   PorousCoeffFormItem,
+  TriangleSplittingInstanceFormItem,
   OutputVarsFull,
   OutputVarsSurface,
   OutputVarsPartialSurface,
@@ -485,12 +486,58 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
 
             <Switch label="Triangle splitting" {...form.getInputProps("triangle_splitting", { type: "checkbox" })} />
             {form.values.triangle_splitting && (
-              <>
-                <Switch label="Apply triangle splitting to specified parts only" {...form.getInputProps("triangle_splitting_specify_part", { type: "checkbox" })} />
-                {form.values.triangle_splitting_specify_part && (
-                  <TextInput label="Triangle splitting part patterns (comma-separated)" placeholder="Part_A, Part_B" {...form.getInputProps("tn_triangle_splitting")} />
-                )}
-              </>
+              <Stack gap="xs" pl="sm">
+                <SimpleGrid cols={2}>
+                  <NumberInput
+                    label="Max absolute edge length (m)"
+                    description="0 = disabled (use relative only)"
+                    decimalScale={4}
+                    step={0.001}
+                    {...form.getInputProps("ts_max_absolute_edge_length")}
+                  />
+                </SimpleGrid>
+                <Divider label="Per-part triangle splitting overrides" labelPosition="center" />
+                <Group justify="space-between">
+                  <Text size="sm" fw={500}>Instances ({form.values.triangle_splitting_instances.length})</Text>
+                  <Button size="xs" leftSection={<IconPlus size={12} />} onClick={() =>
+                    form.insertListItem("triangle_splitting_instances", {
+                      name: `TS_Instance_${form.values.triangle_splitting_instances.length + 1}`,
+                      active: true,
+                      max_absolute_edge_length: 0.0,
+                      max_relative_edge_length: form.values.max_relative_edge_length,
+                      parts: "",
+                    } as TriangleSplittingInstanceFormItem)
+                  }>
+                    Add
+                  </Button>
+                </Group>
+                {form.values.triangle_splitting_instances.map((_, idx) => (
+                  <Paper key={idx} withBorder p="xs">
+                    <Group justify="space-between" mb={6}>
+                      <Title order={6}>{form.values.triangle_splitting_instances[idx].name || `Instance ${idx + 1}`}</Title>
+                      <ActionIcon color="red" size="sm" variant="subtle"
+                        onClick={() => form.removeListItem("triangle_splitting_instances", idx)}>
+                        <IconTrash size={14} />
+                      </ActionIcon>
+                    </Group>
+                    <Stack gap="xs">
+                      <SimpleGrid cols={2}>
+                        <TextInput label="Name" {...form.getInputProps(`triangle_splitting_instances.${idx}.name`)} />
+                        <Switch label="Active" style={{ paddingTop: 24 }}
+                          {...form.getInputProps(`triangle_splitting_instances.${idx}.active`, { type: "checkbox" })} />
+                      </SimpleGrid>
+                      <SimpleGrid cols={2}>
+                        <NumberInput label="Max absolute edge length (m)" decimalScale={4} step={0.001}
+                          {...form.getInputProps(`triangle_splitting_instances.${idx}.max_absolute_edge_length`)} />
+                        <NumberInput label="Max relative edge length" decimalScale={2} step={0.5}
+                          {...form.getInputProps(`triangle_splitting_instances.${idx}.max_relative_edge_length`)} />
+                      </SimpleGrid>
+                      <TextInput label="Parts (comma-separated)" placeholder="Part_A, Part_B"
+                        {...form.getInputProps(`triangle_splitting_instances.${idx}.parts`)} />
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
             )}
 
             <Switch label="Add box refinement for porous media" {...form.getInputProps("box_refinement_porous", { type: "checkbox" })} />

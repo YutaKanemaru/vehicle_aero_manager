@@ -58,6 +58,7 @@ from .schema import (
     Sources,
     SurfaceMeshOptimization,
     TriangleSplitting,
+    TriangleSplittingInstance,
     TurbulenceBoundingBox,
     TurbulenceInstance,
     TurbulencePoint,
@@ -235,10 +236,23 @@ def _parse_geometry(el: etree._Element) -> Geometry:
     baffle_parts = _names(baffle_el) if baffle_el is not None else []
 
     ts_el = el.find("surface_mesh_optimization/triangle_splitting")
+    ts_instances = []
+    if ts_el is not None:
+        for ti_el in ts_el.findall("triangle_splitting_instance"):
+            ti_parts_el = ti_el.find("parts")
+            ti_parts = _names(ti_parts_el) if ti_parts_el is not None else []
+            ts_instances.append(TriangleSplittingInstance(
+                name=_text(ti_el, "name"),
+                active=_bool(ti_el, "active"),
+                max_absolute_edge_length=_float(ti_el, "max_absolute_edge_length"),
+                max_relative_edge_length=_float(ti_el, "max_relative_edge_length"),
+                parts=ti_parts,
+            ))
     triangle_splitting = TriangleSplitting(
         active=_bool(ts_el, "active"),
         max_absolute_edge_length=_float(ts_el, "max_absolute_edge_length"),
         max_relative_edge_length=_float(ts_el, "max_relative_edge_length"),
+        triangle_splitting_instances=ts_instances,
     )
 
     dp_el = el.find("domain_part")

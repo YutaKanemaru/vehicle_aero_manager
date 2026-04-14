@@ -1344,10 +1344,10 @@ export interface components {
              */
             triangle_splitting: boolean;
             /**
-             * Triangle Splitting Specify Part
-             * @default false
+             * Max Absolute Edge Length
+             * @default 0
              */
-            triangle_splitting_specify_part: boolean;
+            max_absolute_edge_length: number;
             /**
              * Max Relative Edge Length
              * @default 9
@@ -1373,6 +1373,8 @@ export interface components {
              * @default true
              */
             box_refinement_porous: boolean;
+            /** Triangle Splitting Instances */
+            triangle_splitting_instances?: components["schemas"]["TriangleSplittingInstanceConfig"][];
         };
         /** MeshingSetup */
         MeshingSetup: {
@@ -2425,8 +2427,6 @@ export interface components {
             car_bounding_box?: string[];
             /** Baffle */
             baffle?: string[];
-            /** Triangle Splitting */
-            triangle_splitting?: string[];
             /** Windtunnel */
             windtunnel?: string[];
             /**
@@ -2598,6 +2598,28 @@ export interface components {
              * @default bearer
              */
             token_type: string;
+        };
+        /** TriangleSplittingInstanceConfig */
+        TriangleSplittingInstanceConfig: {
+            /** Name */
+            name: string;
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /**
+             * Max Absolute Edge Length
+             * @default 0
+             */
+            max_absolute_edge_length: number;
+            /**
+             * Max Relative Edge Length
+             * @default 9
+             */
+            max_relative_edge_length: number;
+            /** Parts */
+            parts?: string[];
         };
         /** TurbulenceGeneratorOption */
         TurbulenceGeneratorOption: {

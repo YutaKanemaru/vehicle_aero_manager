@@ -693,7 +693,7 @@ def assemble_ufx_solver_deck(
         PartialSurfaceInstance, PartialVolumeInstance,
         PorousInstance, ProbeFileInstance, ProbeOutputVariables, Refinement, RotatingInstance, SectionCutInstance, Simulation,
         SimulationGeneral, Sources, SurfaceMeshOptimization,
-        TriangleSplitting, TurbulenceBoundingBox, TurbulenceInstance,
+        TriangleSplitting, TriangleSplittingInstance, TurbulenceBoundingBox, TurbulenceInstance,
         TurbulencePoint, UfxSolverDeck, Version, WallInstance, WallModeling,
         XYZDir, XYZPos,
     )
@@ -1147,8 +1147,17 @@ def assemble_ufx_solver_deck(
     baffle_parts = [name for name in part_info if _matches_any(name, tn.baffle)]
 
     # ── triangle splitting ────────────────────────────────────────────────
-    ts_parts = tn.triangle_splitting if so.meshing.triangle_splitting_specify_part else []
-    ts_active = so.meshing.triangle_splitting and (not so.meshing.triangle_splitting_specify_part or bool(ts_parts))
+    ts_active = so.meshing.triangle_splitting
+    ts_instances = [
+        TriangleSplittingInstance(
+            name=inst.name,
+            active=inst.active,
+            max_absolute_edge_length=inst.max_absolute_edge_length,
+            max_relative_edge_length=inst.max_relative_edge_length,
+            parts=inst.parts,
+        )
+        for inst in so.meshing.triangle_splitting_instances
+    ]
 
     # ── Moment reference system ───────────────────────────────────────────
     if wheel_kin_map:
@@ -1232,8 +1241,9 @@ def assemble_ufx_solver_deck(
             surface_mesh_optimization=SurfaceMeshOptimization(
                 triangle_splitting=TriangleSplitting(
                     active=ts_active,
-                    max_absolute_edge_length=0.0,
+                    max_absolute_edge_length=so.meshing.max_absolute_edge_length,
                     max_relative_edge_length=so.meshing.max_relative_edge_length,
+                    triangle_splitting_instances=ts_instances,
                 )
             ),
             domain_part=DomainPart(export_mesh=False, domain_part_instances=[]),

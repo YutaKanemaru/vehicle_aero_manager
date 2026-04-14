@@ -215,6 +215,15 @@ def _ser_geometry(parent: etree._Element, g: Geometry) -> None:
                g.surface_mesh_optimization.triangle_splitting.max_absolute_edge_length)
     _sub_float(ts_el, "max_relative_edge_length",
                g.surface_mesh_optimization.triangle_splitting.max_relative_edge_length)
+    for inst in g.surface_mesh_optimization.triangle_splitting.triangle_splitting_instances:
+        inst_el = etree.SubElement(ts_el, "triangle_splitting_instance")
+        _sub_str(inst_el, "name", inst.name)
+        _sub_bool(inst_el, "active", inst.active)
+        _sub_float(inst_el, "max_absolute_edge_length", inst.max_absolute_edge_length)
+        _sub_float(inst_el, "max_relative_edge_length", inst.max_relative_edge_length)
+        parts_el = etree.SubElement(inst_el, "parts")
+        for part in inst.parts:
+            _sub_str(parts_el, "name", part)
 
     dp_el = etree.SubElement(el, "domain_part")
     _sub_bool(dp_el, "export_mesh", g.domain_part.export_mesh)

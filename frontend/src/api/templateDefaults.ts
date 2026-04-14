@@ -10,12 +10,13 @@ export const templateDefaults = {
     },
     meshing: {
       triangle_splitting: true,
-      triangle_splitting_specify_part: false,
+      max_absolute_edge_length: 0,
       max_relative_edge_length: 9,
       refinement_level_transition_layers: 8,
       domain_bounding_box_relative: true,
       box_offset_relative: true,
       box_refinement_porous: true,
+      triangle_splitting_instances: [],
     },
     boundary_condition: {
       ground: {
@@ -183,7 +184,6 @@ export const templateDefaults = {
     porous: [],
     car_bounding_box: [],
     baffle: [],
-    triangle_splitting: [],
     windtunnel: [],
     wheel_tire_fr_lh: "",
     wheel_tire_fr_rh: "",

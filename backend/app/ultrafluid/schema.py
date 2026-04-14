@@ -144,10 +144,19 @@ class Simulation(BaseModel):
 # <geometry>
 # ---------------------------------------------------------------------------
 
+class TriangleSplittingInstance(BaseModel):
+    name: str
+    active: bool = True
+    max_absolute_edge_length: float = 0.0
+    max_relative_edge_length: float = 9.0
+    parts: List[str] = Field(default_factory=list)
+
+
 class TriangleSplitting(BaseModel):
     active: bool
     max_absolute_edge_length: float
     max_relative_edge_length: float
+    triangle_splitting_instances: List[TriangleSplittingInstance] = Field(default_factory=list)
 
 
 class SurfaceMeshOptimization(BaseModel):

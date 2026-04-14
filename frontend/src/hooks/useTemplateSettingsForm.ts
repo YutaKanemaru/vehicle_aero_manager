@@ -247,6 +247,14 @@ export interface PorousCoeffFormItem {
   viscous_resistance: number;
 }
 
+export interface TriangleSplittingInstanceFormItem {
+  name: string;
+  active: boolean;
+  max_absolute_edge_length: number;
+  max_relative_edge_length: number;
+  parts: string; // comma-separated
+}
+
 // ---- defaults ----------------------------------------------------------------
 
 const DEFAULT_OV_FULL: OutputVarsFull = {
@@ -320,8 +328,9 @@ export const FORM_DEFAULTS = {
 
   // ── Meshing — sourced from D.setup_option.meshing ──────────────────────
   triangle_splitting: D.setup_option.meshing.triangle_splitting,
-  triangle_splitting_specify_part: D.setup_option.meshing.triangle_splitting_specify_part,
+  ts_max_absolute_edge_length: D.setup_option.meshing.max_absolute_edge_length as number,
   max_relative_edge_length: D.setup_option.meshing.max_relative_edge_length,
+  triangle_splitting_instances: [] as TriangleSplittingInstanceFormItem[],
   refinement_level_transition_layers: D.setup_option.meshing.refinement_level_transition_layers,
   box_refinement_porous: D.setup_option.meshing.box_refinement_porous,
   // Domain bounding box multipliers — sourced from D.setup.domain_bounding_box
@@ -427,7 +436,6 @@ export const FORM_DEFAULTS = {
   tn_porous: D.target_names.porous.join(", "),
   tn_car_bounding_box: D.target_names.car_bounding_box.join(", "),
   tn_baffle: D.target_names.baffle.join(", "),
-  tn_triangle_splitting: D.target_names.triangle_splitting.join(", "),
   tn_windtunnel: D.target_names.windtunnel.join(", "),
   tn_wt_fr_lh: D.target_names.wheel_tire_fr_lh,
   tn_wt_fr_rh: D.target_names.wheel_tire_fr_rh,
@@ -667,8 +675,15 @@ export function valuesFromSettings(settings: any): FormValues {
     simulation_time_with_FP: so?.simulation?.simulation_time_with_FP ?? FORM_DEFAULTS.simulation_time_with_FP,
 
     triangle_splitting: m.triangle_splitting ?? FORM_DEFAULTS.triangle_splitting,
-    triangle_splitting_specify_part: m.triangle_splitting_specify_part ?? FORM_DEFAULTS.triangle_splitting_specify_part,
+    ts_max_absolute_edge_length: (m.max_absolute_edge_length as number | undefined) ?? FORM_DEFAULTS.ts_max_absolute_edge_length,
     max_relative_edge_length: m.max_relative_edge_length ?? FORM_DEFAULTS.max_relative_edge_length,
+    triangle_splitting_instances: ((m.triangle_splitting_instances ?? []) as any[]).map((inst) => ({
+      name: inst.name,
+      active: inst.active ?? true,
+      max_absolute_edge_length: inst.max_absolute_edge_length ?? 0.0,
+      max_relative_edge_length: inst.max_relative_edge_length ?? 9.0,
+      parts: joinList(inst.parts),
+    })) as TriangleSplittingInstanceFormItem[],
     refinement_level_transition_layers: m.refinement_level_transition_layers ?? FORM_DEFAULTS.refinement_level_transition_layers,
     box_refinement_porous: m.box_refinement_porous ?? FORM_DEFAULTS.box_refinement_porous,
     bbox_xmin: bbox[0] ?? FORM_DEFAULTS.bbox_xmin,
@@ -756,7 +771,6 @@ export function valuesFromSettings(settings: any): FormValues {
     tn_porous: joinList(tn.porous),
     tn_car_bounding_box: joinList(tn.car_bounding_box),
     tn_baffle: joinList(tn.baffle),
-    tn_triangle_splitting: joinList(tn.triangle_splitting),
     tn_windtunnel: joinList(tn.windtunnel),
     tn_wt_fr_lh: tn.wheel_tire_fr_lh ?? FORM_DEFAULTS.tn_wt_fr_lh,
     tn_wt_fr_rh: tn.wheel_tire_fr_rh ?? FORM_DEFAULTS.tn_wt_fr_rh,
@@ -891,8 +905,15 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
       },
       meshing: {
         triangle_splitting: values.triangle_splitting,
-        triangle_splitting_specify_part: values.triangle_splitting_specify_part,
+        max_absolute_edge_length: values.ts_max_absolute_edge_length,
         max_relative_edge_length: values.max_relative_edge_length,
+        triangle_splitting_instances: values.triangle_splitting_instances.map((inst) => ({
+          name: inst.name,
+          active: inst.active,
+          max_absolute_edge_length: inst.max_absolute_edge_length,
+          max_relative_edge_length: inst.max_relative_edge_length,
+          parts: splitList(inst.parts),
+        })),
         refinement_level_transition_layers: values.refinement_level_transition_layers,
         domain_bounding_box_relative: true,
         box_offset_relative: true,
@@ -1010,7 +1031,6 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
       porous: splitList(values.tn_porous),
       car_bounding_box: splitList(values.tn_car_bounding_box),
       baffle: splitList(values.tn_baffle),
-      triangle_splitting: splitList(values.tn_triangle_splitting),
       windtunnel: splitList(values.tn_windtunnel),
       wheel_tire_fr_lh: values.tn_wt_fr_lh.trim(),
       wheel_tire_fr_rh: values.tn_wt_fr_rh.trim(),
