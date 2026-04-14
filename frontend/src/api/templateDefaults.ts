@@ -67,10 +67,8 @@ export const templateDefaults = {
       },
     },
     compute: {
-      rotate_wheels: true,
       porous_media: true,
       turbulence_generator: true,
-      moving_ground: true,
       adjust_ride_height: false,
     },
   },

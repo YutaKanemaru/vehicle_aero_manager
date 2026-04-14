@@ -683,7 +683,6 @@ export function TemplateSettingsForm({ form, simType }: Props) {
 
             {/* Compute options */}
             <Divider label="Compute options (defaults)" labelPosition="center" />
-            <Switch label="Rotate wheels (OSM + rotating wall BC)" {...form.getInputProps("compute_rotate_wheels", { type: "checkbox" })} />
             <Switch label="Porous media" {...form.getInputProps("compute_porous_media", { type: "checkbox" })} />
             {hasTG(simType) && (
               <Switch
@@ -692,11 +691,6 @@ export function TemplateSettingsForm({ form, simType }: Props) {
                 {...form.getInputProps("compute_turbulence_generator", { type: "checkbox" })}
               />
             )}
-            <Switch
-              label="Moving ground (belt BC)"
-              disabled={!form.values.compute_rotate_wheels}
-              {...form.getInputProps("compute_moving_ground", { type: "checkbox" })}
-            />
             <Switch label="Adjust ride height" {...form.getInputProps("compute_adjust_ride_height", { type: "checkbox" })} />
 
             {/* Porous media coefficients at template level */}

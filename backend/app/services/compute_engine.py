@@ -734,12 +734,19 @@ def assemble_ufx_solver_deck(
     vy = inflow_velocity * math.sin(yaw_rad)
     velocity_dir = {"x_dir": vx, "y_dir": vy}
 
+    # ── Derived flags from ground_mode ─────────────────────────────────────
+    # rotate_wheels and moving_ground are fully determined by ground_mode:
+    #   static → False / False
+    #   full_moving / rotating_belt_* → True / True
+    rotate_wheels = gc.ground_mode != "static"
+    moving_ground = gc.ground_mode != "static"
+
     # ── Wheel kinematics ──────────────────────────────────────────────────
     is_aero = sim_type == "aero"
     wheel_kin_map: dict[str, dict] = {}
     rotating_instances: list = []
 
-    if is_aero and gc.ground_mode != "static" and so.compute.rotate_wheels:
+    if is_aero and rotate_wheels:
         wheel_map = classify_wheels(analysis_result, tn)
         osm_map   = {
             "fr_lh": tn.overset_fr_lh, "fr_rh": tn.overset_fr_rh,
@@ -813,7 +820,7 @@ def assemble_ufx_solver_deck(
         "fr_lh": tn.wheel_tire_fr_lh, "fr_rh": tn.wheel_tire_fr_rh,
         "rr_lh": tn.wheel_tire_rr_lh, "rr_rh": tn.wheel_tire_rr_rh,
     }
-    if is_aero and gc.ground_mode != "static" and so.compute.rotate_wheels:
+    if is_aero and rotate_wheels:
         for key, kin in wheel_kin_map.items():
             tire_pid = tire_pid_map.get(key, "")
             if tire_pid:
@@ -843,14 +850,14 @@ def assemble_ufx_solver_deck(
             ))
 
     # ベルト wall BC
-    if is_aero and gc.ground_mode == "rotating_belt_5" and so.compute.moving_ground and vbbox:
+    if is_aero and gc.ground_mode == "rotating_belt_5" and moving_ground and vbbox:
         belt_wis, _ = _build_belt5_wall_instances(
             wheel_kin_map, gc.belt5, vbbox, velocity_dir,
             FluidBCMoving, XYZDir, WallInstance,
         )
         wall_instances.extend(belt_wis)
 
-    elif is_aero and gc.ground_mode == "rotating_belt_1" and so.compute.moving_ground:
+    elif is_aero and gc.ground_mode == "rotating_belt_1" and moving_ground:
         wall_instances.append(WallInstance(
             name="Belt",
             parts=["Belt"],

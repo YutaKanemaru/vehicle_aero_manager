@@ -921,13 +921,14 @@ export interface components {
         /**
          * ComputeOption
          * @description Controls which Computed blocks are generated. Config can override per-case.
+         *
+         *     NOTE: rotate_wheels and moving_ground were removed — they are now
+         *     derived from ground_mode in compute_engine.assemble_ufx_solver_deck():
+         *       static       → both False
+         *       full_moving   → both True
+         *       rotating_belt_* → both True
          */
         ComputeOption: {
-            /**
-             * Rotate Wheels
-             * @default true
-             */
-            rotate_wheels: boolean;
             /**
              * Porous Media
              * @default true
@@ -938,11 +939,6 @@ export interface components {
              * @default true
              */
             turbulence_generator: boolean;
-            /**
-             * Moving Ground
-             * @default true
-             */
-            moving_ground: boolean;
             /**
              * Adjust Ride Height
              * @default false

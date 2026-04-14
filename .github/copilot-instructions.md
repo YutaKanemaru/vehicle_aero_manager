@@ -619,8 +619,8 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
       }
     },
     "compute": {
-      "rotate_wheels": true, "porous_media": true,
-      "turbulence_generator": true, "moving_ground": true, "adjust_ride_height": false
+      "porous_media": true,
+      "turbulence_generator": true, "adjust_ride_height": false
     }
   },
   "simulation_parameter": {
@@ -950,10 +950,8 @@ class PorousInput(BaseModel):
 
 class ComputeOverrides(BaseModel):
     """Override Template's ComputeOption per Configuration. None = use Template default."""
-    rotate_wheels: bool | None = None
     porous_media: bool | None = None
     turbulence_generator: bool | None = None
-    moving_ground: bool | None = None
     adjust_ride_height: bool | None = None
 
 class RideHeightInput(BaseModel):
@@ -1023,10 +1021,10 @@ class TemplateSettings(BaseModel):
 **`SetupOption.compute`** (ComputeOption):
 ```python
 class ComputeOption(BaseModel):
-    rotate_wheels: bool = True
+    # NOTE: rotate_wheels / moving_ground removed — derived from ground_mode
+    # in compute_engine.assemble_ufx_solver_deck()
     porous_media: bool = True
     turbulence_generator: bool = True  # Aero only
-    moving_ground: bool = True
     adjust_ride_height: bool = False
 ```
 
@@ -1140,14 +1138,10 @@ def compute_porous_axis(part_info: dict) -> dict:
 ### Compute Flag Dependency Rules
 
 ```
-rotate_wheels = False
-  → meshing.overset.rotating = []
-  → boundary_conditions.wall rotating instances = removed
-  → belt auto-position disabled (belt coords from Template setup)
-
-moving_ground = False
-  → all belt BCs → static (not moving)
-  → turbulence_generator.ground = False (forced)
+rotate_wheels / moving_ground:
+  → REMOVED from ComputeOption — now derived from ground_mode in compute_engine:
+    static → both False
+    full_moving / rotating_belt_* → both True
 
 porous_media = False
   → sources.porous = []
@@ -1195,7 +1189,7 @@ turbulence_generator = False
 | Section | Fields |
 |---|---|
 | Conditions | `inflow_velocity` (Template default shown), `yaw_angle`, `simulation_time` (optional override) |
-| Compute Options | Nested checkbox tree with dependency grayout (rotate_wheels → moving_ground/OSM, etc.) |
+| Compute Options | Checkbox tree — porous_media, turbulence_generator, adjust_ride_height (rotate_wheels/moving_ground derived from ground_mode) |
 | Porous Coefficients | Auto-generated from Assembly porous parts — `inertial/viscous_resistance` per part (shown only if porous_media=ON) |
 | Ride Height | `front/rear_wheel_axis_rh`, `adjust_body_wheel_separately` (shown only if adjust_ride_height=ON) |
 

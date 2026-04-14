@@ -365,10 +365,9 @@ export const FORM_DEFAULTS = {
   tg_body_intensity: D.setup_option.boundary_condition.turbulence_generator.body_tg_intensity,
 
   // ── Compute flags ─────────────────────────────────────────────────────
-  compute_rotate_wheels: D.setup_option.compute.rotate_wheels,
+  // NOTE: rotate_wheels / moving_ground removed — derived from ground_mode in compute_engine
   compute_porous_media: D.setup_option.compute.porous_media,
   compute_turbulence_generator: D.setup_option.compute.turbulence_generator,
-  compute_moving_ground: D.setup_option.compute.moving_ground,
   compute_adjust_ride_height: D.setup_option.compute.adjust_ride_height,
 
   // ── Output — full data ────────────────────────────────────────────────
@@ -693,10 +692,8 @@ export function valuesFromSettings(settings: any): FormValues {
     tg_body_num_eddies: tg.body_tg_num_eddies ?? FORM_DEFAULTS.tg_body_num_eddies,
     tg_body_intensity: tg.body_tg_intensity ?? FORM_DEFAULTS.tg_body_intensity,
 
-    compute_rotate_wheels: cp.rotate_wheels ?? FORM_DEFAULTS.compute_rotate_wheels,
     compute_porous_media: cp.porous_media ?? FORM_DEFAULTS.compute_porous_media,
     compute_turbulence_generator: cp.turbulence_generator ?? FORM_DEFAULTS.compute_turbulence_generator,
-    compute_moving_ground: cp.moving_ground ?? FORM_DEFAULTS.compute_moving_ground,
     compute_adjust_ride_height: cp.adjust_ride_height ?? FORM_DEFAULTS.compute_adjust_ride_height,
 
     fd_output_start_time: fd.output_start_time ?? FORM_DEFAULTS.fd_output_start_time,
@@ -911,10 +908,8 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
         },
       },
       compute: {
-        rotate_wheels: values.compute_rotate_wheels,
         porous_media: values.compute_porous_media,
         turbulence_generator: values.compute_turbulence_generator,
-        moving_ground: values.compute_moving_ground,
         adjust_ride_height: values.compute_adjust_ride_height,
       },
     },

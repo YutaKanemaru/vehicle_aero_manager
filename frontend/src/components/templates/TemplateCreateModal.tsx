@@ -33,7 +33,6 @@ const SIM_TYPE_PRESETS: Record<string, Partial<typeof FORM_DEFAULTS>> = {
     triangle_splitting: true,
     tg_enable_ground: true,
     tg_enable_body: true,
-    compute_rotate_wheels: true,
     compute_turbulence_generator: true,
   },
   ghn: {
@@ -42,7 +41,6 @@ const SIM_TYPE_PRESETS: Record<string, Partial<typeof FORM_DEFAULTS>> = {
     triangle_splitting: false,
     tg_enable_ground: false,
     tg_enable_body: false,
-    compute_rotate_wheels: false,
     compute_turbulence_generator: false,
   },
   fan_noise: {
@@ -51,7 +49,6 @@ const SIM_TYPE_PRESETS: Record<string, Partial<typeof FORM_DEFAULTS>> = {
     triangle_splitting: true,
     tg_enable_ground: false,
     tg_enable_body: false,
-    compute_rotate_wheels: false,
     compute_turbulence_generator: false,
   },
 };
