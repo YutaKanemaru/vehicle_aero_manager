@@ -178,28 +178,32 @@ def compute_domain_bbox(
     ground_z: float | None = None,
 ) -> dict:
     """
-    車両 bbox に 6 つの相対倍率を掛けて絶対的な計算領域 bbox を返す。
+    車両 bbox の各辺を基準に factor * body_dimension だけ拡張して絶対的な bbox を返す。
 
-    multipliers: [x_min_mult, x_max_mult, y_min_mult, y_max_mult, z_min_mult, z_max_mult]
-    車両 COG を基準に X/Y 方向へ展開。
-    Z は ground_z を基準に展開。ground_z が None の場合は vehicle_bbox["z_min"] を使用。
+    multipliers: [x_min_f, x_max_f, y_min_f, y_max_f, z_min_f, z_max_f]
+    計算式: result[i] = factor[i] * dimension + bbox_edge[i]
+      x_min: vehicle_bbox["x_min"] + x_min_f * x_length   (負値 = 前方拡張)
+      x_max: vehicle_bbox["x_max"] + x_max_f * x_length   (正値 = 後方拡張)
+      y_min: vehicle_bbox["y_min"] + y_min_f * y_length   (負値 = 側方拡張)
+      y_max: vehicle_bbox["y_max"] + y_max_f * y_length
+      z_min: ground_z    + z_min_f * z_length   (通常 0)
+      z_max: vehicle_bbox["z_max"] + z_max_f * z_length
+    ground_z が None の場合は vehicle_bbox["z_min"] を使用。
     """
     gz = ground_z if ground_z is not None else vehicle_bbox["z_min"]
-    cx = (vehicle_bbox["x_min"] + vehicle_bbox["x_max"]) / 2
-    cy = (vehicle_bbox["y_min"] + vehicle_bbox["y_max"]) / 2
-    length = vehicle_bbox["x_max"] - vehicle_bbox["x_min"]
-    width  = vehicle_bbox["y_max"] - vehicle_bbox["y_min"]
-    height = vehicle_bbox["z_max"] - vehicle_bbox["z_min"]
+    x_length = vehicle_bbox["x_max"] - vehicle_bbox["x_min"]
+    y_length = vehicle_bbox["y_max"] - vehicle_bbox["y_min"]
+    z_length = vehicle_bbox["z_max"] - vehicle_bbox["z_min"]
 
-    x_min_m, x_max_m, y_min_m, y_max_m, z_min_m, z_max_m = multipliers
+    x_min_f, x_max_f, y_min_f, y_max_f, z_min_f, z_max_f = multipliers
 
     return {
-        "x_min": cx + x_min_m * length,
-        "x_max": cx + x_max_m * length,
-        "y_min": cy + y_min_m * width,
-        "y_max": cy + y_max_m * width,
-        "z_min": gz + z_min_m * height,
-        "z_max": gz + z_max_m * height,
+        "x_min": vehicle_bbox["x_min"] + x_min_f * x_length,
+        "x_max": vehicle_bbox["x_max"] + x_max_f * x_length,
+        "y_min": vehicle_bbox["y_min"] + y_min_f * y_length,
+        "y_max": vehicle_bbox["y_max"] + y_max_f * y_length,
+        "z_min": gz + z_min_f * z_length,
+        "z_max": vehicle_bbox["z_max"] + z_max_f * z_length,
     }
 
 
@@ -1104,18 +1108,22 @@ def assemble_ufx_solver_deck(
         ))
 
     # ── Mesh refinement ───────────────────────────────────────────────────
-    box_instances = [
-        BoxInstance(
+    # box_refinement: 相対乗数 → 車両 bbox を基準に絶対座標に変換
+    box_instances = []
+    for name, br in {**setup.meshing.box_refinement, **setup.meshing.part_box_refinement}.items():
+        if vbbox:
+            abs_box = compute_domain_bbox(vbbox, br.box, ground_z=ground_height)
+        else:
+            abs_box = {
+                "x_min": br.box[0], "x_max": br.box[1],
+                "y_min": br.box[2], "y_max": br.box[3],
+                "z_min": br.box[4], "z_max": br.box[5],
+            }
+        box_instances.append(BoxInstance(
             name=name,
             refinement_level=br.level,
-            bounding_box=BoundingBox(
-                x_min=br.box[0], x_max=br.box[1],
-                y_min=br.box[2], y_max=br.box[3],
-                z_min=br.box[4], z_max=br.box[5],
-            ),
-        )
-        for name, br in {**setup.meshing.box_refinement, **setup.meshing.part_box_refinement}.items()
-    ]
+            bounding_box=BoundingBox(**abs_box),
+        ))
     box_instances += ground_box_instances + tg_extra_boxes
 
     offset_instances = [

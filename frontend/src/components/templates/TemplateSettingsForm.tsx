@@ -3,7 +3,7 @@
  * Used by both TemplateCreateModal and TemplateVersionCreateModal.
  */
 import {
-  Accordion,
+  Tabs,
   ActionIcon,
   Badge,
   Box,
@@ -22,11 +22,13 @@ import {
   Title,
 } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
+import type { ReactNode } from "react";
 import type { UseFormReturnType } from "@mantine/form";
 import type {
   FormValues,
   OffsetRefinementFormItem,
   CustomRefinementFormItem,
+  BoxRefinementFormItem,
   PartialSurfaceFormItem,
   PartialVolumeFormItem,
   SectionCutFormItem,
@@ -43,6 +45,7 @@ import type {
 interface Props {
   form: UseFormReturnType<FormValues>;
   simType: string;
+  generalContent?: ReactNode;
 }
 
 const isAero = (t: string) => t === "aero" || t === "fan_noise";
@@ -195,6 +198,18 @@ function OvSCGrid({
 
 // ---- Aero body offset defaults -----------------------------------------------
 
+// ---- Box refinement defaults (shared between aero & GHN) -------------------
+
+function getBoxRefinementDefaults(): BoxRefinementFormItem[] {
+  return [
+    { name: "Box_RL1", level: 1, box_xmin: -1, box_xmax: 3, box_ymin: -1, box_ymax: 1, box_zmin: -0.2, box_zmax: 1.5 },
+    { name: "Box_RL2", level: 2, box_xmin: -0.5, box_xmax: 1.5, box_ymin: -0.75, box_ymax: 0.75, box_zmin: -0.2, box_zmax: 1 },
+    { name: "Box_RL3", level: 3, box_xmin: -0.3, box_xmax: 1, box_ymin: -0.5, box_ymax: 0.5, box_zmin: -0.2, box_zmax: 0.75 },
+    { name: "Box_RL4", level: 4, box_xmin: -0.2, box_xmax: 0.6, box_ymin: -0.3, box_ymax: 0.3, box_zmin: -0.2, box_zmax: 0.5 },
+    { name: "Box_RL5", level: 5, box_xmin: -0.1, box_xmax: 0.3, box_ymin: -0.15, box_ymax: 0.15, box_zmin: -0.2, box_zmax: 0.25 },
+  ];
+}
+
 function getBodyOffsetDefaults(
   coarsest: number,
   simType: string
@@ -217,7 +232,7 @@ function getBodyOffsetDefaults(
 // Main form component
 // ============================================================
 
-export function TemplateSettingsForm({ form, simType }: Props) {
+export function TemplateSettingsForm({ form, simType, generalContent }: Props) {
   const gm = form.values.ground_mode;
   const isBelt5 = gm === "rotating_belt_5";
   const isBelt1 = gm === "rotating_belt_1";
@@ -379,11 +394,22 @@ export function TemplateSettingsForm({ form, simType }: Props) {
   };
 
   return (
-    <Accordion multiple defaultValue={["sim", "meshing"]}>
+    <Tabs defaultValue={generalContent ? "general" : "sim"}>
+      <Tabs.List>
+        {generalContent && <Tabs.Tab value="general">General</Tabs.Tab>}
+        <Tabs.Tab value="sim">Simulation Run Parameters</Tabs.Tab>
+        <Tabs.Tab value="meshing">Meshing</Tabs.Tab>
+        <Tabs.Tab value="bc">Boundary Conditions</Tabs.Tab>
+        <Tabs.Tab value="output">Output</Tabs.Tab>
+        <Tabs.Tab value="targets">Target Part Names</Tabs.Tab>
+      </Tabs.List>
+      {generalContent && (
+        <Tabs.Panel value="general" pt="md">
+          {generalContent}
+        </Tabs.Panel>
+      )}
       {/* ── Simulation Run Parameters ──────────────────────────────── */}
-      <Accordion.Item value="sim">
-        <Accordion.Control>Simulation Run Parameters</Accordion.Control>
-        <Accordion.Panel>
+      <Tabs.Panel value="sim" pt="md">
           <Stack gap="xs">
             <SimpleGrid cols={2}>
               <NumberInput label="Run time (s)" {...form.getInputProps("simulation_time")} />
@@ -418,13 +444,10 @@ export function TemplateSettingsForm({ form, simType }: Props) {
               <NumberInput label="Flow passages" {...form.getInputProps("simulation_time_FP")} />
             )}
           </Stack>
-        </Accordion.Panel>
-      </Accordion.Item>
+      </Tabs.Panel>
 
       {/* ── Meshing ──────────────────────────────────────────────────── */}
-      <Accordion.Item value="meshing">
-        <Accordion.Control>Meshing</Accordion.Control>
-        <Accordion.Panel>
+      <Tabs.Panel value="meshing" pt="md">
           <Stack gap="xs">
             <SimpleGrid cols={2}>
               <NumberInput
@@ -455,17 +478,80 @@ export function TemplateSettingsForm({ form, simType }: Props) {
             <Switch label="Box/offset refinement relative to car size" {...form.getInputProps("box_offset_relative", { type: "checkbox" })} />
             <Switch label="Add box refinement for porous media" {...form.getInputProps("box_refinement_porous", { type: "checkbox" })} />
 
-            <Divider label="Domain bounding box multipliers" labelPosition="center" />
+            <Divider label="Domain bounding box factors" labelPosition="center" />
+            <Group justify="flex-end">
+              <Button size="xs" variant="light" onClick={() => {
+                form.setFieldValue("bbox_xmin", -5);
+                form.setFieldValue("bbox_xmax", 10);
+                form.setFieldValue("bbox_ymin", -12);
+                form.setFieldValue("bbox_ymax", 12);
+                form.setFieldValue("bbox_zmin", 0);
+                form.setFieldValue("bbox_zmax", 20);
+              }}>
+                Restore defaults
+              </Button>
+            </Group>
             <SimpleGrid cols={3}>
-              <NumberInput label="X min mult" step={0.5} {...form.getInputProps("bbox_xmin")} />
-              <NumberInput label="X max mult" step={0.5} {...form.getInputProps("bbox_xmax")} />
-              <NumberInput label="Y min mult" step={0.5} {...form.getInputProps("bbox_ymin")} />
+              <NumberInput label="X min factor" step={0.5} {...form.getInputProps("bbox_xmin")} />
+              <NumberInput label="X max factor" step={0.5} {...form.getInputProps("bbox_xmax")} />
+              <NumberInput label="Y min factor" step={0.5} {...form.getInputProps("bbox_ymin")} />
             </SimpleGrid>
             <SimpleGrid cols={3}>
-              <NumberInput label="Y max mult" step={0.5} {...form.getInputProps("bbox_ymax")} />
-              <NumberInput label="Z min mult" step={0.5} {...form.getInputProps("bbox_zmin")} />
-              <NumberInput label="Z max mult" step={0.5} {...form.getInputProps("bbox_zmax")} />
+              <NumberInput label="Y max factor" step={0.5} {...form.getInputProps("bbox_ymax")} />
+              <NumberInput label="Z min factor" step={0.5} {...form.getInputProps("bbox_zmin")} />
+              <NumberInput label="Z max factor" step={0.5} {...form.getInputProps("bbox_zmax")} />
             </SimpleGrid>
+
+            {/* Box refinement dynamic list */}
+            <Divider label="Box Refinement (relative to vehicle size)" labelPosition="center" />
+            <Group justify="space-between">
+              <Text size="sm" fw={500}>Box refinement zones ({form.values.box_refinements.length})</Text>
+              <Group gap="xs">
+                <Button size="xs" variant="light" onClick={() => {
+                  const defaults = getBoxRefinementDefaults();
+                  const existing = form.values.box_refinements.filter(
+                    (b) => !defaults.some((d) => d.name === b.name)
+                  );
+                  form.setFieldValue("box_refinements", [...defaults, ...existing]);
+                }}>
+                  Restore defaults
+                </Button>
+                <Button size="xs" leftSection={<IconPlus size={12} />} onClick={() =>
+                  form.insertListItem("box_refinements", {
+                    name: `Box_RL${form.values.box_refinements.length + 1}`,
+                    level: form.values.box_refinements.length + 1,
+                    box_xmin: 0, box_xmax: 0, box_ymin: 0, box_ymax: 0, box_zmin: 0, box_zmax: 0,
+                  } as BoxRefinementFormItem)
+                }>
+                  Add
+                </Button>
+              </Group>
+            </Group>
+            {form.values.box_refinements.map((_, idx) => (
+              <Paper key={idx} withBorder p="xs">
+                <Group justify="space-between" mb={4}>
+                  <Badge size="sm" variant="outline">Box {idx + 1}</Badge>
+                  <ActionIcon color="red" size="sm" variant="subtle"
+                    onClick={() => form.removeListItem("box_refinements", idx)}>
+                    <IconTrash size={14} />
+                  </ActionIcon>
+                </Group>
+                <SimpleGrid cols={2}>
+                  <TextInput label="Name" {...form.getInputProps(`box_refinements.${idx}.name`)} />
+                  <NumberInput label="Refinement level" {...form.getInputProps(`box_refinements.${idx}.level`)} />
+                </SimpleGrid>
+                <SimpleGrid cols={3}>
+                  <NumberInput label="X min" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_xmin`)} />
+                  <NumberInput label="X max" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_xmax`)} />
+                  <NumberInput label="Y min" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_ymin`)} />
+                </SimpleGrid>
+                <SimpleGrid cols={3}>
+                  <NumberInput label="Y max" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_ymax`)} />
+                  <NumberInput label="Z min" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_zmin`)} />
+                  <NumberInput label="Z max" decimalScale={2} step={0.1} {...form.getInputProps(`box_refinements.${idx}.box_zmax`)} />
+                </SimpleGrid>
+              </Paper>
+            ))}
 
             {/* Offset refinement dynamic list */}
             <Divider label="Offset Refinement" labelPosition="center" />
@@ -527,13 +613,10 @@ export function TemplateSettingsForm({ form, simType }: Props) {
               </Paper>
             ))}
           </Stack>
-        </Accordion.Panel>
-      </Accordion.Item>
+      </Tabs.Panel>
 
       {/* ── Boundary Conditions ───────────────────────────────────────── */}
-      <Accordion.Item value="bc">
-        <Accordion.Control>Boundary Conditions</Accordion.Control>
-        <Accordion.Panel>
+      <Tabs.Panel value="bc" pt="md">
           <Stack gap="sm">
             {/* Ground height */}
             <Select
@@ -716,13 +799,10 @@ export function TemplateSettingsForm({ form, simType }: Props) {
               </Paper>
             ))}
           </Stack>
-        </Accordion.Panel>
-      </Accordion.Item>
+      </Tabs.Panel>
 
       {/* ── Output ───────────────────────────────────────────────────── */}
-      <Accordion.Item value="output">
-        <Accordion.Control>Output</Accordion.Control>
-        <Accordion.Panel>
+      <Tabs.Panel value="output" pt="md">
           <Stack gap="sm">
             {/* Full data */}
             <Divider label="Full data output" labelPosition="center" />
@@ -1122,13 +1202,10 @@ export function TemplateSettingsForm({ form, simType }: Props) {
               </Paper>
             ))}
           </Stack>
-        </Accordion.Panel>
-      </Accordion.Item>
+      </Tabs.Panel>
 
       {/* ── Target Part Names ─────────────────────────────────────────── */}
-      <Accordion.Item value="targets">
-        <Accordion.Control>Target Part Names</Accordion.Control>
-        <Accordion.Panel>
+      <Tabs.Panel value="targets" pt="md">
           <Stack gap="xs">
             <Text size="xs" c="dimmed">
               Use comma-separated substrings/prefixes that match part names in the STL.
@@ -1163,8 +1240,7 @@ export function TemplateSettingsForm({ form, simType }: Props) {
             <TextInput label="Car bounding box parts" placeholder="Body_" {...form.getInputProps("tn_car_bounding_box")} />
             <TextInput label="Wind tunnel parts (excluded from forces + offset refinement)" placeholder="WindTunnel_" {...form.getInputProps("tn_windtunnel")} />
           </Stack>
-        </Accordion.Panel>
-      </Accordion.Item>
-    </Accordion>
+      </Tabs.Panel>
+    </Tabs>
   );
 }

@@ -2266,7 +2266,7 @@ export interface components {
              * Domain Bounding Box
              * @default [
              *       -5,
-             *       15,
+             *       10,
              *       -12,
              *       12,
              *       0,
@@ -2282,7 +2282,7 @@ export interface components {
              * Domain Bounding Box
              * @default [
              *       -5,
-             *       15,
+             *       10,
              *       -12,
              *       12,
              *       0,

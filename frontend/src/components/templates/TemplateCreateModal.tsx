@@ -107,52 +107,57 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
   }
 
   return (
-    <Modal opened={opened} onClose={handleClose} title="New Template" size="xl">
+    <Modal opened={opened} onClose={handleClose} title="New Template" size="90%">
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <ScrollArea h="calc(100vh - 160px)" pr="md">
-          <Stack>
-            <TextInput
-              label="Name"
-              placeholder="e.g. Aero_Standard_2026"
-              required
-              value={nameValue}
-              onChange={(e) => setNameValue(e.currentTarget.value)}
-            />
-            <Textarea
-              label="Description"
-              placeholder="Optional description"
-              value={descValue}
-              onChange={(e) => setDescValue(e.currentTarget.value)}
-            />
-            <Select
-              label="Application"
-              data={[
-                { value: "aero", label: "External Aerodynamics" },
-                { value: "ghn", label: "Greenhouse Noise (GHN)" },
-                { value: "fan_noise", label: "Fan Noise" },
-              ]}
-              value={simType}
-              onChange={handleSimTypeChange}
-            />
-            <TextInput
-              label="Version comment"
-              placeholder="Initial version"
-              value={commentValue}
-              onChange={(e) => setCommentValue(e.currentTarget.value)}
-            />
-            <Text size="sm" c="dimmed">
-              Preset defaults applied for{" "}
-              <strong>
-                {simType === "aero"
-                  ? "External Aerodynamics"
-                  : simType === "ghn"
-                  ? "GHN"
-                  : "Fan Noise"}
-              </strong>
-              . Adjust as needed.
-            </Text>
-            <TemplateSettingsForm form={form} simType={simType} />
-          </Stack>
+          <TemplateSettingsForm
+            form={form}
+            simType={simType}
+            generalContent={
+              <Stack gap="sm">
+                <TextInput
+                  label="Name"
+                  placeholder="e.g. Aero_Standard_2026"
+                  required
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.currentTarget.value)}
+                />
+                <Textarea
+                  label="Description"
+                  placeholder="Optional description"
+                  value={descValue}
+                  onChange={(e) => setDescValue(e.currentTarget.value)}
+                />
+                <Select
+                  label="Application"
+                  data={[
+                    { value: "aero", label: "External Aerodynamics" },
+                    { value: "ghn", label: "Greenhouse Noise (GHN)" },
+                    { value: "fan_noise", label: "Fan Noise" },
+                  ]}
+                  value={simType}
+                  onChange={handleSimTypeChange}
+                />
+                <TextInput
+                  label="Version comment"
+                  placeholder="Initial version"
+                  value={commentValue}
+                  onChange={(e) => setCommentValue(e.currentTarget.value)}
+                />
+                <Text size="sm" c="dimmed">
+                  Preset defaults applied for{" "}
+                  <strong>
+                    {simType === "aero"
+                      ? "External Aerodynamics"
+                      : simType === "ghn"
+                      ? "GHN"
+                      : "Fan Noise"}
+                  </strong>
+                  . Adjust as needed.
+                </Text>
+              </Stack>
+            }
+          />
         </ScrollArea>
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={handleClose}>

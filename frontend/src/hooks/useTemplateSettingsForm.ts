@@ -230,6 +230,17 @@ export interface CustomRefinementFormItem {
   parts: string;                   // comma-separated
 }
 
+export interface BoxRefinementFormItem {
+  name: string;
+  level: number;
+  box_xmin: number;
+  box_xmax: number;
+  box_ymin: number;
+  box_ymax: number;
+  box_zmin: number;
+  box_zmax: number;
+}
+
 export interface PorousCoeffFormItem {
   part_name: string;
   inertial_resistance: number;
@@ -322,6 +333,8 @@ export const FORM_DEFAULTS = {
   bbox_ymax: D.setup.domain_bounding_box[3] as number,
   bbox_zmin: D.setup.domain_bounding_box[4] as number,
   bbox_zmax: D.setup.domain_bounding_box[5] as number,
+  // Box refinement dynamic list — relative factors like domain_bounding_box
+  box_refinements: [] as BoxRefinementFormItem[],
   // Offset refinement dynamic list
   offset_refinements: [] as OffsetRefinementFormItem[],
   // Custom refinement dynamic list
@@ -499,7 +512,7 @@ export function valuesFromSettings(settings: any): FormValues {
   const tg = so?.boundary_condition?.turbulence_generator ?? {};
   const cp = so?.compute ?? {};
   const setup = settings?.setup ?? {};
-  const bbox = setup?.domain_bounding_box ?? [-5, 15, -12, 12, 0, 20];
+  const bbox = setup?.domain_bounding_box ?? [-5, 10, -12, 12, 0, 20];
   const tn = settings?.target_names ?? {};
   const out = settings?.output ?? {};
   const fd = out?.full_data ?? {};
@@ -523,6 +536,18 @@ export function valuesFromSettings(settings: any): FormValues {
     name,
     level: v.level ?? 7,
     parts: joinList(v.parts),
+  }));
+  const boxRefinements: BoxRefinementFormItem[] = Object.entries(
+    meshingSetup.box_refinement ?? {}
+  ).map(([name, v]: [string, any]) => ({
+    name,
+    level: v.level ?? 1,
+    box_xmin: v.box?.[0] ?? 0,
+    box_xmax: v.box?.[1] ?? 0,
+    box_ymin: v.box?.[2] ?? 0,
+    box_ymax: v.box?.[3] ?? 0,
+    box_zmin: v.box?.[4] ?? 0,
+    box_zmax: v.box?.[5] ?? 0,
   }));
 
   // Partial surfaces, volumes, section cuts
@@ -656,6 +681,7 @@ export function valuesFromSettings(settings: any): FormValues {
     bbox_ymax: bbox[3] ?? FORM_DEFAULTS.bbox_ymax,
     bbox_zmin: bbox[4] ?? FORM_DEFAULTS.bbox_zmin,
     bbox_zmax: bbox[5] ?? FORM_DEFAULTS.bbox_zmax,
+    box_refinements: boxRefinements,
     offset_refinements: offsetRefinements,
     custom_refinements: customRefinements,
 
@@ -774,6 +800,16 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     customRefinementDict[item.name] = {
       level: item.level,
       parts: splitList(item.parts),
+    };
+  }
+
+  // Build box refinement dict from form list
+  const boxRefinementDict: Record<string, object> = {};
+  for (const item of values.box_refinements) {
+    if (!item.name) continue;
+    boxRefinementDict[item.name] = {
+      level: item.level,
+      box: [item.box_xmin, item.box_xmax, item.box_ymin, item.box_ymax, item.box_zmin, item.box_zmax],
     };
   }
 
@@ -931,7 +967,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
         values.bbox_zmin, values.bbox_zmax,
       ],
       meshing: {
-        box_refinement: existingMeshing.box_refinement ?? {},
+        box_refinement: boxRefinementDict,
         part_box_refinement: existingMeshing.part_box_refinement ?? {},
         offset_refinement: offsetRefinementDict,
         custom_refinement: customRefinementDict,

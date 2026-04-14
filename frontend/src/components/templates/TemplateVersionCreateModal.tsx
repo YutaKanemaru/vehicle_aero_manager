@@ -1,10 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Modal,
   TextInput,
   Button,
   Group,
-  Stack,
   Badge,
   Text,
   ScrollArea,
@@ -33,6 +32,7 @@ interface Props {
 export function TemplateVersionCreateModal({ opened, onClose, template }: Props) {
   const queryClient = useQueryClient();
   const simType = template.sim_type as "aero" | "ghn" | "fan_noise";
+  const [commentValue, setCommentValue] = useState("");
 
   const activeSettings = template.active_version?.settings;
   const form = useForm({
@@ -62,6 +62,7 @@ export function TemplateVersionCreateModal({ opened, onClose, template }: Props)
         queryKey: ["templates", template.id, "versions"],
       });
       notifications.show({ message: "New version created", color: "green" });
+      setCommentValue("");
       onClose();
     },
     onError: (e: Error) => {
@@ -71,7 +72,7 @@ export function TemplateVersionCreateModal({ opened, onClose, template }: Props)
 
   function handleSubmit(values: typeof form.values) {
     mutation.mutate({
-      comment: undefined,
+      comment: commentValue.trim() || undefined,
       settings: buildSettings(values, activeSettings),
     });
   }
@@ -93,14 +94,22 @@ export function TemplateVersionCreateModal({ opened, onClose, template }: Props)
           </Badge>
         </Group>
       }
-      size="xl"
+      size="90%"
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <ScrollArea h="calc(100vh - 160px)" pr="md">
-          <Stack>
-            <TextInput label="Version comment" placeholder="Optional comment" />
-            <TemplateSettingsForm form={form} simType={simType} />
-          </Stack>
+          <TemplateSettingsForm
+            form={form}
+            simType={simType}
+            generalContent={
+              <TextInput
+                label="Version comment"
+                placeholder="Optional comment"
+                value={commentValue}
+                onChange={(e) => setCommentValue(e.currentTarget.value)}
+              />
+            }
+          />
         </ScrollArea>
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={onClose}>

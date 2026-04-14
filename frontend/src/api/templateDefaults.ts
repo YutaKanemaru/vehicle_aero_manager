@@ -89,7 +89,7 @@ export const templateDefaults = {
   setup: {
     domain_bounding_box: [
       -5,
-      15,
+      10,
       -12,
       12,
       0,

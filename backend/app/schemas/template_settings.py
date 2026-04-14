@@ -244,10 +244,11 @@ class MeshingSetup(BaseModel):
 
 
 class Setup(BaseModel):
-    # 6-element list: [x_min_mult, x_max_mult, y_min_mult, y_max_mult, z_min_mult, z_max_mult]
-    # multipliers applied to vehicle bounding box to derive domain bounding box
+    # 6-element list: [x_min_f, x_max_f, y_min_f, y_max_f, z_min_f, z_max_f]
+    # factors applied to vehicle bounding box edges:
+    #   result[i] = factor[i] * body_dimension + bbox_edge[i]
     domain_bounding_box: list[float] = Field(
-        default=[-5.0, 15.0, -12.0, 12.0, 0.0, 20.0],
+        default=[-5.0, 10.0, -12.0, 12.0, 0.0, 20.0],
         min_length=6,
         max_length=6,
     )
