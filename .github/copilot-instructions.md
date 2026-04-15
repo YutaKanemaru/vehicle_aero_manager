@@ -1227,6 +1227,13 @@ def build_probe_csv_files(template_settings: TemplateSettings) -> dict[str, byte
 def resolve_compute_flags(template_flags: ComputeOption, overrides: ComputeOverrides) -> ComputeOption:
     """Apply Config overrides to Template defaults with dependency rules."""
 
+def compute_dt(coarsest_mesh_size: float, mach_factor: float, temperature_k: float) -> float:
+    """LBM time step: dt = coarsest_mesh_size * mach_factor / (Cs * sqrt(3))
+    where Cs = sqrt(gamma * R_specific * T_kelvin) = sqrt(1.4 * 287.05 * T_k).
+    IMPORTANT: formula uses speed of sound, NOT inflow_velocity.
+    Verified against AUR_v1.2_EXT_1.99_corrected.xml (3870 iter, dx=0.192, mach=2, T=293.15K).
+    """
+
 def compute_domain_bbox(vehicle_bbox: dict, multipliers: list[float]) -> dict:
     """Apply 6 relative multipliers to vehicle bbox → absolute domain bounding box."""
 
