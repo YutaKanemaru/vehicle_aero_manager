@@ -524,6 +524,8 @@ Ultrafluid XML file
 
 ### XML Serialization Rules
 
+> **Reference**: All XML structure, tag naming, field semantics, and parameter values must conform to the official **[Altair ultraFluidX User Guide](https://help.altair.com/hwcfdsolvers/ufx/index.htm)**. When in doubt about an XML element's name, structure, or valid values, consult the user guide first before referring to sample files.
+
 - Use `lxml.etree` for all XML generation — never use `xml.etree.ElementTree`
 - Implement a `to_xml()` method or standalone serializer in `app/ultrafluid/serializer.py`
 - Implement a `from_xml()` parser in `app/ultrafluid/parser.py`
