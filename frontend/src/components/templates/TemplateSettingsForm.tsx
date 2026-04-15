@@ -939,7 +939,16 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
               {...form.getInputProps("fd_bbox_mode")}
             />
             {form.values.fd_bbox_mode === "from_meshing_box" && (
-              <TextInput label="Source box name" placeholder="e.g. Box_RL1" {...form.getInputProps("fd_bbox_source_box")} />
+              <Select
+                label="Source box name"
+                placeholder="Select box name"
+                searchable
+                clearable
+                data={form.values.box_refinements
+                  .filter(b => b.box_type !== "around_parts" && b.name)
+                  .map(b => ({ value: b.name, label: `${b.name} (RL${b.level})` }))}
+                {...form.getInputProps("fd_bbox_source_box")}
+              />
             )}
             {form.values.fd_bbox_mode === "user_defined" && (
               <>
