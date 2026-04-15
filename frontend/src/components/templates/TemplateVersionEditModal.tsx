@@ -22,6 +22,7 @@ import {
 } from "../../api/templates";
 import {
   FORM_DEFAULTS,
+  FORM_VALIDATE,
   valuesFromSettings,
   buildSettings,
 } from "../../hooks/useTemplateSettingsForm";
@@ -44,6 +45,7 @@ export function TemplateVersionEditModal({ opened, onClose, template, version }:
 
   const form = useForm({
     initialValues: valuesFromSettings(version.settings),
+    validate: FORM_VALIDATE,
   });
 
   // Re-populate when modal opens or version changes
@@ -140,7 +142,7 @@ export function TemplateVersionEditModal({ opened, onClose, template, version }:
           )}
         </Group>
       }
-      size="90%"
+      size="95%"
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <ScrollArea h="calc(100vh - 160px)" pr="md">

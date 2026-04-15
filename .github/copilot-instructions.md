@@ -1330,11 +1330,22 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 | Tab | Contents |
 |---|---|
 | General *(conditional)* | Rendered from `generalContent` prop — Name, Description, Application, Version comment |
-| Simulation Run Parameters | velocity, run time, averaging, mach factor, wall model, material |
-| Meshing | coarsest voxel, refinement levels, triangle splitting Switch (global ON/OFF) → when ON: max relative/absolute edge length inputs + per-part `triangle_splitting_instances` dynamic list (name/active/max_abs/max_rel/parts per row), **Add porous box refinement** Switch (adds a Box_RL6 around porous parts), box refinement dynamic list (each row: name/level + `SegmentedControl` for `box_type`: **vehicle_bbox_factors** [6 factor inputs relative to vehicle dims, hint "× Vehicle dimensions"] \| **around_parts** [parts string + 6 offset-m NumberInputs] \| **user_defined** [6 absolute-m coord inputs, hint "Absolute coordinates (m)"]; "Restore defaults" sets list to `FORM_DEFAULTS.box_refinements`), offset refinement dynamic list ("Apply body defaults" recalculates RL7/RL6 distances from current voxel size using `FORM_DEFAULTS.offset_refinements`; GHN filters out RL7), custom refinement dynamic list |
-| Boundary Conditions | **Flow Domain Configuration** section (ground height definition + domain bounding box factors / multipliers relative to vehicle size), then ground mode, belt config, BL suction, turbulence generator, porous coefficients (template defaults) dynamic list |
-| Output | full data output_start_time/output_interval (required, s) + file_format `Select` (EnSight/H3D/EnSight & H3D) + coarsening + output variables checkboxes (full: 24 vars, surface: 15 vars), partial surface dynamic list (output_start_time/output_interval required + file_format Select + include/exclude/baffle/per-instance output vars), partial volume dynamic list (3 bbox_mode variants + same time/format fields), section cuts dynamic list (same time/format fields), **probe files dynamic list** (probe points, CSV import/export) |
-| Target Part Names | all `target_names` fields |
+| Simulation Run Parameters | **Accordion**: Run Time (run time, averaging, mach factor, yaw, ramp-up) · Physical Properties (velocity, temp, density, viscosity, gas constant) · Options (°C switch, FP mode) |
+| Meshing | **Accordion**: General (coarsest voxel, num RL, transition layers) · Triangle Splitting (global ON/OFF switch → when ON: max rel/abs edge + per-part instances) · Box Refinement (porous switch + dynamic list; each row: name/level + `SegmentedControl` for `box_type`: vehicle_bbox_factors/around_parts/user_defined) · Offset Refinement (dynamic list, "Apply body defaults") · Custom Refinement (dynamic list) |
+| Boundary Conditions | **Accordion**: Flow Domain Configuration (ground height definition + domain bbox factors) · Ground Condition (ground mode select + wheel/rim part names + OSM parts + BL suction; aero has Select, non-aero has simple BL suction only) · Belt Configuration (aero only; isBelt5: belt settings + **required** tire part names tn_wt_*; isBelt1: belt size) · Turbulence Generator (aero only) · Porous Media Coefficients (dynamic list, template defaults) |
+| Output | **Accordion**: Full Data Output (time fields, format, merge, coarsening [Coarsest RL max=number_of_resolution, Coarsen by SegmentedControl "1"|"2"], bbox select/coords, output vars 24+15 checkboxes) · Aero Coefficients (aero only; ref area/length auto, along-axis) · Partial Surfaces · Partial Volumes (coarsening same SegmentedControl) · Section Cuts · Probe Files |
+| Part Specification | `tn_baffle` + `tn_windtunnel` only |
+| Ride Height | `compute_adjust_ride_height` Switch only (placeholder) |
+
+**Key notes:**
+- Modal `size="95%"` for all 3 create/edit modals
+- `merge_output` default is `false` for all output config classes (FullData, PartialSurface, PartialVolume, SectionCut) — both backend Pydantic and frontend helpers
+- `FORM_VALIDATE` exported from `useTemplateSettingsForm.ts` — validates `tn_wt_fr/rr_lh/rh` as required when `ground_mode === "rotating_belt_5"`
+- All create/version modals import and pass `validate: FORM_VALIDATE` to `useForm()`
+- `tn_wheel` / `tn_rim` moved to BC tab > Ground Condition accordion (aero only)
+- `tn_wt_*` tire parts moved to BC tab > Belt Configuration accordion (isBelt5, marked `required`)
+- `tn_osm_*` OSM parts moved to BC tab > Ground Condition, shown when `overset_wheels` is ON
+- `compute_adjust_ride_height` moved from BC tab to Ride Height tab
 
 ---
 

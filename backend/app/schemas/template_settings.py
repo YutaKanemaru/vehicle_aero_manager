@@ -289,12 +289,12 @@ class Setup(BaseModel):
 class FullDataOutputConfig(BaseModel):
     """Full-volume and surface data output configuration."""
     output_start_time: float = 1.5              # seconds
-    output_interval: float = 0.3                # seconds
+    output_interval: float = 0.3               # seconds
     file_format: Literal["ensight", "h3d", "ensight_and_h3d"] = "h3d"
     output_coarsening_active: bool = False
     coarsest_target_refinement_level: int = 3
     coarsen_by_num_refinement_levels: int = 0
-    merge_output: bool = True
+    merge_output: bool = False
     delete_unmerged: bool = True
     output_variables_full: OutputVariablesFull = Field(default_factory=OutputVariablesFull)
     output_variables_surface: OutputVariablesSurface = Field(default_factory=OutputVariablesSurface)
@@ -310,7 +310,7 @@ class PartialSurfaceOutputConfig(BaseModel):
     output_start_time: float = 1.5
     output_interval: float = 0.3
     file_format: Literal["ensight", "h3d", "ensight_and_h3d"] = "h3d"
-    merge_output: bool = True
+    merge_output: bool = False
     delete_unmerged: bool = True
     include_parts: list[str] = Field(default_factory=list)
     exclude_parts: list[str] = Field(default_factory=list)
@@ -328,7 +328,7 @@ class PartialVolumeOutputConfig(BaseModel):
     output_coarsening_active: bool = False
     coarsest_target_refinement_level: int = 3
     coarsen_by_num_refinement_levels: int = 0
-    merge_output: bool = True
+    merge_output: bool = False
     delete_unmerged: bool = True
     output_variables: PartialVolumeOutputVariables = Field(default_factory=PartialVolumeOutputVariables)
     # bounding box specification
@@ -408,7 +408,7 @@ class SectionCutConfig(BaseModel):
     output_start_time: float = 1.5
     output_interval: float = 0.3
     file_format: Literal["ensight", "h3d", "ensight_and_h3d"] = "h3d"
-    merge_output: bool = True
+    merge_output: bool = False
     delete_unmerged: bool = True
     triangulation: bool = False
     # Cut plane definition — axis normal direction (unit vector)

@@ -184,7 +184,7 @@ export const templateDefaults = {
       output_coarsening_active: false,
       coarsest_target_refinement_level: 3,
       coarsen_by_num_refinement_levels: 0,
-      merge_output: true,
+      merge_output: false,
       delete_unmerged: true,
       output_variables_full: {
         pressure: false,

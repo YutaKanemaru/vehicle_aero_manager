@@ -1194,7 +1194,7 @@ export interface components {
             coarsen_by_num_refinement_levels: number;
             /**
              * Merge Output
-             * @default true
+             * @default false
              */
             merge_output: boolean;
             /**
@@ -1790,7 +1790,7 @@ export interface components {
             file_format: "ensight" | "h3d" | "ensight_and_h3d";
             /**
              * Merge Output
-             * @default true
+             * @default false
              */
             merge_output: boolean;
             /**
@@ -1927,7 +1927,7 @@ export interface components {
             coarsen_by_num_refinement_levels: number;
             /**
              * Merge Output
-             * @default true
+             * @default false
              */
             merge_output: boolean;
             /**
@@ -2267,7 +2267,7 @@ export interface components {
             file_format: "ensight" | "h3d" | "ensight_and_h3d";
             /**
              * Merge Output
-             * @default true
+             * @default false
              */
             merge_output: boolean;
             /**

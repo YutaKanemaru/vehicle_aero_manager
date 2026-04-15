@@ -480,6 +480,28 @@ export const FORM_DEFAULTS = {
 
 export type FormValues = typeof FORM_DEFAULTS;
 
+// ---- form validation ---------------------------------------------------------
+
+/** Shared validate rules for all template settings modals. */
+export const FORM_VALIDATE: Partial<Record<keyof FormValues, (value: unknown, values: FormValues) => string | null>> = {
+  tn_wt_fr_lh: (v, values) =>
+    values.ground_mode === "rotating_belt_5" && !(v as string).trim()
+      ? "Required when 5-belt mode is active"
+      : null,
+  tn_wt_fr_rh: (v, values) =>
+    values.ground_mode === "rotating_belt_5" && !(v as string).trim()
+      ? "Required when 5-belt mode is active"
+      : null,
+  tn_wt_rr_lh: (v, values) =>
+    values.ground_mode === "rotating_belt_5" && !(v as string).trim()
+      ? "Required when 5-belt mode is active"
+      : null,
+  tn_wt_rr_rh: (v, values) =>
+    values.ground_mode === "rotating_belt_5" && !(v as string).trim()
+      ? "Required when 5-belt mode is active"
+      : null,
+};
+
 // ---- helpers -----------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

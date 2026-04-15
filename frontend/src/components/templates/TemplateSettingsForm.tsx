@@ -3,6 +3,7 @@
  * Used by both TemplateCreateModal and TemplateVersionCreateModal.
  */
 import {
+  Accordion,
   Tabs,
   ActionIcon,
   Badge,
@@ -269,7 +270,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
       output_start_time: 1.5,
       output_interval: 0.3,
       file_format: "h3d",
-      merge_output: true,
+      merge_output: false,
       delete_unmerged: true,
       include_parts: "",
       exclude_parts: "",
@@ -294,7 +295,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
       output_coarsening_active: false,
       coarsest_target_refinement_level: 3,
       coarsen_by_num_refinement_levels: 0,
-      merge_output: true,
+      merge_output: false,
       delete_unmerged: true,
       bbox_mode: "user_defined",
       bbox_source_box_name: "",
@@ -324,7 +325,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
       output_start_time: 1.5,
       output_interval: 0.3,
       file_format: "h3d",
-      merge_output: true,
+      merge_output: false,
       delete_unmerged: true,
       triangulation: false,
       axis_x: 0.0, axis_y: 0.0, axis_z: 1.0,
@@ -411,7 +412,8 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
         <Tabs.Tab value="meshing">Meshing</Tabs.Tab>
         <Tabs.Tab value="bc">Boundary Conditions</Tabs.Tab>
         <Tabs.Tab value="output">Output</Tabs.Tab>
-        <Tabs.Tab value="targets">Target Part Names</Tabs.Tab>
+        <Tabs.Tab value="parts">Part Specification</Tabs.Tab>
+        <Tabs.Tab value="ride_height">Ride Height</Tabs.Tab>
       </Tabs.List>
       {generalContent && (
         <Tabs.Panel value="general" pt="md">
@@ -420,45 +422,62 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
       )}
       {/* ── Simulation Run Parameters ──────────────────────────────── */}
       <Tabs.Panel value="sim" pt="md">
-        <PanelWrapper disabled={readOnly}><Stack gap="xs">
-            <SimpleGrid cols={2}>
-              <NumberInput label="Run time (s)" {...form.getInputProps("simulation_time")} />
-              <NumberInput label="Start averaging time (s)" {...form.getInputProps("start_averaging_time")} />
-            </SimpleGrid>
-            <SimpleGrid cols={2}>
-              <NumberInput label="Averaging window size (s)" {...form.getInputProps("avg_window_size")} />
-              <NumberInput label="Mach factor" step={0.1} {...form.getInputProps("mach_factor")} />
-            </SimpleGrid>
-            <SimpleGrid cols={2}>
-              <NumberInput label="Ramp-up iterations" {...form.getInputProps("num_ramp_up_iter")} />
-              <NumberInput label="Default yaw angle (°)" step={0.5} {...form.getInputProps("yaw_angle")} />
-            </SimpleGrid>
-
-            <Divider label="Physical properties" labelPosition="center" />
-            <SimpleGrid cols={2}>
-              <NumberInput label="Inflow velocity (m/s)" step={0.1} {...form.getInputProps("inflow_velocity")} />
-              <NumberInput label="Temperature (°C)" {...form.getInputProps("temperature")} />
-            </SimpleGrid>
-            <SimpleGrid cols={2}>
-              <NumberInput label="Density (kg/m³)" decimalScale={4} step={0.0001} {...form.getInputProps("density")} />
-              <NumberInput label="Dynamic viscosity (kg/(s·m))" decimalScale={8} step={1e-7} {...form.getInputProps("dynamic_viscosity")} />
-            </SimpleGrid>
-            <SimpleGrid cols={2}>
-              <NumberInput label="Specific gas constant (J/(kg·K))" {...form.getInputProps("specific_gas_constant")} />
-            </SimpleGrid>
-
-            <Divider label="Options" labelPosition="center" />
-            <Switch label="Temperature input is °C (auto-convert to K)" {...form.getInputProps("temperature_degree", { type: "checkbox" })} />
-            <Switch label="Use flow-passage time instead of fixed run time" {...form.getInputProps("simulation_time_with_FP", { type: "checkbox" })} />
-            {form.values.simulation_time_with_FP && (
-              <NumberInput label="Flow passages" {...form.getInputProps("simulation_time_FP")} />
-            )}
-          </Stack></PanelWrapper>
+        <PanelWrapper disabled={readOnly}>
+          <Accordion multiple defaultValue={["run-time", "physical", "options"]}>
+            <Accordion.Item value="run-time">
+              <Accordion.Control><Text fw={500}>Run Time</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
+                <SimpleGrid cols={2}>
+                  <NumberInput label="Run time (s)" {...form.getInputProps("simulation_time")} />
+                  <NumberInput label="Start averaging time (s)" {...form.getInputProps("start_averaging_time")} />
+                </SimpleGrid>
+                <SimpleGrid cols={2}>
+                  <NumberInput label="Averaging window size (s)" {...form.getInputProps("avg_window_size")} />
+                  <NumberInput label="Mach factor" step={0.1} {...form.getInputProps("mach_factor")} />
+                </SimpleGrid>
+                <SimpleGrid cols={2}>
+                  <NumberInput label="Ramp-up iterations" {...form.getInputProps("num_ramp_up_iter")} />
+                  <NumberInput label="Default yaw angle (°)" step={0.5} {...form.getInputProps("yaw_angle")} />
+                </SimpleGrid>
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item value="physical">
+              <Accordion.Control><Text fw={500}>Physical Properties</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
+                <SimpleGrid cols={2}>
+                  <NumberInput label="Inflow velocity (m/s)" step={0.1} {...form.getInputProps("inflow_velocity")} />
+                  <NumberInput label="Temperature (°C)" {...form.getInputProps("temperature")} />
+                </SimpleGrid>
+                <SimpleGrid cols={2}>
+                  <NumberInput label="Density (kg/m³)" decimalScale={4} step={0.0001} {...form.getInputProps("density")} />
+                  <NumberInput label="Dynamic viscosity (kg/(s·m))" decimalScale={8} step={1e-7} {...form.getInputProps("dynamic_viscosity")} />
+                </SimpleGrid>
+                <SimpleGrid cols={2}>
+                  <NumberInput label="Specific gas constant (J/(kg·K))" {...form.getInputProps("specific_gas_constant")} />
+                </SimpleGrid>
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item value="options">
+              <Accordion.Control><Text fw={500}>Options</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
+                <Switch label="Temperature input is °C (auto-convert to K)" {...form.getInputProps("temperature_degree", { type: "checkbox" })} />
+                <Switch label="Use flow-passage time instead of fixed run time" {...form.getInputProps("simulation_time_with_FP", { type: "checkbox" })} />
+                {form.values.simulation_time_with_FP && (
+                  <NumberInput label="Flow passages" {...form.getInputProps("simulation_time_FP")} />
+                )}
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        </PanelWrapper>
       </Tabs.Panel>
 
       {/* ── Meshing ──────────────────────────────────────────────────── */}
       <Tabs.Panel value="meshing" pt="md">
-        <PanelWrapper disabled={readOnly}><Stack gap="xs">
+        <PanelWrapper disabled={readOnly}>
+          <Accordion multiple defaultValue={["general", "triangle-splitting", "box-refinement", "offset-refinement", "custom-refinement"]}>
+            <Accordion.Item value="general">
+              <Accordion.Control><Text fw={500}>General</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
             <SimpleGrid cols={2}>
               <NumberInput
                 label="Coarsest voxel size (m)"
@@ -470,7 +489,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
               <NumberInput label="Number of refinement levels" {...form.getInputProps("number_of_resolution")} />
             </SimpleGrid>
             <NumberInput label="Refinement level transition layers" {...form.getInputProps("refinement_level_transition_layers")} />
-
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item value="triangle-splitting">
+              <Accordion.Control><Text fw={500}>Triangle Splitting</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
             <Switch label="Triangle splitting" {...form.getInputProps("triangle_splitting", { type: "checkbox" })} />
             {form.values.triangle_splitting && (
               <Stack gap="xs" pl="sm">
@@ -529,7 +552,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
             )}
 
             {/* Box refinement dynamic list */}
-            <Divider label="Box Refinement (relative to vehicle size)" labelPosition="center" />
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item value="box-refinement">
+              <Accordion.Control><Text fw={500}>Box Refinement</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
             <Switch label="Add box refinement for porous media" {...form.getInputProps("box_refinement_porous", { type: "checkbox" })} />
             <Group justify="space-between">
               <Text size="sm" fw={500}>Box refinement zones ({form.values.box_refinements.length})</Text>
@@ -626,7 +653,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
             ))}
 
             {/* Offset refinement dynamic list */}
-            <Divider label="Offset Refinement" labelPosition="center" />
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item value="offset-refinement">
+              <Accordion.Control><Text fw={500}>Offset Refinement</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
             <Group justify="space-between">
               <Text size="sm" fw={500}>Offset refinement zones ({form.values.offset_refinements.length})</Text>
               <Group gap="xs">
@@ -657,7 +688,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
             ))}
 
             {/* Custom refinement dynamic list */}
-            <Divider label="Custom Refinement" labelPosition="center" />
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item value="custom-refinement">
+              <Accordion.Control><Text fw={500}>Custom Refinement</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
             <Group justify="space-between">
               <Text size="sm" fw={500}>Custom refinement zones ({form.values.custom_refinements.length})</Text>
               <Button size="xs" leftSection={<IconPlus size={12} />}
@@ -684,228 +719,278 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                 <TextInput label="Parts (comma-separated)" placeholder="Part_A, Part_B" {...form.getInputProps(`custom_refinements.${idx}.parts`)} />
               </Paper>
             ))}
-          </Stack></PanelWrapper>
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        </PanelWrapper>
       </Tabs.Panel>
 
       {/* ── Boundary Conditions ───────────────────────────────────────── */}
       <Tabs.Panel value="bc" pt="md">
-        <PanelWrapper disabled={readOnly}><Stack gap="sm">
-            {/* ── Flow Domain Configuration ── */}
-            <Divider label="Flow Domain Configuration" labelPosition="center" />
-            {/* Ground height */}
-            <Select
-              label="Ground height definition"
-              data={[
-                { value: "from_geometry", label: "From geometry (z_min of STL)" },
-                { value: "absolute", label: "Absolute z-position" },
-              ]}
-              {...form.getInputProps("ground_height_mode")}
-            />
-            {form.values.ground_height_mode === "absolute" && (
-              <NumberInput label="Ground height, absolute z (m)" step={0.01} {...form.getInputProps("ground_height_absolute")} />
-            )}
-            {form.values.ground_height_mode === "from_geometry" && (
-              <NumberInput
-                label="Ground height offset from geometry z_min (m)"
-                description="ground_height = STL z_min + offset  (e.g. 0.01 for 10 mm above z_min)"
-                step={0.001}
-                decimalScale={4}
-                {...form.getInputProps("ground_height_offset_from_geom_zMin")}
-              />
-            )}
+        <PanelWrapper disabled={readOnly}>
+          <Accordion multiple defaultValue={["flow-domain", "ground-condition", "belt-config", "turbulence-gen", "porous-media"]}>
 
-            <Divider label="Domain bounding box factors (multipliers relative to vehicle size)" labelPosition="center" />
-            <Group justify="flex-end">
-              <Button size="xs" variant="light" onClick={() => {
-                form.setFieldValue("bbox_xmin", -5);
-                form.setFieldValue("bbox_xmax", 10);
-                form.setFieldValue("bbox_ymin", -12);
-                form.setFieldValue("bbox_ymax", 12);
-                form.setFieldValue("bbox_zmin", 0);
-                form.setFieldValue("bbox_zmax", 20);
-              }}>
-                Restore defaults
-              </Button>
-            </Group>
-            <SimpleGrid cols={3}>
-              <NumberInput label="X min factor" step={0.5} {...form.getInputProps("bbox_xmin")} />
-              <NumberInput label="X max factor" step={0.5} {...form.getInputProps("bbox_xmax")} />
-              <NumberInput label="Y min factor" step={0.5} {...form.getInputProps("bbox_ymin")} />
-            </SimpleGrid>
-            <SimpleGrid cols={3}>
-              <NumberInput label="Y max factor" step={0.5} {...form.getInputProps("bbox_ymax")} />
-              <NumberInput label="Z min factor" step={0.5} {...form.getInputProps("bbox_zmin")} />
-              <NumberInput label="Z max factor" step={0.5} {...form.getInputProps("bbox_zmax")} />
-            </SimpleGrid>
-            <Divider />
-
-            <Switch label="Ground patch active" {...form.getInputProps("ground_patch_active", { type: "checkbox" })} />
-
-            {/* Ground mode — aero only */}
-            {isAero(simType) && (
-              <>
+            {/* ── Flow Domain ── */}
+            <Accordion.Item value="flow-domain">
+              <Accordion.Control><Text fw={500}>Flow Domain Configuration</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
                 <Select
-                  label="Ground condition"
+                  label="Ground height definition"
                   data={[
-                    { value: "rotating_belt_5", label: "5-belt rotating" },
-                    { value: "rotating_belt_1", label: "1-belt rotating" },
-                    { value: "full_moving", label: "Full moving ground" },
-                    { value: "static", label: "Static ground" },
+                    { value: "from_geometry", label: "From geometry (z_min of STL)" },
+                    { value: "absolute", label: "Absolute z-position" },
                   ]}
-                  {...form.getInputProps("ground_mode")}
+                  {...form.getInputProps("ground_height_mode")}
                 />
-
-                {!isFullMoving && (
-                  <Switch label="Overset mesh for rotating wheels (OSM)" {...form.getInputProps("overset_wheels", { type: "checkbox" })} />
+                {form.values.ground_height_mode === "absolute" && (
+                  <NumberInput label="Ground height, absolute z (m)" step={0.01} {...form.getInputProps("ground_height_absolute")} />
                 )}
+                {form.values.ground_height_mode === "from_geometry" && (
+                  <NumberInput
+                    label="Ground height offset from geometry z_min (m)"
+                    description="ground_height = STL z_min + offset  (e.g. 0.01 for 10 mm above z_min)"
+                    step={0.001}
+                    decimalScale={4}
+                    {...form.getInputProps("ground_height_offset_from_geom_zMin")}
+                  />
+                )}
+                <Divider label="Domain bounding box factors (multipliers relative to vehicle size)" labelPosition="center" />
+                <Group justify="flex-end">
+                  <Button size="xs" variant="light" onClick={() => {
+                    form.setFieldValue("bbox_xmin", -5);
+                    form.setFieldValue("bbox_xmax", 10);
+                    form.setFieldValue("bbox_ymin", -12);
+                    form.setFieldValue("bbox_ymax", 12);
+                    form.setFieldValue("bbox_zmin", 0);
+                    form.setFieldValue("bbox_zmax", 20);
+                  }}>
+                    Restore defaults
+                  </Button>
+                </Group>
+                <SimpleGrid cols={3}>
+                  <NumberInput label="X min factor" step={0.5} {...form.getInputProps("bbox_xmin")} />
+                  <NumberInput label="X max factor" step={0.5} {...form.getInputProps("bbox_xmax")} />
+                  <NumberInput label="Y min factor" step={0.5} {...form.getInputProps("bbox_ymin")} />
+                </SimpleGrid>
+                <SimpleGrid cols={3}>
+                  <NumberInput label="Y max factor" step={0.5} {...form.getInputProps("bbox_ymax")} />
+                  <NumberInput label="Z min factor" step={0.5} {...form.getInputProps("bbox_zmin")} />
+                  <NumberInput label="Z max factor" step={0.5} {...form.getInputProps("bbox_zmax")} />
+                </SimpleGrid>
+                <Switch label="Ground patch active" {...form.getInputProps("ground_patch_active", { type: "checkbox" })} />
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
 
-                {!isFullMoving && (
+            {/* ── Ground Condition ── */}
+            <Accordion.Item value="ground-condition">
+              <Accordion.Control><Text fw={500}>Ground Condition</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
+                {isAero(simType) ? (
                   <>
-                    <Switch label="Apply BL suction (no-slip / slip ground split)" {...form.getInputProps("bl_suction_apply", { type: "checkbox" })} />
-                    {form.values.bl_suction_apply && (
+                    <Select
+                      label="Ground condition"
+                      data={[
+                        { value: "rotating_belt_5", label: "5-belt rotating" },
+                        { value: "rotating_belt_1", label: "1-belt rotating" },
+                        { value: "full_moving", label: "Full moving ground" },
+                        { value: "static", label: "Static ground" },
+                      ]}
+                      {...form.getInputProps("ground_mode")}
+                    />
+                    <Text size="xs" c="dimmed">
+                      Use comma-separated substrings/prefixes that match part names in the STL.
+                    </Text>
+                    <SimpleGrid cols={2}>
+                      <TextInput label="Wheel parts" placeholder="Wheel_" {...form.getInputProps("tn_wheel")} />
+                      <TextInput label="Rim parts (for wheel axis detection)" placeholder="_Spokes_" {...form.getInputProps("tn_rim")} />
+                    </SimpleGrid>
+                    {!isFullMoving && (
+                      <Switch label="Overset mesh for rotating wheels (OSM)" {...form.getInputProps("overset_wheels", { type: "checkbox" })} />
+                    )}
+                    {!isFullMoving && form.values.overset_wheels && (
                       <>
-                        {isBelt5 ? (
+                        <Divider label="OSM region parts" labelPosition="center" />
+                        <SimpleGrid cols={2}>
+                          <TextInput label="FR LH OSM" placeholder="Overset_FR_LH" {...form.getInputProps("tn_osm_fr_lh")} />
+                          <TextInput label="FR RH OSM" placeholder="Overset_FR_RH" {...form.getInputProps("tn_osm_fr_rh")} />
+                          <TextInput label="RR LH OSM" placeholder="Overset_RR_LH" {...form.getInputProps("tn_osm_rr_lh")} />
+                          <TextInput label="RR RH OSM" placeholder="Overset_RR_RH" {...form.getInputProps("tn_osm_rr_rh")} />
+                        </SimpleGrid>
+                      </>
+                    )}
+                    {!isFullMoving && (
+                      <>
+                        <Switch label="Apply BL suction (no-slip / slip ground split)" {...form.getInputProps("bl_suction_apply", { type: "checkbox" })} />
+                        {form.values.bl_suction_apply && (
                           <>
-                            <Switch label="Derive no-slip x-min from center belt x-min" {...form.getInputProps("bl_suction_from_belt_xmin", { type: "checkbox" })} />
-                            {form.values.bl_suction_from_belt_xmin ? (
-                              <NumberInput label="BL x-min offset from belt (m)" step={0.01} allowDecimal {...form.getInputProps("bl_suction_xmin_offset")} />
+                            {isBelt5 ? (
+                              <>
+                                <Switch label="Derive no-slip x-min from center belt x-min" {...form.getInputProps("bl_suction_from_belt_xmin", { type: "checkbox" })} />
+                                {form.values.bl_suction_from_belt_xmin ? (
+                                  <NumberInput label="BL x-min offset from belt (m)" step={0.01} allowDecimal {...form.getInputProps("bl_suction_xmin_offset")} />
+                                ) : (
+                                  <NumberInput label="No-slip x-min position (m)" step={0.01} {...form.getInputProps("bl_suction_no_slip_xmin_pos")} />
+                                )}
+                              </>
                             ) : (
                               <NumberInput label="No-slip x-min position (m)" step={0.01} {...form.getInputProps("bl_suction_no_slip_xmin_pos")} />
                             )}
                           </>
-                        ) : (
-                          <NumberInput label="No-slip x-min position (m)" step={0.01} {...form.getInputProps("bl_suction_no_slip_xmin_pos")} />
                         )}
                       </>
                     )}
-                  </>
-                )}
-
-                {isStatic && (
-                  <Switch label="Apply box refinement for static ground" {...form.getInputProps("apply_static_ground_refinement", { type: "checkbox" })} />
-                )}
-
-                {isBelt5 && (
-                  <>
-                    <Divider label="5-Belt Configuration" labelPosition="center" />
-                    <Switch label="Wheel belt position auto (from tire centroid)" {...form.getInputProps("belt5_wheel_loc_auto", { type: "checkbox" })} />
-                    <Switch label="Narrow car fallback (minimum belt gap)" {...form.getInputProps("belt5_narrow_fallback", { type: "checkbox" })} />
-                    {form.values.belt5_narrow_fallback && (
-                      <NumberInput label="Minimum belt gap (m)" step={0.05} {...form.getInputProps("belt5_narrow_min_gap")} />
+                    {isStatic && (
+                      <Switch label="Apply box refinement for static ground" {...form.getInputProps("apply_static_ground_refinement", { type: "checkbox" })} />
                     )}
-                    <Select
-                      label="Center belt position"
-                      data={[
-                        { value: "at_wheelbase_center", label: "At wheelbase center" },
-                        { value: "user_specified", label: "User specified" },
-                      ]}
-                      {...form.getInputProps("belt5_center_pos")}
-                    />
-                    {form.values.belt5_center_pos === "user_specified" && (
-                      <NumberInput label="Center belt x position (m)" step={0.01} {...form.getInputProps("belt5_center_x")} />
-                    )}
-                    <Text size="sm" fw={500}>Wheel belt size (m)</Text>
-                    <SimpleGrid cols={2}>
-                      <NumberInput label="Width (x)" step={0.05} {...form.getInputProps("belt5_wheel_size_x")} />
-                      <NumberInput label="Length (y)" step={0.05} {...form.getInputProps("belt5_wheel_size_y")} />
-                    </SimpleGrid>
-                    <Text size="sm" fw={500}>Center belt size (m)</Text>
-                    <SimpleGrid cols={2}>
-                      <NumberInput label="Width (x)" step={0.05} {...form.getInputProps("belt5_center_size_x")} />
-                      <NumberInput label="Length (y)" step={0.05} {...form.getInputProps("belt5_center_size_y")} />
-                    </SimpleGrid>
-                    <Switch label="Include wheel belt forces in aerodynamic loads" {...form.getInputProps("belt5_include_wheel_forces", { type: "checkbox" })} />
                   </>
-                )}
-
-                {isBelt1 && (
+                ) : (
                   <>
-                    <Divider label="1-Belt Configuration" labelPosition="center" />
-                    <Text size="sm" fw={500}>Belt size (m)</Text>
-                    <SimpleGrid cols={2}>
-                      <NumberInput label="Width (x)" step={0.05} {...form.getInputProps("belt1_size_x")} />
-                      <NumberInput label="Length (y)" step={0.1} {...form.getInputProps("belt1_size_y")} />
-                    </SimpleGrid>
+                    <Switch label="Apply BL suction (no-slip / slip ground split)" {...form.getInputProps("bl_suction_apply", { type: "checkbox" })} />
+                    {form.values.bl_suction_apply && (
+                      <NumberInput label="No-slip x-min position (m)" step={0.01} {...form.getInputProps("bl_suction_no_slip_xmin_pos")} />
+                    )}
                   </>
                 )}
-              </>
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+
+            {/* ── Belt Configuration (aero only) ── */}
+            {isAero(simType) && (
+              <Accordion.Item value="belt-config">
+                <Accordion.Control><Text fw={500}>Belt Configuration</Text></Accordion.Control>
+                <Accordion.Panel><Stack gap="xs">
+                  {isBelt5 && (
+                    <>
+                      <Switch label="Wheel belt position auto (from tire centroid)" {...form.getInputProps("belt5_wheel_loc_auto", { type: "checkbox" })} />
+                      <Switch label="Narrow car fallback (minimum belt gap)" {...form.getInputProps("belt5_narrow_fallback", { type: "checkbox" })} />
+                      {form.values.belt5_narrow_fallback && (
+                        <NumberInput label="Minimum belt gap (m)" step={0.05} {...form.getInputProps("belt5_narrow_min_gap")} />
+                      )}
+                      <Select
+                        label="Center belt position"
+                        data={[
+                          { value: "at_wheelbase_center", label: "At wheelbase center" },
+                          { value: "user_specified", label: "User specified" },
+                        ]}
+                        {...form.getInputProps("belt5_center_pos")}
+                      />
+                      {form.values.belt5_center_pos === "user_specified" && (
+                        <NumberInput label="Center belt x position (m)" step={0.01} {...form.getInputProps("belt5_center_x")} />
+                      )}
+                      <Text size="sm" fw={500}>Wheel belt size (m)</Text>
+                      <SimpleGrid cols={2}>
+                        <NumberInput label="Width (x)" step={0.05} {...form.getInputProps("belt5_wheel_size_x")} />
+                        <NumberInput label="Length (y)" step={0.05} {...form.getInputProps("belt5_wheel_size_y")} />
+                      </SimpleGrid>
+                      <Text size="sm" fw={500}>Center belt size (m)</Text>
+                      <SimpleGrid cols={2}>
+                        <NumberInput label="Width (x)" step={0.05} {...form.getInputProps("belt5_center_size_x")} />
+                        <NumberInput label="Length (y)" step={0.05} {...form.getInputProps("belt5_center_size_y")} />
+                      </SimpleGrid>
+                      <Switch label="Include wheel belt forces in aerodynamic loads" {...form.getInputProps("belt5_include_wheel_forces", { type: "checkbox" })} />
+                      <Divider label="Tire part names (required for belt auto-position)" labelPosition="center" />
+                      <Text size="xs" c="dimmed">
+                        Use exact STL part names for individual tire parts.
+                      </Text>
+                      <SimpleGrid cols={2}>
+                        <TextInput label="FR LH tire" placeholder="WheelTire_FR_LH" required {...form.getInputProps("tn_wt_fr_lh")} />
+                        <TextInput label="FR RH tire" placeholder="WheelTire_FR_RH" required {...form.getInputProps("tn_wt_fr_rh")} />
+                        <TextInput label="RR LH tire" placeholder="WheelTire_RR_LH" required {...form.getInputProps("tn_wt_rr_lh")} />
+                        <TextInput label="RR RH tire" placeholder="WheelTire_RR_RH" required {...form.getInputProps("tn_wt_rr_rh")} />
+                      </SimpleGrid>
+                      <NumberInput label="Tire roughness (m)" decimalScale={5} step={0.0001} {...form.getInputProps("tn_tire_roughness")} />
+                    </>
+                  )}
+                  {isBelt1 && (
+                    <>
+                      <Text size="sm" fw={500}>Belt size (m)</Text>
+                      <SimpleGrid cols={2}>
+                        <NumberInput label="Width (x)" step={0.05} {...form.getInputProps("belt1_size_x")} />
+                        <NumberInput label="Length (y)" step={0.1} {...form.getInputProps("belt1_size_y")} />
+                      </SimpleGrid>
+                    </>
+                  )}
+                  {!isBelt5 && !isBelt1 && (
+                    <Text size="sm" c="dimmed">
+                      Select a belt ground mode (5-belt or 1-belt) in Ground Condition to configure belt settings.
+                    </Text>
+                  )}
+                </Stack></Accordion.Panel>
+              </Accordion.Item>
             )}
 
-            {/* GHN/fan_noise BL suction (simple, no belt options) */}
-            {!isAero(simType) && (
-              <>
-                <Switch label="Apply BL suction (no-slip / slip ground split)" {...form.getInputProps("bl_suction_apply", { type: "checkbox" })} />
-                {form.values.bl_suction_apply && (
-                  <NumberInput label="No-slip x-min position (m)" step={0.01} {...form.getInputProps("bl_suction_no_slip_xmin_pos")} />
-                )}
-              </>
-            )}
-
-            {/* Turbulence generator — aero only */}
+            {/* ── Turbulence Generator (aero only) ── */}
             {hasTG(simType) && (
-              <>
-                <Divider label="Turbulence Generator" labelPosition="center" />
-                <SimpleGrid cols={2}>
-                  <Switch label="Enable ground TG" {...form.getInputProps("tg_enable_ground", { type: "checkbox" })} />
-                  <Switch label="Enable body TG" {...form.getInputProps("tg_enable_body", { type: "checkbox" })} />
-                </SimpleGrid>
-                {form.values.tg_enable_ground && (
+              <Accordion.Item value="turbulence-gen">
+                <Accordion.Control><Text fw={500}>Turbulence Generator</Text></Accordion.Control>
+                <Accordion.Panel><Stack gap="xs">
                   <SimpleGrid cols={2}>
-                    <NumberInput label="Ground TG num eddies" {...form.getInputProps("tg_ground_num_eddies")} />
-                    <NumberInput label="Ground TG intensity" decimalScale={3} step={0.005} {...form.getInputProps("tg_ground_intensity")} />
+                    <Switch label="Enable ground TG" {...form.getInputProps("tg_enable_ground", { type: "checkbox" })} />
+                    <Switch label="Enable body TG" {...form.getInputProps("tg_enable_body", { type: "checkbox" })} />
                   </SimpleGrid>
-                )}
-                {form.values.tg_enable_body && (
-                  <SimpleGrid cols={2}>
-                    <NumberInput label="Body TG num eddies" {...form.getInputProps("tg_body_num_eddies")} />
-                    <NumberInput label="Body TG intensity" decimalScale={3} step={0.005} {...form.getInputProps("tg_body_intensity")} />
-                  </SimpleGrid>
-                )}
-              </>
+                  {form.values.tg_enable_ground && (
+                    <SimpleGrid cols={2}>
+                      <NumberInput label="Ground TG num eddies" {...form.getInputProps("tg_ground_num_eddies")} />
+                      <NumberInput label="Ground TG intensity" decimalScale={3} step={0.005} {...form.getInputProps("tg_ground_intensity")} />
+                    </SimpleGrid>
+                  )}
+                  {form.values.tg_enable_body && (
+                    <SimpleGrid cols={2}>
+                      <NumberInput label="Body TG num eddies" {...form.getInputProps("tg_body_num_eddies")} />
+                      <NumberInput label="Body TG intensity" decimalScale={3} step={0.005} {...form.getInputProps("tg_body_intensity")} />
+                    </SimpleGrid>
+                  )}
+                </Stack></Accordion.Panel>
+              </Accordion.Item>
             )}
 
-            {/* Compute options */}
-            <Divider label="Compute options (defaults)" labelPosition="center" />
-            <Switch label="Adjust ride height" {...form.getInputProps("compute_adjust_ride_height", { type: "checkbox" })} />
-
-            {/* Porous media coefficients at template level */}
-            <Divider label="Porous Media Coefficients (template defaults)" labelPosition="center" />
-            <Group justify="space-between">
-              <Text size="sm" fw={500}>Porous parts ({form.values.porous_coefficients.length})</Text>
-              <Button size="xs" leftSection={<IconPlus size={12} />}
-                onClick={() => form.insertListItem("porous_coefficients", {
-                  part_name: "", inertial_resistance: 0.0, viscous_resistance: 0.0,
-                } as PorousCoeffFormItem)}>
-                Add porous part
-              </Button>
-            </Group>
-            <Text size="xs" c="dimmed">
-              These serve as defaults. Can be overridden per Configuration.
-            </Text>
-            {form.values.porous_coefficients.map((_, idx) => (
-              <Paper key={idx} withBorder p="xs">
-                <Group justify="space-between" mb={4}>
-                  <Badge size="sm" variant="outline">Porous {idx + 1}</Badge>
-                  <ActionIcon color="red" size="sm" variant="subtle"
-                    onClick={() => form.removeListItem("porous_coefficients", idx)}>
-                    <IconTrash size={14} />
-                  </ActionIcon>
+            {/* ── Porous Media ── */}
+            <Accordion.Item value="porous-media">
+              <Accordion.Control><Text fw={500}>Porous Media Coefficients (template defaults)</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
+                <Group justify="space-between">
+                  <Text size="sm" fw={500}>Porous parts ({form.values.porous_coefficients.length})</Text>
+                  <Button size="xs" leftSection={<IconPlus size={12} />}
+                    onClick={() => form.insertListItem("porous_coefficients", {
+                      part_name: "", inertial_resistance: 0.0, viscous_resistance: 0.0,
+                    } as PorousCoeffFormItem)}>
+                    Add porous part
+                  </Button>
                 </Group>
-                <TextInput label="Part name (must match STL part name exactly)" {...form.getInputProps(`porous_coefficients.${idx}.part_name`)} />
-                <SimpleGrid cols={2}>
-                  <NumberInput label="Inertial resistance (1/m)" decimalScale={2} step={1} {...form.getInputProps(`porous_coefficients.${idx}.inertial_resistance`)} />
-                  <NumberInput label="Viscous resistance (1/s)" decimalScale={2} step={1} {...form.getInputProps(`porous_coefficients.${idx}.viscous_resistance`)} />
-                </SimpleGrid>
-              </Paper>
-            ))}
-          </Stack></PanelWrapper>
+                <Text size="xs" c="dimmed">
+                  These serve as defaults. Can be overridden per Configuration.
+                </Text>
+                {form.values.porous_coefficients.map((_, idx) => (
+                  <Paper key={idx} withBorder p="xs">
+                    <Group justify="space-between" mb={4}>
+                      <Badge size="sm" variant="outline">Porous {idx + 1}</Badge>
+                      <ActionIcon color="red" size="sm" variant="subtle"
+                        onClick={() => form.removeListItem("porous_coefficients", idx)}>
+                        <IconTrash size={14} />
+                      </ActionIcon>
+                    </Group>
+                    <TextInput label="Part name (must match STL part name exactly)" {...form.getInputProps(`porous_coefficients.${idx}.part_name`)} />
+                    <SimpleGrid cols={2}>
+                      <NumberInput label="Inertial resistance (1/m)" decimalScale={2} step={1} {...form.getInputProps(`porous_coefficients.${idx}.inertial_resistance`)} />
+                      <NumberInput label="Viscous resistance (1/s)" decimalScale={2} step={1} {...form.getInputProps(`porous_coefficients.${idx}.viscous_resistance`)} />
+                    </SimpleGrid>
+                  </Paper>
+                ))}
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+
+          </Accordion>
+        </PanelWrapper>
       </Tabs.Panel>
 
       {/* ── Output ───────────────────────────────────────────────────── */}
       <Tabs.Panel value="output" pt="md">
-        <PanelWrapper disabled={readOnly}><Stack gap="sm">
+        <PanelWrapper disabled={readOnly}>
+          <Accordion multiple defaultValue={["full-data", "aero-coeff", "partial-surfaces", "partial-volumes", "section-cuts", "probe-files"]}>
+            <Accordion.Item value="full-data">
+              <Accordion.Control><Text fw={500}>Full Data Output</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
             {/* Full data */}
-            <Divider label="Full data output" labelPosition="center" />
             <SimpleGrid cols={2}>
               <NumberInput label="Output start time (s)" allowDecimal step={0.1} required {...form.getInputProps("fd_output_start_time")} />
               <NumberInput label="Output interval (s)" allowDecimal step={0.1} required {...form.getInputProps("fd_output_interval")} />
@@ -927,8 +1012,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
             <Switch label="Output coarsening" {...form.getInputProps("fd_coarsening_active", { type: "checkbox" })} />
             {form.values.fd_coarsening_active && (
               <SimpleGrid cols={2}>
-                <NumberInput label="Coarsest target RL" {...form.getInputProps("fd_coarsest_target_rl")} />
-                <NumberInput label="Coarsen by num RL" {...form.getInputProps("fd_coarsen_by_num_rl")} />
+                <NumberInput label="Coarsest target RL" min={1} max={form.values.number_of_resolution} {...form.getInputProps("fd_coarsest_target_rl")} />
+                <Box>
+                  <Text size="xs" mb={4}>Coarsen by num RL</Text>
+                  <SegmentedControl data={["1", "2"]} value={String(form.values.fd_coarsen_by_num_rl)} onChange={(v) => form.setFieldValue("fd_coarsen_by_num_rl", Number(v))} />
+                </Box>
               </SimpleGrid>
             )}
             <Select
@@ -977,11 +1065,13 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
               values={form.values.output_variables_surface}
               onChange={(v) => form.setFieldValue("output_variables_surface", v)}
             />
-
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
             {/* Aero coefficients */}
             {isAero(simType) && (
-              <>
-                <Divider label="Aero coefficients" labelPosition="center" />
+              <Accordion.Item value="aero-coeff">
+                <Accordion.Control><Text fw={500}>Aero Coefficients</Text></Accordion.Control>
+                <Accordion.Panel><Stack gap="xs">
                 <Switch label="Reference area: auto (Ultrafluid calculates)" {...form.getInputProps("ac_ref_area_auto", { type: "checkbox" })} />
                 {!form.values.ac_ref_area_auto && (
                   <NumberInput label="Reference area (m²)" decimalScale={4} step={0.1} {...form.getInputProps("ac_ref_area")} />
@@ -1004,11 +1094,13 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                     </SimpleGrid>
                   </>
                 )}
-              </>
+                </Stack></Accordion.Panel>
+              </Accordion.Item>
             )}
 
-            {/* Partial Surfaces */}
-            <Divider label="Partial Surfaces" labelPosition="center" />
+            <Accordion.Item value="partial-surfaces">
+              <Accordion.Control><Text fw={500}>Partial Surfaces</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
             <Group justify="space-between">
               <Text size="sm" fw={500}>Partial surface outputs ({form.values.partial_surfaces.length})</Text>
               <Button size="xs" leftSection={<IconPlus size={12} />} onClick={addPartialSurface}>Add</Button>
@@ -1063,8 +1155,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
               </Paper>
             ))}
 
-            {/* Partial Volumes */}
-            <Divider label="Partial Volumes" labelPosition="center" />
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item value="partial-volumes">
+              <Accordion.Control><Text fw={500}>Partial Volumes</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
             <Group justify="space-between">
               <Text size="sm" fw={500}>Partial volume outputs ({form.values.partial_volumes.length})</Text>
               <Button size="xs" leftSection={<IconPlus size={12} />} onClick={addPartialVolume}>Add</Button>
@@ -1097,8 +1192,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                   <Switch label="Output coarsening" {...form.getInputProps(`partial_volumes.${idx}.output_coarsening_active`, { type: "checkbox" })} />
                   {pv.output_coarsening_active && (
                     <SimpleGrid cols={2}>
-                      <NumberInput label="Coarsest target RL" {...form.getInputProps(`partial_volumes.${idx}.coarsest_target_refinement_level`)} />
-                      <NumberInput label="Coarsen by num RL" {...form.getInputProps(`partial_volumes.${idx}.coarsen_by_num_refinement_levels`)} />
+                      <NumberInput label="Coarsest target RL" min={1} max={form.values.number_of_resolution} {...form.getInputProps(`partial_volumes.${idx}.coarsest_target_refinement_level`)} />
+                      <Box>
+                        <Text size="xs" mb={4}>Coarsen by num RL</Text>
+                        <SegmentedControl data={["1", "2"]} value={String(pv.coarsen_by_num_refinement_levels)} onChange={(v) => form.setFieldValue(`partial_volumes.${idx}.coarsen_by_num_refinement_levels`, Number(v))} />
+                      </Box>
                     </SimpleGrid>
                   )}
                   <SimpleGrid cols={2}>
@@ -1154,8 +1252,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
               </Paper>
             ))}
 
-            {/* Section Cuts */}
-            <Divider label="Section Cuts" labelPosition="center" />
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item value="section-cuts">
+              <Accordion.Control><Text fw={500}>Section Cuts</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
             <Group justify="space-between">
               <Text size="sm" fw={500}>Section cut outputs ({form.values.section_cuts.length})</Text>
               <Button size="xs" leftSection={<IconPlus size={12} />} onClick={addSectionCut}>Add</Button>
@@ -1212,8 +1313,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
               </Paper>
             ))}
 
-            {/* Probe Files */}
-            <Divider label="Probe Files" labelPosition="center" />
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+            <Accordion.Item value="probe-files">
+              <Accordion.Control><Text fw={500}>Probe Files</Text></Accordion.Control>
+              <Accordion.Panel><Stack gap="xs">
             <Group justify="space-between">
               <Text size="sm" fw={500}>Probe file instances ({form.values.probe_files.length})</Text>
               <Button size="xs" leftSection={<IconPlus size={12} />} onClick={addProbeFile}>Add</Button>
@@ -1356,43 +1460,29 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                 </Stack>
               </Paper>
             ))}
-          </Stack></PanelWrapper>
+              </Stack></Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        </PanelWrapper>
       </Tabs.Panel>
 
       {/* ── Target Part Names ─────────────────────────────────────────── */}
-      <Tabs.Panel value="targets" pt="md">
+      {/* ── Part Specification ─────────────────────────────────────────── */}
+      <Tabs.Panel value="parts" pt="md">
         <PanelWrapper disabled={readOnly}><Stack gap="xs">
-            <Text size="xs" c="dimmed">
-              Use comma-separated substrings/prefixes that match part names in the STL.
-            </Text>
-            <TextInput label="Wheel parts" placeholder="Wheel_" {...form.getInputProps("tn_wheel")} />
-            {hasWheels(simType) && (
-              <>
-                <TextInput label="Rim parts (for wheel axis detection)" placeholder="_Spokes_" {...form.getInputProps("tn_rim")} />
-                <Divider label="Individual tire parts (for belt auto-position & roughness)" labelPosition="center" />
-                <SimpleGrid cols={2}>
-                  <TextInput label="FR LH tire" placeholder="WheelTire_FR_LH" {...form.getInputProps("tn_wt_fr_lh")} />
-                  <TextInput label="FR RH tire" placeholder="WheelTire_FR_RH" {...form.getInputProps("tn_wt_fr_rh")} />
-                  <TextInput label="RR LH tire" placeholder="WheelTire_RR_LH" {...form.getInputProps("tn_wt_rr_lh")} />
-                  <TextInput label="RR RH tire" placeholder="WheelTire_RR_RH" {...form.getInputProps("tn_wt_rr_rh")} />
-                </SimpleGrid>
-                <NumberInput label="Tire roughness (m)" decimalScale={5} step={0.0001} {...form.getInputProps("tn_tire_roughness")} />
-                {form.values.overset_wheels && (
-                  <>
-                    <Divider label="OSM region parts" labelPosition="center" />
-                    <SimpleGrid cols={2}>
-                      <TextInput label="FR LH OSM" placeholder="Overset_FR_LH" {...form.getInputProps("tn_osm_fr_lh")} />
-                      <TextInput label="FR RH OSM" placeholder="Overset_FR_RH" {...form.getInputProps("tn_osm_fr_rh")} />
-                      <TextInput label="RR LH OSM" placeholder="Overset_RR_LH" {...form.getInputProps("tn_osm_rr_lh")} />
-                      <TextInput label="RR RH OSM" placeholder="Overset_RR_RH" {...form.getInputProps("tn_osm_rr_rh")} />
-                    </SimpleGrid>
-                  </>
-                )}
-              </>
-            )}
-            <TextInput label="Baffle parts" placeholder="_Baffle_" {...form.getInputProps("tn_baffle")} />
-            <TextInput label="Wind tunnel parts (excluded from forces + offset refinement)" placeholder="WindTunnel_" {...form.getInputProps("tn_windtunnel")} />
-          </Stack></PanelWrapper>
+          <Text size="xs" c="dimmed">
+            Use comma-separated substrings/prefixes that match part names in the STL.
+          </Text>
+          <TextInput label="Baffle parts" placeholder="_Baffle_" {...form.getInputProps("tn_baffle")} />
+          <TextInput label="Wind tunnel parts (excluded from forces + offset refinement)" placeholder="WindTunnel_" {...form.getInputProps("tn_windtunnel")} />
+        </Stack></PanelWrapper>
+      </Tabs.Panel>
+
+      {/* ── Ride Height ─────────────────────────────────────────────────── */}
+      <Tabs.Panel value="ride_height" pt="md">
+        <PanelWrapper disabled={readOnly}><Stack gap="xs">
+          <Switch label="Adjust ride height" {...form.getInputProps("compute_adjust_ride_height", { type: "checkbox" })} />
+        </Stack></PanelWrapper>
       </Tabs.Panel>
     </Tabs>
   );

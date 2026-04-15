@@ -16,6 +16,7 @@ import { notifications } from "@mantine/notifications";
 import { templatesApi, type TemplateCreate } from "../../api/templates";
 import {
   FORM_DEFAULTS,
+  FORM_VALIDATE,
   buildSettings,
   valuesFromSettings,
 } from "../../hooks/useTemplateSettingsForm";
@@ -35,7 +36,7 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
   const [commentValue, setCommentValue] = useState("");
   const closeAfterSave = useRef(false);
 
-  const form = useForm({ initialValues: { ...FORM_DEFAULTS } });
+  const form = useForm({ initialValues: { ...FORM_DEFAULTS }, validate: FORM_VALIDATE });
 
   // Fetch preset from backend whenever sim_type changes
   const { data: presetData } = useQuery({
@@ -106,7 +107,7 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
   }
 
   return (
-    <Modal opened={opened} onClose={handleClose} title="New Template" size="90%">
+    <Modal opened={opened} onClose={handleClose} title="New Template" size="95%">
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <ScrollArea h="calc(100vh - 160px)" pr="md">
           <TemplateSettingsForm

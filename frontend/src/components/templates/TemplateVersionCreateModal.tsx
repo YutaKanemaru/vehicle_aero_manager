@@ -21,6 +21,7 @@ import {
 } from "../../api/templates";
 import {
   FORM_DEFAULTS,
+  FORM_VALIDATE,
   valuesFromSettings,
   buildSettings,
 } from "../../hooks/useTemplateSettingsForm";
@@ -45,6 +46,7 @@ export function TemplateVersionCreateModal({ opened, onClose, template }: Props)
     initialValues: activeSettings
       ? valuesFromSettings(activeSettings)
       : { ...FORM_DEFAULTS },
+    validate: FORM_VALIDATE,
   });
 
   // Re-populate when template changes or modal re-opens
@@ -141,7 +143,7 @@ export function TemplateVersionCreateModal({ opened, onClose, template }: Props)
           </Badge>
         </Group>
       }
-      size="90%"
+      size="95%"
     >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <ScrollArea h="calc(100vh - 160px)" pr="md">
