@@ -222,15 +222,33 @@ def analyze_stl_to_json(file_path: Path) -> str:
 # Timing / iteration helpers
 # ---------------------------------------------------------------------------
 
-def compute_dt(coarsest_mesh_size: float, inflow_velocity: float, mach_factor: float) -> float:
+def compute_dt(
+    coarsest_mesh_size: float,
+    mach_factor: float,
+    temperature_k: float,
+    gamma: float = 1.4,
+    r_specific: float = 287.05,
+) -> float:
     """
     LBM タイムステップを計算する。
 
-    dt = coarsest_mesh_size / (inflow_velocity × mach_factor × √3)
+    dt = coarsest_mesh_size * mach_factor / (Cs * sqrt(3))
 
-    √3 は LBM の音速スケーリング定数 (cs = 1/√3 × dx/dt)。
+    where Cs = sqrt(gamma * R_specific * T_kelvin) は実際の音速 [m/s]。
+    sqrt(3) は LBM の格子音速スケーリング定数 (cs_lattice = 1/sqrt(3))。
+    mach_factor は LBM の格子マッハ数を上げてステップ数を削減するスケーリング係数。
+
+    物理的導出:
+      Ma_LBM = v_phys / Cs * mach_factor  (人工的に Mach 数を拡大)
+      u_lattice = Ma_LBM / sqrt(3) = v_phys * dt / dx
+      → dt = dx * mach_factor / (Cs * sqrt(3))
+
+    Note: Inspire VWT API の run_param.numTimeSteps も同式を使用していることを
+          AUR_v1.2_EXT_1.99_corrected.xml (3870 iter, T=293.15K, dx=0.192, mach=2)
+          との照合で確認済み。
     """
-    denom = inflow_velocity * mach_factor * math.sqrt(3.0)
+    Cs = math.sqrt(gamma * r_specific * temperature_k)
+    denom = Cs * math.sqrt(3.0) / mach_factor
     if denom <= 0:
         return 1e-4
     return coarsest_mesh_size / denom
@@ -856,7 +874,7 @@ def assemble_ufx_solver_deck(
     # ── 有効パラメータ ────────────────────────────────────────────────────
     temperature_k = (sp.temperature + 273.15) if so.simulation.temperature_degree else sp.temperature
     coarsest      = sp.coarsest_voxel_size                 # ユーザー入力のコースメッシュサイズ
-    dt            = compute_dt(coarsest, inflow_velocity, sp.mach_factor)
+    dt            = compute_dt(coarsest, sp.mach_factor, temperature_k)
 
     # parameter_preset: fan_noise のときのみ "fan_noise"、それ以外 "default"
     parameter_preset = "fan_noise" if sim_type == "fan_noise" else "default"
