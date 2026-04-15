@@ -1431,6 +1431,13 @@ def assemble_ufx_solver_deck(
     if is_aero and gc.ground_mode == "rotating_belt_5":
         passive_parts.append("Belt_Center")
 
+    # uFX_top_and_sides — 上面・左右面は常に slip (AUR_v1.2_EXT_1.99_corrected.xml 準拠)
+    wall_instances.append(WallInstance(
+        name="uFX_top_and_sides",
+        parts=["uFX_domain_z_max", "uFX_domain_y_min", "uFX_domain_y_max"],
+        fluid_bc_settings=FluidBCSlip(type="slip"),
+    ))
+
     # ── Assemble UfxSolverDeck ────────────────────────────────────────────
     deck = UfxSolverDeck(
         version=Version(gui_version="2024", solver_version="2024"),
@@ -1486,16 +1493,16 @@ def assemble_ufx_solver_deck(
         ),
         boundary_conditions=BoundaryConditions(
             inlet=[InletInstance(
-                name="Inlet",
-                parts=["Inlet"],
+                name="uFX_inlet",
+                parts=["uFX_domain_x_min"],
                 fluid_bc_settings=FluidBCVelocity(
                     type="velocity",
                     velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
                 ),
             )],
             outlet=[OutletInstance(
-                name="Outlet",
-                parts=["Outlet"],
+                name="uFX_outlet",
+                parts=["uFX_domain_x_max"],
                 fluid_bc_settings=FluidBCNonReflectivePressure(type="non_reflective_pressure"),
             )],
             wall=wall_instances,
