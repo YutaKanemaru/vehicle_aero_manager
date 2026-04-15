@@ -1238,7 +1238,68 @@ def compute_wheel_kinematics(wheel_parts: dict, inflow_velocity: float) -> list[
 
 def compute_porous_axis(part_info: dict) -> dict:
     """PCA on porous part vertices → face normal → PorousAxis xyz."""
+
+def _build_belt5_wall_instances(
+    wheel_kin_map, belt5_cfg, vbbox, velocity_dir,
+    FluidBCMoving, XYZDir, WallInstance,
+    DomainPartInstance, BoundingRange,
+) -> tuple[list, float, list]:
+    """Returns (wall_instances, center_xmin, domain_part_instances).
+    Builds 5 moving WallInstances (FR_LH/FR_RH/RR_LH/RR_RH + Belt_Center) and
+    corresponding DomainPartInstances (location="z_min", export_mesh=True) with
+    computed bounding_range per belt from wheel kinematics and belt5 config.
+    """
 ```
+
+**Ground BC and `domain_part_instances` assembly** (in `assemble_ufx_solver_deck`):
+
+Ground wall BC logic:
+```
+ground_mode == "full_moving":
+  → WallInstance(name="uFX_moving_ground", parts=["uFX_domain_z_min"], type="moving")
+
+ground_mode != "full_moving" (all other modes):
+  → WallInstance(name="uFX_slip_ground", parts=["uFX_domain_z_min"], type="slip")  [always]
+  → WallInstance(name="uFX_static_ground", parts=["uFX_ground"], type="static")    [only if bl_suction.apply=True]
+```
+
+Belt DomainPartInstances (`belt_dpis`):
+```
+ground_mode == "rotating_belt_5":
+  → _build_belt5_wall_instances() returns belt_dpis:
+      Belt_Wheel_FR_LH, Belt_Wheel_FR_RH, Belt_Wheel_RR_LH, Belt_Wheel_RR_RH  (z_min, export_mesh=True)
+      Belt_Center  (z_min, export_mesh=True, x=[center_xmin, center_xmin+bsc.x], y=[-bsc.y/2, bsc.y/2])
+
+ground_mode == "rotating_belt_1":
+  → belt_dpis = [DomainPartInstance(name="Belt", location="z_min", export_mesh=True,
+        bounding_range=BoundingRange(x_min=no_slip_xmin, x_max=vbbox["x_max"],
+            y_min=-b1.belt_size.y/2, y_max=b1.belt_size.y/2))]
+```
+
+`uFX_ground` DomainPartInstance (BL suction patch):
+```
+Condition: ground_mode != "full_moving" AND bl_suction.apply=True AND no_slip_xmin is not None
+  ground_patch_active=True  → y_min/y_max = floor_dims (vehicle body bbox ±25% width)
+  ground_patch_active=False → y_min/y_max = full domain_bb width
+
+DomainPartInstance(name="uFX_ground", location="z_min", export_mesh=False,
+    bounding_range=BoundingRange(x_min=no_slip_xmin, x_max=floor_dims["x_max"],
+        y_min=gnd_y_min, y_max=gnd_y_max))
+```
+
+Final assembly:
+```python
+domain_part_instances = belt_dpis[:] + ([ground_dpi] if ground_dpi else [])
+domain_part = DomainPart(export_mesh=bool(domain_part_instances), domain_part_instances=domain_part_instances)
+```
+
+`passive_parts` additions (beyond windtunnel + wheel belt forces):
+```
+BL suction ON (non-full_moving):  passive_parts.append("uFX_ground")
+rotating_belt_5:                   passive_parts.append("Belt_Center")
+```
+
+> **Official Ultrafluid docs basis**: "BL suction entries can be replaced by setting the domain ground to a 'slip' ground and adding a `domain_part_instance` with 'static' BC starting at the suction position. This static patch needs to be excluded from the force coefficient calculation by making it a passive part."
 
 **Partial surface/volume build logic** (in `assemble_ufx_solver_deck`):
 - `ps_instances` loop: filters `all_part_names` by `include_parts` / `exclude_parts` patterns; auto-excludes baffles when `baffle_export_option` is set.
@@ -1333,6 +1394,7 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 | Simulation Run Parameters | **Accordion**: Run Time (run time, averaging, mach factor, yaw, ramp-up) · Physical Properties (velocity, temp, density, viscosity, gas constant) · Options (°C switch, FP mode) |
 | Meshing | **Accordion**: General (coarsest voxel, num RL, transition layers) · Triangle Splitting (global ON/OFF switch → when ON: max rel/abs edge + per-part instances) · Box Refinement (porous switch + dynamic list; each row: name/level + `SegmentedControl` for `box_type`: vehicle_bbox_factors/around_parts/user_defined) · Offset Refinement (dynamic list, "Apply body defaults") · Custom Refinement (dynamic list) |
 | Boundary Conditions | **Accordion**: Flow Domain Configuration (ground height definition + domain bbox factors) · Ground Condition (ground mode select + wheel/rim part names + OSM parts + BL suction; aero has Select, non-aero has simple BL suction only) · Belt Configuration (aero only; isBelt5: belt settings + **required** tire part names tn_wt_*; isBelt1: belt size) · Turbulence Generator (aero only) · Porous Media Coefficients (dynamic list, template defaults) |
+| *(Belt size label convention)* | x = vehicle longitudinal = **Length (x)**; y = vehicle lateral = **Width (y)**. Applied to all 3 belt size inputs (wheel belt, center belt, belt_1). |
 | Output | **Accordion**: Full Data Output (time fields, format, merge, coarsening [Coarsest RL max=number_of_resolution, Coarsen by SegmentedControl "1"|"2"], bbox select/coords, output vars 24+15 checkboxes) · Aero Coefficients (aero only; ref area/length auto, along-axis) · Partial Surfaces · Partial Volumes (coarsening same SegmentedControl) · Section Cuts · Probe Files |
 | Part Specification | `tn_baffle` + `tn_windtunnel` only |
 | Ride Height | `compute_adjust_ride_height` Switch only (placeholder) |
