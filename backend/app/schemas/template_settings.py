@@ -288,10 +288,9 @@ class Setup(BaseModel):
 
 class FullDataOutputConfig(BaseModel):
     """Full-volume and surface data output configuration."""
-    output_start_time: float | None = None      # seconds; None = auto (= simulation_time)
-    output_interval: float | None = None         # seconds; None = auto (= simulation_time)
-    file_format_ensight: bool = False
-    file_format_h3d: bool = True
+    output_start_time: float = 1.5              # seconds
+    output_interval: float = 0.3                # seconds
+    file_format: Literal["ensight", "h3d", "ensight_and_h3d"] = "h3d"
     output_coarsening_active: bool = False
     coarsest_target_refinement_level: int = 3
     coarsen_by_num_refinement_levels: int = 0
@@ -308,10 +307,9 @@ class FullDataOutputConfig(BaseModel):
 class PartialSurfaceOutputConfig(BaseModel):
     """Partial surface export configuration (one instance)."""
     name: str = "partial_surface"
-    output_start_time: float | None = None
-    output_interval: float | None = None
-    file_format_ensight: bool = False
-    file_format_h3d: bool = True
+    output_start_time: float = 1.5
+    output_interval: float = 0.3
+    file_format: Literal["ensight", "h3d", "ensight_and_h3d"] = "h3d"
     merge_output: bool = True
     delete_unmerged: bool = True
     include_parts: list[str] = Field(default_factory=list)
@@ -324,10 +322,9 @@ class PartialSurfaceOutputConfig(BaseModel):
 class PartialVolumeOutputConfig(BaseModel):
     """Partial volume export configuration (one instance)."""
     name: str = "partial_volume"
-    output_start_time: float | None = None
-    output_interval: float | None = None
-    file_format_ensight: bool = False
-    file_format_h3d: bool = True
+    output_start_time: float = 1.5
+    output_interval: float = 0.3
+    file_format: Literal["ensight", "h3d", "ensight_and_h3d"] = "h3d"
     output_coarsening_active: bool = False
     coarsest_target_refinement_level: int = 3
     coarsen_by_num_refinement_levels: int = 0
@@ -408,10 +405,9 @@ class ProbeFileConfig(BaseModel):
 class SectionCutConfig(BaseModel):
     """Section cut output configuration (one instance)."""
     name: str = "section_cut"
-    output_start_time: float | None = None   # seconds; None = use full_data value
-    output_interval: float | None = None      # seconds; None = use full_data value
-    file_format_ensight: bool = False
-    file_format_h3d: bool = True
+    output_start_time: float = 1.5
+    output_interval: float = 0.3
+    file_format: Literal["ensight", "h3d", "ensight_and_h3d"] = "h3d"
     merge_output: bool = True
     delete_unmerged: bool = True
     triangulation: bool = False
@@ -455,8 +451,6 @@ class TargetNames(BaseModel):
     # Generic part-name matching patterns (prefix/substring)
     wheel: list[str] = Field(default_factory=list)
     rim: list[str] = Field(default_factory=list)
-    porous: list[str] = Field(default_factory=list)
-    car_bounding_box: list[str] = Field(default_factory=list)
     baffle: list[str] = Field(default_factory=list)
     # windtunnel: excluded from offset refinement (unless manually specified) + passive parts
     windtunnel: list[str] = Field(default_factory=list)

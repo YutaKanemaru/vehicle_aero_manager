@@ -700,23 +700,26 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
   },
   "output": {
     "full_data": {
-      "output_start_time": null, "output_interval": null,
-      "file_format_ensight": false, "file_format_h3d": true,
+      "output_start_time": 1.5, "output_interval": 0.3,
+      "file_format": "h3d",
       "output_coarsening_active": false,
       "bbox_mode": "from_meshing_box",
       "output_variables_full": { "pressure": false, ... },
       "output_variables_surface": { "pressure": false, ... }
     },
     "partial_surfaces": [
-      { "name": "PS_Body", "include_parts": ["Body_"], "exclude_parts": [],
+      { "name": "PS_Body", "output_start_time": 1.5, "output_interval": 0.3, "file_format": "h3d",
+        "include_parts": ["Body_"], "exclude_parts": [],
         "baffle_export_option": null, "output_variables": {...} }
     ],
     "partial_volumes": [
-      { "name": "PV_Wake", "bbox_mode": "user_defined",
+      { "name": "PV_Wake", "output_start_time": 1.5, "output_interval": 0.3, "file_format": "h3d",
+        "bbox_mode": "user_defined",
         "bbox": [-1, 5, -1.5, 1.5, 0, 1.5], "output_variables": {...} }
     ],
     "section_cuts": [
-      { "name": "SC_Center", "axis_x": 0, "axis_y": 1, "axis_z": 0,
+      { "name": "SC_Center", "output_start_time": 1.5, "output_interval": 0.3, "file_format": "h3d",
+        "axis_x": 0, "axis_y": 1, "axis_z": 0,
         "point_x": 0, "point_y": 0, "point_z": 0.5, "bbox": [], "output_variables": {...} }
     ],
     "probe_files": [
@@ -734,7 +737,6 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
   },
   "target_names": {
     "wheel": ["Wheel_"], "rim": ["_Spokes_"],
-    "porous": ["Porous_Media_"], "car_bounding_box": [""],
     "baffle": ["_Baffle_"],
     "windtunnel": [], "wheel_tire_fr_lh": "", "wheel_tire_fr_rh": "",
     "wheel_tire_rr_lh": "", "wheel_tire_rr_rh": "",
@@ -1177,6 +1179,9 @@ class ProbeFileConfig(BaseModel):
 
 **`TargetNames`** key fields:
 ```python
+wheel: list[str] = []      # part-name patterns for wheel classification
+rim: list[str] = []        # part-name patterns for rim (PCA axis) detection
+baffle: list[str] = []     # part-name patterns for baffle parts
 wheel_tire_fr_lh: str = ""  # individual tyre PID — belt auto-position & roughness
 wheel_tire_fr_rh: str = ""
 wheel_tire_rr_lh: str = ""
@@ -1188,6 +1193,10 @@ overset_rr_rh: str = ""
 windtunnel: list[str] = []  # passive parts — excluded from force calc + offset refinement
 tire_roughness: float = 0.0
 ```
+
+**Note**: `porous` and `car_bounding_box` fields have been removed from `TargetNames`.
+- Porous part matching now uses `porous_coefficients[].part_name` (exact match) directly — no pattern filter needed.
+- `car_bounding_box` was unused and has been deleted.
 
 ### Compute Engine Extensions (`app/services/compute_engine.py`)
 
@@ -1303,9 +1312,9 @@ interface OffsetRefinementFormItem          { name, level, normal_distance, part
 interface CustomRefinementFormItem          { name, level, parts: string }
 interface PorousCoeffFormItem               { part_name, inertial_resistance, viscous_resistance }
 interface TriangleSplittingInstanceFormItem { name, active, max_absolute_edge_length, max_relative_edge_length, parts: string }
-interface PartialSurfaceFormItem    { name, include_parts, exclude_parts, baffle_export_option, output_variables, ... }
+interface PartialSurfaceFormItem    { name, output_start_time, output_interval, file_format, include_parts, exclude_parts, baffle_export_option, output_variables, ... }
 interface PartialVolumeFormItem     { name, bbox_mode, bbox_source_box, bbox, bbox_offset_xmin/xmax/ymin/ymax/zmin/zmax, output_variables, ... }
-interface SectionCutFormItem        { name, axis_x/y/z, point_x/y/z, bbox, output_variables, ... }
+interface SectionCutFormItem        { name, output_start_time, output_interval, file_format, axis_x/y/z, point_x/y/z, bbox, output_variables, ... }
 interface ProbeFileFormItem         { name, probe_type, radius, output_frequency, output_variables, points: ProbePointFormItem[] }
 interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 ```
@@ -1324,7 +1333,7 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 | Simulation Run Parameters | velocity, run time, averaging, mach factor, wall model, material |
 | Meshing | coarsest voxel, refinement levels, triangle splitting Switch (global ON/OFF) → when ON: max relative/absolute edge length inputs + per-part `triangle_splitting_instances` dynamic list (name/active/max_abs/max_rel/parts per row), **Add porous box refinement** Switch (adds a Box_RL6 around porous parts), box refinement dynamic list (each row: name/level + `SegmentedControl` for `box_type`: **vehicle_bbox_factors** [6 factor inputs relative to vehicle dims, hint "× Vehicle dimensions"] \| **around_parts** [parts string + 6 offset-m NumberInputs] \| **user_defined** [6 absolute-m coord inputs, hint "Absolute coordinates (m)"]; "Restore defaults" sets list to `FORM_DEFAULTS.box_refinements`), offset refinement dynamic list ("Apply body defaults" recalculates RL7/RL6 distances from current voxel size using `FORM_DEFAULTS.offset_refinements`; GHN filters out RL7), custom refinement dynamic list |
 | Boundary Conditions | **Flow Domain Configuration** section (ground height definition + domain bounding box factors / multipliers relative to vehicle size), then ground mode, belt config, BL suction, turbulence generator, porous coefficients (template defaults) dynamic list |
-| Output | full data format/coarsening, output variables checkboxes (full: 24 vars, surface: 15 vars), partial surface dynamic list (include/exclude/baffle/per-instance output vars), partial volume dynamic list (3 bbox_mode variants), section cuts dynamic list, **probe files dynamic list** (probe points, CSV import/export) |
+| Output | full data output_start_time/output_interval (required, s) + file_format `Select` (EnSight/H3D/EnSight & H3D) + coarsening + output variables checkboxes (full: 24 vars, surface: 15 vars), partial surface dynamic list (output_start_time/output_interval required + file_format Select + include/exclude/baffle/per-instance output vars), partial volume dynamic list (3 bbox_mode variants + same time/format fields), section cuts dynamic list (same time/format fields), **probe files dynamic list** (probe points, CSV import/export) |
 | Target Part Names | all `target_names` fields |
 
 ---

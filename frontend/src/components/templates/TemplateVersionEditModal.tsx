@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Modal,
   TextInput,
@@ -38,6 +38,7 @@ export function TemplateVersionEditModal({ opened, onClose, template, version }:
   const queryClient = useQueryClient();
   const simType = template.sim_type as "aero" | "ghn" | "fan_noise";
   const [commentValue, setCommentValue] = useState(version.comment ?? "");
+  const closeAfterSave = useRef(false);
   const [jsonLoadError, setJsonLoadError] = useState<string | null>(null);
   const [jsonLoading, setJsonLoading] = useState(false);
 
@@ -59,14 +60,17 @@ export function TemplateVersionEditModal({ opened, onClose, template, version }:
     mutationFn: (data: TemplateVersionUpdate) =>
       templatesApi.updateVersion(template.id, version.id, data),
     onSuccess: () => {
+      const shouldClose = closeAfterSave.current;
+      closeAfterSave.current = false;
       queryClient.invalidateQueries({ queryKey: ["templates"] });
       queryClient.invalidateQueries({
         queryKey: ["templates", template.id, "versions"],
       });
       notifications.show({ message: "Version updated", color: "green" });
-      onClose();
+      if (shouldClose) onClose();
     },
     onError: (e: Error) => {
+      closeAfterSave.current = false;
       notifications.show({ message: e.message, color: "red" });
     },
   });
@@ -170,7 +174,18 @@ export function TemplateVersionEditModal({ opened, onClose, template, version }:
             Cancel
           </Button>
           <Button type="submit" loading={mutation.isPending}>
-            Save Changes
+            Save without closing
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            loading={mutation.isPending}
+            onClick={() => {
+              closeAfterSave.current = true;
+              form.onSubmit(handleSubmit)();
+            }}
+          >
+            Save and close
           </Button>
         </Group>
         {jsonLoadError && (

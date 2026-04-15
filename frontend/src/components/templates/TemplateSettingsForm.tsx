@@ -266,10 +266,9 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
   const addPartialSurface = () =>
     form.insertListItem("partial_surfaces", {
       name: `Partial_Surface_${form.values.partial_surfaces.length + 1}`,
-      output_start_time: null,
-      output_interval: null,
-      file_format_ensight: false,
-      file_format_h3d: true,
+      output_start_time: 1.5,
+      output_interval: 0.3,
+      file_format: "h3d",
       merge_output: true,
       delete_unmerged: true,
       include_parts: "",
@@ -289,10 +288,9 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
   const addPartialVolume = () =>
     form.insertListItem("partial_volumes", {
       name: `Partial_Volume_${form.values.partial_volumes.length + 1}`,
-      output_start_time: null,
-      output_interval: null,
-      file_format_ensight: false,
-      file_format_h3d: true,
+      output_start_time: 1.5,
+      output_interval: 0.3,
+      file_format: "h3d",
       output_coarsening_active: false,
       coarsest_target_refinement_level: 3,
       coarsen_by_num_refinement_levels: 0,
@@ -323,10 +321,9 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
   const addSectionCut = () =>
     form.insertListItem("section_cuts", {
       name: `Section_Cut_${form.values.section_cuts.length + 1}`,
-      output_start_time: null,
-      output_interval: null,
-      file_format_ensight: false,
-      file_format_h3d: true,
+      output_start_time: 1.5,
+      output_interval: 0.3,
+      file_format: "h3d",
       merge_output: true,
       delete_unmerged: true,
       triangulation: false,
@@ -909,13 +906,19 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
             {/* Full data */}
             <Divider label="Full data output" labelPosition="center" />
             <SimpleGrid cols={2}>
-              <NumberInput label="Output start time (s, blank=auto)" allowDecimal step={0.1} {...form.getInputProps("fd_output_start_time")} />
-              <NumberInput label="Output interval (s, blank=auto)" allowDecimal step={0.1} {...form.getInputProps("fd_output_interval")} />
+              <NumberInput label="Output start time (s)" allowDecimal step={0.1} required {...form.getInputProps("fd_output_start_time")} />
+              <NumberInput label="Output interval (s)" allowDecimal step={0.1} required {...form.getInputProps("fd_output_interval")} />
             </SimpleGrid>
-            <SimpleGrid cols={2}>
-              <Switch label="Format: EnSight" {...form.getInputProps("fd_format_ensight", { type: "checkbox" })} />
-              <Switch label="Format: H3D" {...form.getInputProps("fd_format_h3d", { type: "checkbox" })} />
-            </SimpleGrid>
+            <Select
+              label="File format"
+              data={[
+                { value: "ensight", label: "EnSight" },
+                { value: "h3d", label: "H3D" },
+                { value: "ensight_and_h3d", label: "EnSight & H3D" },
+              ]}
+              allowDeselect={false}
+              {...form.getInputProps("fd_file_format")}
+            />
             <SimpleGrid cols={2}>
               <Switch label="Merge output files" {...form.getInputProps("fd_merge_output", { type: "checkbox" })} />
               <Switch label="Delete unmerged files" disabled={!form.values.fd_merge_output} {...form.getInputProps("fd_delete_unmerged", { type: "checkbox" })} />
@@ -1012,13 +1015,19 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                 <Stack gap="xs">
                   <TextInput label="Name" {...form.getInputProps(`partial_surfaces.${idx}.name`)} />
                   <SimpleGrid cols={2}>
-                    <NumberInput label="Output start time (s, blank=auto)" {...form.getInputProps(`partial_surfaces.${idx}.output_start_time`)} />
-                    <NumberInput label="Output interval (s, blank=auto)" {...form.getInputProps(`partial_surfaces.${idx}.output_interval`)} />
+                    <NumberInput label="Output start time (s)" required {...form.getInputProps(`partial_surfaces.${idx}.output_start_time`)} />
+                    <NumberInput label="Output interval (s)" required {...form.getInputProps(`partial_surfaces.${idx}.output_interval`)} />
                   </SimpleGrid>
-                  <SimpleGrid cols={2}>
-                    <Switch label="Format: EnSight" {...form.getInputProps(`partial_surfaces.${idx}.file_format_ensight`, { type: "checkbox" })} />
-                    <Switch label="Format: H3D" {...form.getInputProps(`partial_surfaces.${idx}.file_format_h3d`, { type: "checkbox" })} />
-                  </SimpleGrid>
+                  <Select
+                    label="File format"
+                    data={[
+                      { value: "ensight", label: "EnSight" },
+                      { value: "h3d", label: "H3D" },
+                      { value: "ensight_and_h3d", label: "EnSight & H3D" },
+                    ]}
+                    allowDeselect={false}
+                    {...form.getInputProps(`partial_surfaces.${idx}.file_format`)}
+                  />
                   <SimpleGrid cols={2}>
                     <Switch label="Merge output" {...form.getInputProps(`partial_surfaces.${idx}.merge_output`, { type: "checkbox" })} />
                     <Switch label="Delete unmerged" {...form.getInputProps(`partial_surfaces.${idx}.delete_unmerged`, { type: "checkbox" })} />
@@ -1062,13 +1071,19 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                 <Stack gap="xs">
                   <TextInput label="Name" {...form.getInputProps(`partial_volumes.${idx}.name`)} />
                   <SimpleGrid cols={2}>
-                    <NumberInput label="Output start time (s, blank=auto)" {...form.getInputProps(`partial_volumes.${idx}.output_start_time`)} />
-                    <NumberInput label="Output interval (s, blank=auto)" {...form.getInputProps(`partial_volumes.${idx}.output_interval`)} />
+                    <NumberInput label="Output start time (s)" required {...form.getInputProps(`partial_volumes.${idx}.output_start_time`)} />
+                    <NumberInput label="Output interval (s)" required {...form.getInputProps(`partial_volumes.${idx}.output_interval`)} />
                   </SimpleGrid>
-                  <SimpleGrid cols={2}>
-                    <Switch label="Format: EnSight" {...form.getInputProps(`partial_volumes.${idx}.file_format_ensight`, { type: "checkbox" })} />
-                    <Switch label="Format: H3D" {...form.getInputProps(`partial_volumes.${idx}.file_format_h3d`, { type: "checkbox" })} />
-                  </SimpleGrid>
+                  <Select
+                    label="File format"
+                    data={[
+                      { value: "ensight", label: "EnSight" },
+                      { value: "h3d", label: "H3D" },
+                      { value: "ensight_and_h3d", label: "EnSight & H3D" },
+                    ]}
+                    allowDeselect={false}
+                    {...form.getInputProps(`partial_volumes.${idx}.file_format`)}
+                  />
                   <Switch label="Output coarsening" {...form.getInputProps(`partial_volumes.${idx}.output_coarsening_active`, { type: "checkbox" })} />
                   {pv.output_coarsening_active && (
                     <SimpleGrid cols={2}>
@@ -1147,13 +1162,19 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                 <Stack gap="xs">
                   <TextInput label="Name" {...form.getInputProps(`section_cuts.${idx}.name`)} />
                   <SimpleGrid cols={2}>
-                    <NumberInput label="Output start time (s, blank=auto)" {...form.getInputProps(`section_cuts.${idx}.output_start_time`)} />
-                    <NumberInput label="Output interval (s, blank=auto)" {...form.getInputProps(`section_cuts.${idx}.output_interval`)} />
+                    <NumberInput label="Output start time (s)" required {...form.getInputProps(`section_cuts.${idx}.output_start_time`)} />
+                    <NumberInput label="Output interval (s)" required {...form.getInputProps(`section_cuts.${idx}.output_interval`)} />
                   </SimpleGrid>
-                  <SimpleGrid cols={2}>
-                    <Switch label="Format: EnSight" {...form.getInputProps(`section_cuts.${idx}.file_format_ensight`, { type: "checkbox" })} />
-                    <Switch label="Format: H3D" {...form.getInputProps(`section_cuts.${idx}.file_format_h3d`, { type: "checkbox" })} />
-                  </SimpleGrid>
+                  <Select
+                    label="File format"
+                    data={[
+                      { value: "ensight", label: "EnSight" },
+                      { value: "h3d", label: "H3D" },
+                      { value: "ensight_and_h3d", label: "EnSight & H3D" },
+                    ]}
+                    allowDeselect={false}
+                    {...form.getInputProps(`section_cuts.${idx}.file_format`)}
+                  />
                   <SimpleGrid cols={2}>
                     <Switch label="Merge output" {...form.getInputProps(`section_cuts.${idx}.merge_output`, { type: "checkbox" })} />
                     <Switch label="Triangulation" {...form.getInputProps(`section_cuts.${idx}.triangulation`, { type: "checkbox" })} />
@@ -1359,9 +1380,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                 )}
               </>
             )}
-            <TextInput label="Porous media parts" placeholder="Porous_Media_" {...form.getInputProps("tn_porous")} />
             <TextInput label="Baffle parts" placeholder="_Baffle_" {...form.getInputProps("tn_baffle")} />
-            <TextInput label="Car bounding box parts" placeholder="Body_" {...form.getInputProps("tn_car_bounding_box")} />
             <TextInput label="Wind tunnel parts (excluded from forces + offset refinement)" placeholder="WindTunnel_" {...form.getInputProps("tn_windtunnel")} />
           </Stack></PanelWrapper>
       </Tabs.Panel>

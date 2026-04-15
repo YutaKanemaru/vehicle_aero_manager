@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Modal,
   TextInput,
@@ -36,6 +36,7 @@ export function TemplateVersionCreateModal({ opened, onClose, template }: Props)
   const queryClient = useQueryClient();
   const simType = template.sim_type as "aero" | "ghn" | "fan_noise";
   const [commentValue, setCommentValue] = useState("");
+  const closeAfterSave = useRef(false);
   const [jsonLoadError, setJsonLoadError] = useState<string | null>(null);
   const [jsonLoading, setJsonLoading] = useState(false);
 
@@ -62,15 +63,18 @@ export function TemplateVersionCreateModal({ opened, onClose, template }: Props)
     mutationFn: (data: TemplateVersionCreate) =>
       templatesApi.createVersion(template.id, data),
     onSuccess: () => {
+      const shouldClose = closeAfterSave.current;
+      closeAfterSave.current = false;
       queryClient.invalidateQueries({ queryKey: ["templates"] });
       queryClient.invalidateQueries({
         queryKey: ["templates", template.id, "versions"],
       });
       notifications.show({ message: "New version created", color: "green" });
       setCommentValue("");
-      onClose();
+      if (shouldClose) onClose();
     },
     onError: (e: Error) => {
+      closeAfterSave.current = false;
       notifications.show({ message: e.message, color: "red" });
     },
   });
@@ -171,7 +175,18 @@ export function TemplateVersionCreateModal({ opened, onClose, template }: Props)
             Cancel
           </Button>
           <Button type="submit" loading={mutation.isPending}>
-            Create Version
+            Save without closing
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            loading={mutation.isPending}
+            onClick={() => {
+              closeAfterSave.current = true;
+              form.onSubmit(handleSubmit)();
+            }}
+          >
+            Save and close
           </Button>
         </Group>
         {jsonLoadError && (

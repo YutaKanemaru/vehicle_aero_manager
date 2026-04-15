@@ -1161,20 +1161,22 @@ export interface components {
          * @description Full-volume and surface data output configuration.
          */
         FullDataOutputConfig: {
-            /** Output Start Time */
-            output_start_time?: number | null;
-            /** Output Interval */
-            output_interval?: number | null;
             /**
-             * File Format Ensight
-             * @default false
+             * Output Start Time
+             * @default 1.5
              */
-            file_format_ensight: boolean;
+            output_start_time: number;
             /**
-             * File Format H3D
-             * @default true
+             * Output Interval
+             * @default 0.3
              */
-            file_format_h3d: boolean;
+            output_interval: number;
+            /**
+             * File Format
+             * @default h3d
+             * @enum {string}
+             */
+            file_format: "ensight" | "h3d" | "ensight_and_h3d";
             /**
              * Output Coarsening Active
              * @default false
@@ -1770,20 +1772,22 @@ export interface components {
              * @default partial_surface
              */
             name: string;
-            /** Output Start Time */
-            output_start_time?: number | null;
-            /** Output Interval */
-            output_interval?: number | null;
             /**
-             * File Format Ensight
-             * @default false
+             * Output Start Time
+             * @default 1.5
              */
-            file_format_ensight: boolean;
+            output_start_time: number;
             /**
-             * File Format H3D
-             * @default true
+             * Output Interval
+             * @default 0.3
              */
-            file_format_h3d: boolean;
+            output_interval: number;
+            /**
+             * File Format
+             * @default h3d
+             * @enum {string}
+             */
+            file_format: "ensight" | "h3d" | "ensight_and_h3d";
             /**
              * Merge Output
              * @default true
@@ -1890,20 +1894,22 @@ export interface components {
              * @default partial_volume
              */
             name: string;
-            /** Output Start Time */
-            output_start_time?: number | null;
-            /** Output Interval */
-            output_interval?: number | null;
             /**
-             * File Format Ensight
-             * @default false
+             * Output Start Time
+             * @default 1.5
              */
-            file_format_ensight: boolean;
+            output_start_time: number;
             /**
-             * File Format H3D
-             * @default true
+             * Output Interval
+             * @default 0.3
              */
-            file_format_h3d: boolean;
+            output_interval: number;
+            /**
+             * File Format
+             * @default h3d
+             * @enum {string}
+             */
+            file_format: "ensight" | "h3d" | "ensight_and_h3d";
             /**
              * Output Coarsening Active
              * @default false
@@ -2243,20 +2249,22 @@ export interface components {
              * @default section_cut
              */
             name: string;
-            /** Output Start Time */
-            output_start_time?: number | null;
-            /** Output Interval */
-            output_interval?: number | null;
             /**
-             * File Format Ensight
-             * @default false
+             * Output Start Time
+             * @default 1.5
              */
-            file_format_ensight: boolean;
+            output_start_time: number;
             /**
-             * File Format H3D
-             * @default true
+             * Output Interval
+             * @default 0.3
              */
-            file_format_h3d: boolean;
+            output_interval: number;
+            /**
+             * File Format
+             * @default h3d
+             * @enum {string}
+             */
+            file_format: "ensight" | "h3d" | "ensight_and_h3d";
             /**
              * Merge Output
              * @default true
@@ -2573,10 +2581,6 @@ export interface components {
             wheel?: string[];
             /** Rim */
             rim?: string[];
-            /** Porous */
-            porous?: string[];
-            /** Car Bounding Box */
-            car_bounding_box?: string[];
             /** Baffle */
             baffle?: string[];
             /** Windtunnel */

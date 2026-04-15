@@ -128,10 +128,9 @@ export interface OutputVarsSectionCut {
 
 export interface PartialSurfaceFormItem {
   name: string;
-  output_start_time: number | null;
-  output_interval: number | null;
-  file_format_ensight: boolean;
-  file_format_h3d: boolean;
+  output_start_time: number;
+  output_interval: number;
+  file_format: string;
   merge_output: boolean;
   delete_unmerged: boolean;
   include_parts: string;           // comma-separated
@@ -142,10 +141,9 @@ export interface PartialSurfaceFormItem {
 
 export interface PartialVolumeFormItem {
   name: string;
-  output_start_time: number | null;
-  output_interval: number | null;
-  file_format_ensight: boolean;
-  file_format_h3d: boolean;
+  output_start_time: number;
+  output_interval: number;
+  file_format: string;
   output_coarsening_active: boolean;
   coarsest_target_refinement_level: number;
   coarsen_by_num_refinement_levels: number;
@@ -166,10 +164,9 @@ export interface PartialVolumeFormItem {
 
 export interface SectionCutFormItem {
   name: string;
-  output_start_time: number | null;
-  output_interval: number | null;
-  file_format_ensight: boolean;
-  file_format_h3d: boolean;
+  output_start_time: number;
+  output_interval: number;
+  file_format: string;
   merge_output: boolean;
   delete_unmerged: boolean;
   triangulation: boolean;
@@ -426,10 +423,9 @@ export const FORM_DEFAULTS = {
   compute_adjust_ride_height: D.setup_option.compute.adjust_ride_height,
 
   // ── Output — full data ────────────────────────────────────────────────
-  fd_output_start_time: D.output.full_data.output_start_time as number | null,
-  fd_output_interval: D.output.full_data.output_interval as number | null,
-  fd_format_ensight: D.output.full_data.file_format_ensight,
-  fd_format_h3d: D.output.full_data.file_format_h3d,
+  fd_output_start_time: D.output.full_data.output_start_time as number,
+  fd_output_interval: D.output.full_data.output_interval as number,
+  fd_file_format: D.output.full_data.file_format as string,
   fd_coarsening_active: D.output.full_data.output_coarsening_active,
   fd_coarsest_target_rl: D.output.full_data.coarsest_target_refinement_level,
   fd_coarsen_by_num_rl: D.output.full_data.coarsen_by_num_refinement_levels,
@@ -469,8 +465,6 @@ export const FORM_DEFAULTS = {
   // ── Target names (comma-separated for list fields) ────────────────────
   tn_wheel: D.target_names.wheel.join(", "),
   tn_rim: D.target_names.rim.join(", "),
-  tn_porous: D.target_names.porous.join(", "),
-  tn_car_bounding_box: D.target_names.car_bounding_box.join(", "),
   tn_baffle: D.target_names.baffle.join(", "),
   tn_windtunnel: D.target_names.windtunnel.join(", "),
   tn_wt_fr_lh: D.target_names.wheel_tire_fr_lh,
@@ -618,10 +612,9 @@ export function valuesFromSettings(settings: any): FormValues {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const partialSurfaces: PartialSurfaceFormItem[] = (out?.partial_surfaces ?? []).map((ps: any) => ({
     name: ps.name ?? "partial_surface",
-    output_start_time: ps.output_start_time ?? null,
-    output_interval: ps.output_interval ?? null,
-    file_format_ensight: ps.file_format_ensight ?? false,
-    file_format_h3d: ps.file_format_h3d ?? true,
+    output_start_time: ps.output_start_time ?? 1.5,
+    output_interval: ps.output_interval ?? 0.3,
+    file_format: ps.file_format ?? "h3d",
     merge_output: ps.merge_output ?? true,
     delete_unmerged: ps.delete_unmerged ?? true,
     include_parts: joinList(ps.include_parts),
@@ -633,10 +626,9 @@ export function valuesFromSettings(settings: any): FormValues {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const partialVolumes: PartialVolumeFormItem[] = (out?.partial_volumes ?? []).map((pv: any) => ({
     name: pv.name ?? "partial_volume",
-    output_start_time: pv.output_start_time ?? null,
-    output_interval: pv.output_interval ?? null,
-    file_format_ensight: pv.file_format_ensight ?? false,
-    file_format_h3d: pv.file_format_h3d ?? true,
+    output_start_time: pv.output_start_time ?? 1.5,
+    output_interval: pv.output_interval ?? 0.3,
+    file_format: pv.file_format ?? "h3d",
     output_coarsening_active: pv.output_coarsening_active ?? false,
     coarsest_target_refinement_level: pv.coarsest_target_refinement_level ?? 3,
     coarsen_by_num_refinement_levels: pv.coarsen_by_num_refinement_levels ?? 0,
@@ -658,10 +650,9 @@ export function valuesFromSettings(settings: any): FormValues {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sectionCuts: SectionCutFormItem[] = (out?.section_cuts ?? []).map((sc: any) => ({
     name: sc.name ?? "section_cut",
-    output_start_time: sc.output_start_time ?? null,
-    output_interval: sc.output_interval ?? null,
-    file_format_ensight: sc.file_format_ensight ?? false,
-    file_format_h3d: sc.file_format_h3d ?? true,
+    output_start_time: sc.output_start_time ?? 1.5,
+    output_interval: sc.output_interval ?? 0.3,
+    file_format: sc.file_format ?? "h3d",
     merge_output: sc.merge_output ?? true,
     delete_unmerged: sc.delete_unmerged ?? true,
     triangulation: sc.triangulation ?? false,
@@ -796,8 +787,7 @@ export function valuesFromSettings(settings: any): FormValues {
 
     fd_output_start_time: fd.output_start_time ?? FORM_DEFAULTS.fd_output_start_time,
     fd_output_interval: fd.output_interval ?? FORM_DEFAULTS.fd_output_interval,
-    fd_format_ensight: fd.file_format_ensight ?? FORM_DEFAULTS.fd_format_ensight,
-    fd_format_h3d: fd.file_format_h3d ?? FORM_DEFAULTS.fd_format_h3d,
+    fd_file_format: (fd.file_format ?? "h3d") as string,
     fd_coarsening_active: fd.output_coarsening_active ?? FORM_DEFAULTS.fd_coarsening_active,
     fd_coarsest_target_rl: fd.coarsest_target_refinement_level ?? FORM_DEFAULTS.fd_coarsest_target_rl,
     fd_coarsen_by_num_rl: fd.coarsen_by_num_refinement_levels ?? FORM_DEFAULTS.fd_coarsen_by_num_rl,
@@ -832,8 +822,6 @@ export function valuesFromSettings(settings: any): FormValues {
 
     tn_wheel: joinList(tn.wheel),
     tn_rim: joinList(tn.rim),
-    tn_porous: joinList(tn.porous),
-    tn_car_bounding_box: joinList(tn.car_bounding_box),
     tn_baffle: joinList(tn.baffle),
     tn_windtunnel: joinList(tn.windtunnel),
     tn_wt_fr_lh: tn.wheel_tire_fr_lh ?? FORM_DEFAULTS.tn_wt_fr_lh,
@@ -911,8 +899,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     name: ps.name,
     output_start_time: ps.output_start_time,
     output_interval: ps.output_interval,
-    file_format_ensight: ps.file_format_ensight,
-    file_format_h3d: ps.file_format_h3d,
+    file_format: ps.file_format,
     merge_output: ps.merge_output,
     delete_unmerged: ps.delete_unmerged,
     include_parts: splitList(ps.include_parts),
@@ -927,8 +914,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     name: pv.name,
     output_start_time: pv.output_start_time,
     output_interval: pv.output_interval,
-    file_format_ensight: pv.file_format_ensight,
-    file_format_h3d: pv.file_format_h3d,
+    file_format: pv.file_format,
     output_coarsening_active: pv.output_coarsening_active,
     coarsest_target_refinement_level: pv.coarsest_target_refinement_level,
     coarsen_by_num_refinement_levels: pv.coarsen_by_num_refinement_levels,
@@ -953,8 +939,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     name: sc.name,
     output_start_time: sc.output_start_time,
     output_interval: sc.output_interval,
-    file_format_ensight: sc.file_format_ensight,
-    file_format_h3d: sc.file_format_h3d,
+    file_format: sc.file_format,
     merge_output: sc.merge_output,
     delete_unmerged: sc.delete_unmerged,
     triangulation: sc.triangulation,
@@ -1080,8 +1065,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
       full_data: {
         output_start_time: values.fd_output_start_time,
         output_interval: values.fd_output_interval,
-        file_format_ensight: values.fd_format_ensight,
-        file_format_h3d: values.fd_format_h3d,
+        file_format: values.fd_file_format,
         output_coarsening_active: values.fd_coarsening_active,
         coarsest_target_refinement_level: values.fd_coarsest_target_rl,
         coarsen_by_num_refinement_levels: values.fd_coarsen_by_num_rl,
@@ -1114,8 +1098,6 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     target_names: {
       wheel: splitList(values.tn_wheel),
       rim: splitList(values.tn_rim),
-      porous: splitList(values.tn_porous),
-      car_bounding_box: splitList(values.tn_car_bounding_box),
       baffle: splitList(values.tn_baffle),
       windtunnel: splitList(values.tn_windtunnel),
       wheel_tire_fr_lh: values.tn_wt_fr_lh.trim(),

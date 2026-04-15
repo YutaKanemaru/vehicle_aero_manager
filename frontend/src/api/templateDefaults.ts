@@ -178,10 +178,9 @@ export const templateDefaults = {
   },
   output: {
     full_data: {
-      output_start_time: null,
-      output_interval: null,
-      file_format_ensight: false,
-      file_format_h3d: true,
+      output_start_time: 1.5,
+      output_interval: 0.3,
+      file_format: "h3d",
       output_coarsening_active: false,
       coarsest_target_refinement_level: 3,
       coarsen_by_num_refinement_levels: 0,
@@ -254,8 +253,6 @@ export const templateDefaults = {
   target_names: {
     wheel: [],
     rim: [],
-    porous: [],
-    car_bounding_box: [],
     baffle: [],
     windtunnel: [],
     wheel_tire_fr_lh: "",

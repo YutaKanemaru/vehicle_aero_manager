@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Modal,
   TextInput,
@@ -33,6 +33,7 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
   const [nameValue, setNameValue] = useState("");
   const [descValue, setDescValue] = useState("");
   const [commentValue, setCommentValue] = useState("");
+  const closeAfterSave = useRef(false);
 
   const form = useForm({ initialValues: { ...FORM_DEFAULTS } });
 
@@ -55,6 +56,8 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
   const mutation = useMutation({
     mutationFn: (data: TemplateCreate) => templatesApi.create(data),
     onSuccess: () => {
+      const shouldClose = closeAfterSave.current;
+      closeAfterSave.current = false;
       queryClient.invalidateQueries({ queryKey: ["templates"] });
       notifications.show({ message: "Template created", color: "green" });
       form.reset();
@@ -63,9 +66,10 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
       setNameValue("");
       setDescValue("");
       setCommentValue("");
-      onClose();
+      if (shouldClose) onClose();
     },
     onError: (e: Error) => {
+      closeAfterSave.current = false;
       notifications.show({ message: e.message, color: "red" });
     },
   });
@@ -78,6 +82,7 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
 
   function handleSubmit(values: typeof form.values) {
     if (!nameValue.trim()) {
+      closeAfterSave.current = false;
       notifications.show({ message: "Name is required", color: "red" });
       return;
     }
@@ -158,7 +163,18 @@ export function TemplateCreateModal({ opened, onClose }: Props) {
             Cancel
           </Button>
           <Button type="submit" loading={mutation.isPending}>
-            Create Template
+            Save without closing
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            loading={mutation.isPending}
+            onClick={() => {
+              closeAfterSave.current = true;
+              form.onSubmit(handleSubmit)();
+            }}
+          >
+            Save and close
           </Button>
         </Group>
       </form>

@@ -321,6 +321,15 @@ def _matches_any(part_name: str, patterns: list[str]) -> bool:
     return any(p and p.lower() in part_name.lower() for p in patterns)
 
 
+def _resolve_file_format(fmt: str):
+    """Convert file_format string to FileFormat(ensight, h3d) — imported lazily."""
+    from app.ultrafluid.schema import FileFormat  # type: ignore
+    return FileFormat(
+        ensight=fmt in ("ensight", "ensight_and_h3d"),
+        h3d=fmt in ("h3d", "ensight_and_h3d"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Wheel classification & kinematics
 # ---------------------------------------------------------------------------
@@ -1006,8 +1015,6 @@ def assemble_ufx_solver_deck(
     if template_settings.porous_coefficients:
         porous_coeff_map = {p.part_name: p for p in template_settings.porous_coefficients}
         for pname, pinfo in part_info.items():
-            if not _matches_any(pname, tn.porous):
-                continue
             coeff = porous_coeff_map.get(pname)
             if coeff is None:
                 continue
@@ -1026,26 +1033,14 @@ def assemble_ufx_solver_deck(
     avg_window = time_to_iterations(sp.avg_window_size, dt)
 
     fd = out_cfg.full_data
-    out_start = time_to_iterations(
-        fd.output_start_time if fd.output_start_time is not None else sp.simulation_time, dt
-    )
-    out_freq = time_to_iterations(
-        fd.output_interval if fd.output_interval is not None else sp.simulation_time, dt
-    )
+    out_start = time_to_iterations(fd.output_start_time, dt)
+    out_freq = time_to_iterations(fd.output_interval, dt)
 
     # ── Section cut instances ─────────────────────────────────────────────
     sc_instances: list = []
     for sc in out_cfg.section_cuts:
-        sc_start = time_to_iterations(
-            sc.output_start_time if sc.output_start_time is not None
-            else (fd.output_start_time if fd.output_start_time is not None else sp.simulation_time),
-            dt,
-        )
-        sc_freq = time_to_iterations(
-            sc.output_interval if sc.output_interval is not None
-            else (fd.output_interval if fd.output_interval is not None else sp.simulation_time),
-            dt,
-        )
+        sc_start = time_to_iterations(sc.output_start_time, dt)
+        sc_freq = time_to_iterations(sc.output_interval, dt)
         if len(sc.bbox) == 6:
             sc_bbox = BoundingBox(
                 x_min=sc.bbox[0], x_max=sc.bbox[1],
@@ -1059,7 +1054,7 @@ def assemble_ufx_solver_deck(
             merge_output_files=sc.merge_output,
             delete_unmerged_output_files=sc.delete_unmerged,
             triangulation=sc.triangulation,
-            file_format=FileFormat(ensight=sc.file_format_ensight, h3d=sc.file_format_h3d),
+            file_format=_resolve_file_format(sc.file_format),
             axis=XYZDir(x_dir=sc.axis_x, y_dir=sc.axis_y, z_dir=sc.axis_z),
             point=XYZPos(x_pos=sc.point_x, y_pos=sc.point_y, z_pos=sc.point_z),
             bounding_box=sc_bbox,
@@ -1113,16 +1108,8 @@ def assemble_ufx_solver_deck(
     baffle_patterns = tn.baffle
     ps_instances: list = []
     for ps_cfg in out_cfg.partial_surfaces:
-        ps_start = time_to_iterations(
-            ps_cfg.output_start_time if ps_cfg.output_start_time is not None
-            else (fd.output_start_time if fd.output_start_time is not None else sp.simulation_time),
-            dt,
-        )
-        ps_freq = time_to_iterations(
-            ps_cfg.output_interval if ps_cfg.output_interval is not None
-            else (fd.output_interval if fd.output_interval is not None else sp.simulation_time),
-            dt,
-        )
+        ps_start = time_to_iterations(ps_cfg.output_start_time, dt)
+        ps_freq = time_to_iterations(ps_cfg.output_interval, dt)
         # include_parts: empty = all parts; non-empty = filter by substring match
         if ps_cfg.include_parts:
             parts_list = [p for p in all_part_names if any(pat in p for pat in ps_cfg.include_parts)]
@@ -1139,7 +1126,7 @@ def assemble_ufx_solver_deck(
             parts=parts_list,
             merge_output_files=ps_cfg.merge_output,
             delete_unmerged_output_files=ps_cfg.delete_unmerged,
-            file_format=FileFormat(ensight=ps_cfg.file_format_ensight, h3d=ps_cfg.file_format_h3d),
+            file_format=_resolve_file_format(ps_cfg.file_format),
             output_frequency=ps_freq,
             output_start_iteration=ps_start,
             output_variables=ps_cfg.output_variables,
@@ -1148,16 +1135,8 @@ def assemble_ufx_solver_deck(
     # ── Partial volume instances ──────────────────────────────────────────
     pv_instances: list = []
     for pv_cfg in out_cfg.partial_volumes:
-        pv_start = time_to_iterations(
-            pv_cfg.output_start_time if pv_cfg.output_start_time is not None
-            else (fd.output_start_time if fd.output_start_time is not None else sp.simulation_time),
-            dt,
-        )
-        pv_freq = time_to_iterations(
-            pv_cfg.output_interval if pv_cfg.output_interval is not None
-            else (fd.output_interval if fd.output_interval is not None else sp.simulation_time),
-            dt,
-        )
+        pv_start = time_to_iterations(pv_cfg.output_start_time, dt)
+        pv_freq = time_to_iterations(pv_cfg.output_interval, dt)
         # Resolve bounding box based on bbox_mode
         if pv_cfg.bbox_mode == "from_meshing_box" and pv_cfg.bbox_source_box_name:
             _box = (
@@ -1219,7 +1198,7 @@ def assemble_ufx_solver_deck(
             name=pv_cfg.name,
             merge_output_files=pv_cfg.merge_output,
             delete_unmerged_output_files=pv_cfg.delete_unmerged,
-            file_format=FileFormat(ensight=pv_cfg.file_format_ensight, h3d=pv_cfg.file_format_h3d),
+            file_format=_resolve_file_format(pv_cfg.file_format),
             output_frequency=pv_freq,
             output_start_iteration=pv_start,
             bounding_box=pv_bb,
@@ -1433,10 +1412,7 @@ def assemble_ufx_solver_deck(
         ),
         output=Output(
             general=OutputGeneral(
-                file_format=FileFormat(
-                    ensight=fd.file_format_ensight,
-                    h3d=fd.file_format_h3d,
-                ),
+                file_format=_resolve_file_format(fd.file_format),
                 output_coarsening=OutputCoarsening(
                     active=fd.output_coarsening_active,
                     coarsen_by_num_refinement_levels=fd.coarsen_by_num_refinement_levels,
