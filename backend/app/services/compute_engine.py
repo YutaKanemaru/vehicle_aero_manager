@@ -540,11 +540,13 @@ def _build_belt5_wall_instances(
     FluidBCMoving: type,
     XYZDir: type,
     WallInstance: type,
-) -> tuple[list, float]:
+    DomainPartInstance: type,
+    BoundingRange: type,
+) -> tuple[list, float, list]:
     """
     5ベルト wall BC インスタンスを生成する。
 
-    Returns: (wall_instances, center_belt_xmin)
+    Returns: (wall_instances, center_belt_xmin, domain_part_instances)
     """
     bsw = belt5_cfg.belt_size_wheel
     bsc = belt5_cfg.belt_size_center
@@ -581,6 +583,7 @@ def _build_belt5_wall_instances(
                 belt_y_positions[rh_key] = mid + min_gap / 2
 
     instances = []
+    domain_part_instances = []
 
     # ホイールベルト x 位置: ホイール centroid を基準に bsw.x の幅で設置
     for key, belt_label in (
@@ -591,12 +594,24 @@ def _build_belt5_wall_instances(
     ):
         kin = wheel_kin_map.get(key)
         center_x = kin["center"]["x_pos"] if kin else (vbbox["x_min"] + vbbox["x_max"]) / 2
+        belt_y = belt_y_positions.get(key, (vbbox["y_min"] + vbbox["y_max"]) / 2)
         instances.append(WallInstance(
             name=belt_label,
             parts=[belt_label],
             fluid_bc_settings=FluidBCMoving(
                 type="moving",
                 velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
+            ),
+        ))
+        domain_part_instances.append(DomainPartInstance(
+            name=belt_label,
+            location="z_min",
+            export_mesh=True,
+            bounding_range=BoundingRange(
+                x_min=center_x - bsw.x / 2,
+                x_max=center_x + bsw.x / 2,
+                y_min=belt_y - bsw.y / 2,
+                y_max=belt_y + bsw.y / 2,
             ),
         ))
 
@@ -609,8 +624,19 @@ def _build_belt5_wall_instances(
             velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
         ),
     ))
+    domain_part_instances.append(DomainPartInstance(
+        name="Belt_Center",
+        location="z_min",
+        export_mesh=True,
+        bounding_range=BoundingRange(
+            x_min=center_xmin,
+            x_max=center_xmin + bsc.x,
+            y_min=-bsc.y / 2,
+            y_max=bsc.y / 2,
+        ),
+    ))
 
-    return instances, center_xmin
+    return instances, center_xmin, domain_part_instances
 
 
 def _build_ground_box_refinements(
@@ -972,10 +998,12 @@ def assemble_ufx_solver_deck(
             ))
 
     # ベルト wall BC
+    belt_dpis: list = []
     if is_aero and gc.ground_mode == "rotating_belt_5" and moving_ground and vbbox:
-        belt_wis, _ = _build_belt5_wall_instances(
+        belt_wis, _, belt_dpis = _build_belt5_wall_instances(
             wheel_kin_map, gc.belt5, vbbox, velocity_dir,
             FluidBCMoving, XYZDir, WallInstance,
+            DomainPartInstance, BoundingRange,
         )
         wall_instances.extend(belt_wis)
 
@@ -988,27 +1016,45 @@ def assemble_ufx_solver_deck(
                 velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
             ),
         ))
+        if no_slip_xmin is not None and vbbox:
+            b1 = gc.belt1
+            belt_dpis = [DomainPartInstance(
+                name="Belt",
+                location="z_min",
+                export_mesh=True,
+                bounding_range=BoundingRange(
+                    x_min=no_slip_xmin,
+                    x_max=vbbox["x_max"],
+                    y_min=-b1.belt_size.y / 2,
+                    y_max=b1.belt_size.y / 2,
+                ),
+            )]
 
     # 地面 wall BC
     if is_aero and gc.ground_mode == "full_moving":
+        # full_moving: ドメイン床面全体を moving にする
         wall_instances.append(WallInstance(
-            name="Ground",
-            parts=["Ground"],
+            name="uFX_moving_ground",
+            parts=["uFX_domain_z_min"],
             fluid_bc_settings=FluidBCMoving(
                 type="moving",
                 velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
             ),
         ))
     else:
-        # static ground BC ("uFX_ground")
-        ground_parts = ["uFX_ground"]
-        if gc.ground_patch_active and floor_dims:
-            pass  # 実際のパーツ名は STL 由来のため、ここでは標準名を使用
+        # slip: uFX_domain_z_min 全体をスリップにする
         wall_instances.append(WallInstance(
-            name="uFX_ground",
-            parts=ground_parts,
-            fluid_bc_settings=FluidBCStatic(type="static"),
+            name="uFX_slip_ground",
+            parts=["uFX_domain_z_min"],
+            fluid_bc_settings=FluidBCSlip(type="slip"),
         ))
+        # BL suction ON のときのみ static パッチを追加
+        if gc.bl_suction.apply:
+            wall_instances.append(WallInstance(
+                name="uFX_static_ground",
+                parts=["uFX_ground"],
+                fluid_bc_settings=FluidBCStatic(type="static"),
+            ))
 
     # ── Porous sources ────────────────────────────────────────────────────
     porous_instances: list = []
@@ -1325,6 +1371,30 @@ def assemble_ufx_solver_deck(
     else:
         out_bb = domain_bb
 
+    # ── domain_part_instances (belt + uFX_ground) ─────────────────────────
+    ground_dpi = None
+    if gc.ground_mode != "full_moving" and gc.bl_suction.apply and no_slip_xmin is not None and floor_dims:
+        if gc.ground_patch_active:
+            gnd_y_min = floor_dims["y_min"]
+            gnd_y_max = floor_dims["y_max"]
+        else:
+            gnd_y_min = abs_bbox["y_min"]
+            gnd_y_max = abs_bbox["y_max"]
+        ground_dpi = DomainPartInstance(
+            name="uFX_ground",
+            location="z_min",
+            export_mesh=False,
+            bounding_range=BoundingRange(
+                x_min=no_slip_xmin,
+                x_max=floor_dims["x_max"],
+                y_min=gnd_y_min,
+                y_max=gnd_y_max,
+            ),
+        )
+    domain_part_instances: list = belt_dpis[:]
+    if ground_dpi is not None:
+        domain_part_instances.append(ground_dpi)
+
     # ── passive parts (windtunnel → passive) ──────────────────────────────
     passive_parts = [
         p for p in part_info
@@ -1336,6 +1406,12 @@ def assemble_ufx_solver_deck(
             f"Belt_Wheel_{k.upper()}"
             for k in ("fr_lh", "fr_rh", "rr_lh", "rr_rh")
         ]
+    # uFX_ground は bl_suction=ON のとき passive に追加 (ドキュメント要件)
+    if gc.ground_mode != "full_moving" and gc.bl_suction.apply:
+        passive_parts.append("uFX_ground")
+    # Belt_Center は export_mesh=True のため passive に追加
+    if is_aero and gc.ground_mode == "rotating_belt_5":
+        passive_parts.append("Belt_Center")
 
     # ── Assemble UfxSolverDeck ────────────────────────────────────────────
     deck = UfxSolverDeck(
@@ -1374,7 +1450,7 @@ def assemble_ufx_solver_deck(
                     triangle_splitting_instances=ts_instances,
                 )
             ),
-            domain_part=DomainPart(export_mesh=False, domain_part_instances=[]),
+            domain_part=DomainPart(export_mesh=bool(domain_part_instances), domain_part_instances=domain_part_instances),
         ),
         meshing=Meshing(
             general=MeshingGeneral(
