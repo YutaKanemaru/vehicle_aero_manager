@@ -767,10 +767,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                         {isBelt5 ? (
                           <>
                             <Switch label="Derive no-slip x-min from center belt x-min" {...form.getInputProps("bl_suction_from_belt_xmin", { type: "checkbox" })} />
-                            {!form.values.bl_suction_from_belt_xmin && (
+                            {form.values.bl_suction_from_belt_xmin ? (
+                              <NumberInput label="BL x-min offset from belt (m)" step={0.01} allowDecimal {...form.getInputProps("bl_suction_xmin_offset")} />
+                            ) : (
                               <NumberInput label="No-slip x-min position (m)" step={0.01} {...form.getInputProps("bl_suction_no_slip_xmin_pos")} />
                             )}
-                            <NumberInput label="BL x-min offset from belt (m)" step={0.01} allowDecimal {...form.getInputProps("bl_suction_xmin_offset")} />
                           </>
                         ) : (
                           <NumberInput label="No-slip x-min position (m)" step={0.01} {...form.getInputProps("bl_suction_no_slip_xmin_pos")} />
