@@ -879,13 +879,13 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                       )}
                       <Text size="sm" fw={500}>Wheel belt size (m)</Text>
                       <SimpleGrid cols={2}>
-                        <NumberInput label="Width (x)" step={0.05} {...form.getInputProps("belt5_wheel_size_x")} />
-                        <NumberInput label="Length (y)" step={0.05} {...form.getInputProps("belt5_wheel_size_y")} />
+                        <NumberInput label="Length (x)" step={0.05} {...form.getInputProps("belt5_wheel_size_x")} />
+                        <NumberInput label="Width (y)" step={0.05} {...form.getInputProps("belt5_wheel_size_y")} />
                       </SimpleGrid>
                       <Text size="sm" fw={500}>Center belt size (m)</Text>
                       <SimpleGrid cols={2}>
-                        <NumberInput label="Width (x)" step={0.05} {...form.getInputProps("belt5_center_size_x")} />
-                        <NumberInput label="Length (y)" step={0.05} {...form.getInputProps("belt5_center_size_y")} />
+                        <NumberInput label="Length (x)" step={0.05} {...form.getInputProps("belt5_center_size_x")} />
+                        <NumberInput label="Width (y)" step={0.05} {...form.getInputProps("belt5_center_size_y")} />
                       </SimpleGrid>
                       <Switch label="Include wheel belt forces in aerodynamic loads" {...form.getInputProps("belt5_include_wheel_forces", { type: "checkbox" })} />
                       <Divider label="Tire part names (required for belt auto-position)" labelPosition="center" />
@@ -905,8 +905,8 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                     <>
                       <Text size="sm" fw={500}>Belt size (m)</Text>
                       <SimpleGrid cols={2}>
-                        <NumberInput label="Width (x)" step={0.05} {...form.getInputProps("belt1_size_x")} />
-                        <NumberInput label="Length (y)" step={0.1} {...form.getInputProps("belt1_size_y")} />
+                        <NumberInput label="Length (x)" step={0.05} {...form.getInputProps("belt1_size_x")} />
+                        <NumberInput label="Width (y)" step={0.1} {...form.getInputProps("belt1_size_y")} />
                       </SimpleGrid>
                     </>
                   )}
