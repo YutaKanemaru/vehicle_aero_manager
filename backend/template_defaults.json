@@ -57,10 +57,10 @@
       "turbulence_generator": {
         "enable_ground_tg": true,
         "enable_body_tg": true,
-        "ground_tg_num_eddies": 800,
         "ground_tg_intensity": 0.05,
-        "body_tg_num_eddies": 800,
-        "body_tg_intensity": 0.01
+        "body_tg_intensity": 0.01,
+        "ground_tg_length_scale": null,
+        "body_tg_length_scale": null
       }
     },
     "compute": {

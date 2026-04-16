@@ -2796,25 +2796,19 @@ export interface components {
              */
             enable_body_tg: boolean;
             /**
-             * Ground Tg Num Eddies
-             * @default 800
-             */
-            ground_tg_num_eddies: number;
-            /**
              * Ground Tg Intensity
              * @default 0.05
              */
             ground_tg_intensity: number;
             /**
-             * Body Tg Num Eddies
-             * @default 800
-             */
-            body_tg_num_eddies: number;
-            /**
              * Body Tg Intensity
              * @default 0.01
              */
             body_tg_intensity: number;
+            /** Ground Tg Length Scale */
+            ground_tg_length_scale?: number | null;
+            /** Body Tg Length Scale */
+            body_tg_length_scale?: number | null;
         };
         /** UpdateRoleRequest */
         UpdateRoleRequest: {

@@ -930,14 +930,14 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                   </SimpleGrid>
                   {form.values.tg_enable_ground && (
                     <SimpleGrid cols={2}>
-                      <NumberInput label="Ground TG num eddies" {...form.getInputProps("tg_ground_num_eddies")} />
                       <NumberInput label="Ground TG intensity" decimalScale={3} step={0.005} {...form.getInputProps("tg_ground_intensity")} />
+                      <NumberInput label="Ground TG length scale (m)" description="auto: 4 × RL6 voxel size" placeholder="auto" decimalScale={5} step={0.001} min={0} {...form.getInputProps("tg_ground_length_scale")} />
                     </SimpleGrid>
                   )}
                   {form.values.tg_enable_body && (
                     <SimpleGrid cols={2}>
-                      <NumberInput label="Body TG num eddies" {...form.getInputProps("tg_body_num_eddies")} />
                       <NumberInput label="Body TG intensity" decimalScale={3} step={0.005} {...form.getInputProps("tg_body_intensity")} />
+                      <NumberInput label="Body TG length scale (m)" description="auto: 4 × RL6 voxel size" placeholder="auto" decimalScale={5} step={0.001} min={0} {...form.getInputProps("tg_body_length_scale")} />
                     </SimpleGrid>
                   )}
                 </Stack></Accordion.Panel>

@@ -768,11 +768,15 @@ def _build_tg_instances(
     box_instances = []
     OFFSET = 0.02  # box refinement パディング
 
+    auto_ls = round(4 * coarsest * (0.5 ** 6), 6)  # = 0.012 when coarsest=0.192
+    ground_ls = tg_cfg.ground_tg_length_scale if tg_cfg.ground_tg_length_scale is not None else auto_ls
+    body_ls = tg_cfg.body_tg_length_scale if tg_cfg.body_tg_length_scale is not None else auto_ls
+
     if tg_cfg.enable_ground_tg and no_slip_xmin is not None:
         tg_instances.append(TurbulenceInstance(
             name="tg_ground",
-            num_eddies=tg_cfg.ground_tg_num_eddies,
-            length_scale=coarsest * (0.5 ** 6),
+            num_eddies=800,
+            length_scale=ground_ls,
             turbulence_intensity=tg_cfg.ground_tg_intensity,
             point=TurbulencePoint(x_pos=no_slip_xmin - 0.01),
             bounding_box=TurbulenceBoundingBox(
@@ -792,8 +796,8 @@ def _build_tg_instances(
 
         tg_instances.append(TurbulenceInstance(
             name="tg_body",
-            num_eddies=tg_cfg.body_tg_num_eddies,
-            length_scale=coarsest * (0.5 ** 6),
+            num_eddies=800,
+            length_scale=body_ls,
             turbulence_intensity=tg_cfg.body_tg_intensity,
             point=TurbulencePoint(x_pos=tg_x),
             bounding_box=TurbulenceBoundingBox(

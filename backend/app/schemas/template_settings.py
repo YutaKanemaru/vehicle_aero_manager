@@ -160,11 +160,13 @@ class TurbulenceGeneratorOption(BaseModel):
     # enable_ground_tg = True forces apply_static_ground_refinement ON in Compute Engine.
     enable_ground_tg: bool = True
     enable_body_tg: bool = True
-    # Tunable parameters (Computed Engine uses these)
-    ground_tg_num_eddies: int = 800
+    # Tunable parameters (Compute Engine uses these)
+    # num_eddies is hardcoded to 800 in Compute Engine — not exposed here
     ground_tg_intensity: float = 0.05
-    body_tg_num_eddies: int = 800
     body_tg_intensity: float = 0.01
+    # length_scale: None = auto (4 × RL6 voxel size = 4 × coarsest × 0.5^6)
+    ground_tg_length_scale: float | None = None
+    body_tg_length_scale: float | None = None
 
 
 # ---------------------------------------------------------------------------

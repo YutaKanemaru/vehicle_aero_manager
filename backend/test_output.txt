@@ -1,0 +1,31 @@
+﻿≡ƒôé Φç¬σïòµñ£σç║: C:\Users\z0054ymk\OneDrive - Altair Engineering, Inc\PROJECT\C06-DEV\vehicle_aero_manager\backend\data\uploads\geometries\057cfb10-2c6a-4d3f-b1b6-a7e7bf880c78\VREF.stl
+
+≡ƒöì Φºúµ₧ÉΘûïσºï: VREF.stl
+======================================================================
+  [1/3] πâòπé⌐πâ╝πâ₧πââπâêµñ£σç║: VREF.stl
+  [2/3] ASCII STL πé╣πâêπâ¬πâ╝πâƒπâ│πé░Φºúµ₧ÉΣ╕¡...
+        Solid [1]: VREF_RL7_LHS
+        Solid [2]: VREF_RL7_Cowl
+        Solid [3]: VREF_RL7_RHS
+        Solid [4]: VREF_RL3_Wrap
+        Solid [5]: VREF_RL4_Wrap
+        Solid [6]: VREF_RL5_Wrap
+  [3/3] Φ╗èΣ╕íσà¿Σ╜ô bbox Φ¿êτ«ùΣ╕¡ (6 parts)...
+  Γ£à Φºúµ₧Éσ«îΣ║å
+
+πÇÉΦ╗èΣ╕íσà¿Σ╜ôπÇæ
+  Length (X): 11.2697 m  (-2.3415 ~ 8.9282)
+  Width  (Y): 4.1632 m  (-2.0879 ~ 2.0753)
+  Height (Z): 2.8046 m  (-0.3238 ~ 2.4808)
+
+πÇÉπâæπâ╝πâäΣ╕ÇΦªºπÇæ(6 parts)
+  πâæπâ╝πâäσÉì                                                Θáéτé╣        Θ¥ó   Θçìσ┐â (x, y, z)
+  -------------------------------------------------------------------------------------
+  VREF_RL3_Wrap                                   72,048   24,016   (+3.293, -0.006, +1.079)
+  VREF_RL4_Wrap                                   72,048   24,016   (+2.446, -0.002, +0.924)
+  VREF_RL5_Wrap                                   72,048   24,016   (+1.957, -0.019, +0.864)
+  VREF_RL7_Cowl                                   51,360   17,120   (+0.404, -0.005, +1.020)
+  VREF_RL7_LHS                                    72,534   24,178   (+1.206, -0.827, +1.189)
+  VREF_RL7_RHS                                    72,534   24,178   (+1.206, +0.817, +1.189)
+
+Γ£à σ«îΣ║å ΓÇö JSON πéÆΣ┐¥σ¡ÿ: C:\Users\z0054ymk\OneDrive - Altair Engineering, Inc\PROJECT\C06-DEV\vehicle_aero_manager\backend\test_compute_engine_result.json

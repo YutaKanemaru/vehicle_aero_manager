@@ -412,10 +412,10 @@ export const FORM_DEFAULTS = {
   // ── Boundary conditions — turbulence generator ────────────────────────
   tg_enable_ground: D.setup_option.boundary_condition.turbulence_generator.enable_ground_tg,
   tg_enable_body: D.setup_option.boundary_condition.turbulence_generator.enable_body_tg,
-  tg_ground_num_eddies: D.setup_option.boundary_condition.turbulence_generator.ground_tg_num_eddies,
   tg_ground_intensity: D.setup_option.boundary_condition.turbulence_generator.ground_tg_intensity,
-  tg_body_num_eddies: D.setup_option.boundary_condition.turbulence_generator.body_tg_num_eddies,
+  tg_ground_length_scale: D.setup_option.boundary_condition.turbulence_generator.ground_tg_length_scale ?? null,
   tg_body_intensity: D.setup_option.boundary_condition.turbulence_generator.body_tg_intensity,
+  tg_body_length_scale: D.setup_option.boundary_condition.turbulence_generator.body_tg_length_scale ?? null,
 
   // ── Compute flags ─────────────────────────────────────────────────────
   // NOTE: porous_media / turbulence_generator / rotate_wheels / moving_ground
@@ -800,10 +800,10 @@ export function valuesFromSettings(settings: any): FormValues {
 
     tg_enable_ground: tg.enable_ground_tg ?? FORM_DEFAULTS.tg_enable_ground,
     tg_enable_body: tg.enable_body_tg ?? FORM_DEFAULTS.tg_enable_body,
-    tg_ground_num_eddies: tg.ground_tg_num_eddies ?? FORM_DEFAULTS.tg_ground_num_eddies,
     tg_ground_intensity: tg.ground_tg_intensity ?? FORM_DEFAULTS.tg_ground_intensity,
-    tg_body_num_eddies: tg.body_tg_num_eddies ?? FORM_DEFAULTS.tg_body_num_eddies,
+    tg_ground_length_scale: tg.ground_tg_length_scale ?? null,
     tg_body_intensity: tg.body_tg_intensity ?? FORM_DEFAULTS.tg_body_intensity,
+    tg_body_length_scale: tg.body_tg_length_scale ?? null,
 
     compute_adjust_ride_height: cp.adjust_ride_height ?? FORM_DEFAULTS.compute_adjust_ride_height,
 
@@ -1043,10 +1043,10 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
         turbulence_generator: {
           enable_ground_tg: values.tg_enable_ground,
           enable_body_tg: values.tg_enable_body,
-          ground_tg_num_eddies: values.tg_ground_num_eddies,
           ground_tg_intensity: values.tg_ground_intensity,
-          body_tg_num_eddies: values.tg_body_num_eddies,
+          ground_tg_length_scale: values.tg_ground_length_scale,
           body_tg_intensity: values.tg_body_intensity,
+          body_tg_length_scale: values.tg_body_length_scale,
         },
       },
       compute: {
