@@ -657,7 +657,10 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
       },
       "turbulence_generator": {
         "enable_ground_tg": true, "enable_body_tg": true,
-        "ground_tg_num_eddies": 800, "body_tg_num_eddies": 800
+        "ground_tg_intensity": 0.05, "body_tg_intensity": 0.01,
+        // num_eddies is hardcoded to 800 in Compute Engine — not stored in settings
+        // length_scale: null = auto (4 × coarsest × 0.5^6 = 0.012 when coarsest=0.192)
+        "ground_tg_length_scale": null, "body_tg_length_scale": null
       }
     },
     "compute": {
@@ -1402,7 +1405,7 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 | General *(conditional)* | Rendered from `generalContent` prop — Name, Description, Application, Version comment |
 | Simulation Run Parameters | **Accordion**: Run Time (run time, averaging, mach factor, yaw, ramp-up) · Physical Properties (velocity, temp, density, viscosity, gas constant) · Options (°C switch, FP mode) |
 | Meshing | **Accordion**: General (coarsest voxel, num RL, transition layers) · Triangle Splitting (global ON/OFF switch → when ON: max rel/abs edge + per-part instances) · Box Refinement (porous switch + dynamic list; each row: name/level + `SegmentedControl` for `box_type`: vehicle_bbox_factors/around_parts/user_defined) · Offset Refinement (dynamic list, "Apply body defaults") · Custom Refinement (dynamic list) |
-| Boundary Conditions | **Accordion**: Flow Domain Configuration (ground height definition + domain bbox factors) · Ground Condition (ground mode select + wheel/rim part names + OSM parts + BL suction; aero has Select, non-aero has simple BL suction only) · Belt Configuration (aero only; isBelt5: belt settings + **required** tire part names tn_wt_*; isBelt1: belt size) · Turbulence Generator (aero only) · Porous Media Coefficients (dynamic list, template defaults) |
+| Boundary Conditions | **Accordion**: Flow Domain Configuration (ground height definition + domain bbox factors) · Ground Condition (ground mode select + wheel/rim part names + OSM parts + BL suction; aero has Select, non-aero has simple BL suction only) · Belt Configuration (aero only; isBelt5: belt settings + **required** tire part names tn_wt_*; isBelt1: belt size) · Turbulence Generator (aero only; enable switches + per-TG: `intensity` + `length scale (m)` [placeholder="auto", auto = 4 × RL6 voxel size; `num_eddies` hardcoded 800, not in UI]) · Porous Media Coefficients (dynamic list, template defaults) |
 | *(Belt size label convention)* | x = vehicle longitudinal = **Length (x)**; y = vehicle lateral = **Width (y)**. Applied to all 3 belt size inputs (wheel belt, center belt, belt_1). |
 | Output | **Accordion**: Full Data Output (time fields, format, merge, coarsening [Coarsest RL max=number_of_resolution, Coarsen by SegmentedControl "1"|"2"], bbox select/coords, output vars 24+15 checkboxes) · Aero Coefficients (aero only; ref area/length auto, along-axis) · Partial Surfaces · Partial Volumes (coarsening same SegmentedControl) · Section Cuts · Probe Files |
 | Part Specification | `tn_baffle` + `tn_windtunnel` only |
