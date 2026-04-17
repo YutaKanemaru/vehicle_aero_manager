@@ -1070,13 +1070,25 @@ def assemble_ufx_solver_deck(
             parts=["uFX_domain_z_min"],
             fluid_bc_settings=FluidBCSlip(type="slip"),
         ))
-        # BL suction ON のときのみ static パッチを追加
+        # BL suction ON のときのみ uFX_ground パッチを追加
+        # rotating_belt_1: uFX_ground も moving（ベルト速度と同じ）
+        # それ以外（static / belt5）: uFX_ground は static
         if gc.bl_suction.apply:
-            wall_instances.append(WallInstance(
-                name="uFX_static_ground",
-                parts=["uFX_ground"],
-                fluid_bc_settings=FluidBCStatic(type="static"),
-            ))
+            if is_aero and gc.ground_mode == "rotating_belt_1":
+                wall_instances.append(WallInstance(
+                    name="uFX_moving_ground_patch",
+                    parts=["uFX_ground"],
+                    fluid_bc_settings=FluidBCMoving(
+                        type="moving",
+                        velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
+                    ),
+                ))
+            else:
+                wall_instances.append(WallInstance(
+                    name="uFX_static_ground",
+                    parts=["uFX_ground"],
+                    fluid_bc_settings=FluidBCStatic(type="static"),
+                ))
 
     # ── Porous sources ────────────────────────────────────────────────────
     porous_instances: list = []
