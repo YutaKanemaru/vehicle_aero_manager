@@ -652,6 +652,8 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
         "ground_mode": "rotating_belt_5",
         "overset_wheels": true,
         "ground_patch_active": true,
+        // no_slip_xmin_pos: required when apply=true AND (ground_mode != rotating_belt_5 OR no_slip_xmin_from_belt_xmin=false)
+        // GroundConfig.model_validator enforces this — ValidationError if missing
         "bl_suction": { "apply": true, "no_slip_xmin_from_belt_xmin": true, "bl_xmin_offset": 0.0 },
         "belt5": { "wheel_belt_location_auto": true, "belt_size_wheel": {"x": 0.4, "y": 0.3}, ... }
       },
@@ -1268,11 +1270,16 @@ def _build_belt5_wall_instances(
 Ground wall BC logic:
 ```
 ground_mode == "full_moving":
-  → WallInstance(name="uFX_moving_ground", parts=["uFX_domain_z_min"], type="moving")
+  → WallInstance(name="uFX_moving_ground",       parts=["uFX_domain_z_min"], type="moving")
 
 ground_mode != "full_moving" (all other modes):
-  → WallInstance(name="uFX_slip_ground", parts=["uFX_domain_z_min"], type="slip")  [always]
-  → WallInstance(name="uFX_static_ground", parts=["uFX_ground"], type="static")    [only if bl_suction.apply=True]
+  → WallInstance(name="uFX_slip_ground",          parts=["uFX_domain_z_min"], type="slip")  [always]
+
+  BL suction ON (bl_suction.apply=True):
+    ground_mode == "rotating_belt_1":
+      → WallInstance(name="uFX_moving_ground_patch", parts=["uFX_ground"], type="moving")  [belt speed]
+    ground_mode == "rotating_belt_5" or "static":
+      → WallInstance(name="uFX_static_ground",       parts=["uFX_ground"], type="static")
 ```
 
 Belt DomainPartInstances (`belt_dpis`):
