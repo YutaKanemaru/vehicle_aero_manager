@@ -1521,9 +1521,9 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for 
 - `get_cached_glb(geometry_id, lod) -> bytes | None`: returns cached GLB bytes if exists
 - `invalidate_cache(geometry_id)`: removes all LOD cache files for a geometry
 - `LOD_DECIMATION_PARAMS`: per-LOD dict with `target_reduction` (0.0–1.0), `agg` (0–10), `min_faces` (per-part lower bound)
-  - `low`:    `{target_reduction: 0.75, agg: 7, min_faces: 100}` — fast, less precise
-  - `medium`: `{target_reduction: 0.75, agg: 5, min_faces: 500}` — balanced **(production default)**
-  - `high`:   `{target_reduction: 0.75, agg: 3, min_faces: 1000}` — slow, preserves curvature most
+  - `low`:    `{target_reduction: 0.50, agg: 7, min_faces: 1000}` — fast, less precise
+  - `medium`: `{target_reduction: 0.50, agg: 5, min_faces: 1000}` — balanced **(production default)**
+  - `high`:   `{target_reduction: 0.50, agg: 3, min_faces: 1000}` — slow, preserves curvature most
 - `LOD_TARGET_REDUCTION` / `LOD_MIN_FACES_PER_PART`: alias dicts derived from `LOD_DECIMATION_PARAMS` (backward compat)
 - Cache path: `{viewer_cache_dir}/{geometry_id}_{lod}.glb`
 - **`fast-simplification`** must be installed (`uv add fast-simplification`) as primary QEM engine; trimesh QEM → subsampling are automatic fallbacks

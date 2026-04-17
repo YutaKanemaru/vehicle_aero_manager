@@ -21,11 +21,21 @@ from app.services.compute_engine import _detect_stl_format
 
 logger = logging.getLogger(__name__)
 
-LOD_TARGET_FACES: dict[str, int] = {
-    "low": 50_000,
-    "medium": 200_000,
-    "high": 500_000,
+# 各LODのデシメーションパラメータ
+# target_reduction : 削減率 (0.0〜1.0) — 元の face 数に対して何割削減するか
+# agg              : fast-simplification aggressiveness (1〜10)
+#                    高いほど平面を優先削減・曲面を保持する挙動が強くなる
+#                    5=デフォルト(バランス), 7=平面優先, 9=積極的（形状崩れリスク有）
+# min_faces        : パーツあたりの最低 face 数（削減しすぎを防ぐ下限）
+LOD_DECIMATION_PARAMS: dict[str, dict] = {
+    "low":    {"target_reduction": 0.50, "agg": 7,   "min_faces": 1_000},
+    "medium": {"target_reduction": 0.50, "agg": 5,   "min_faces": 1_000},
+    "high":   {"target_reduction": 0.50, "agg": 3,   "min_faces": 1_000},
 }
+
+# 後方互換用エイリアス
+LOD_TARGET_REDUCTION: dict[str, float] = {k: v["target_reduction"] for k, v in LOD_DECIMATION_PARAMS.items()}
+LOD_MIN_FACES_PER_PART: dict[str, int] = {k: v["min_faces"] for k, v in LOD_DECIMATION_PARAMS.items()}
 
 
 def _get_stl_path(geometry: Geometry) -> Path:
@@ -122,10 +132,14 @@ def _decimate_solid(
     name: str,
     vertices: np.ndarray,
     faces: np.ndarray,
-    target_faces: int,
+    target_reduction: float,
+    min_faces: int,
 ) -> tuple[str, "trimesh.Trimesh"]:
     """
     1 パーツのデシメーションを実行する (ThreadPoolExecutor から呼ばれる)。
+
+    target_reduction: 削減率 (0.0〜1.0)。0.75 なら元の 75% を削減し 25% を残す。
+    min_faces: このパーツの最低 face 数 (下限ガード)。
 
     trimesh.Trimesh を直接構築 (trimesh.load() 不使用)。
     QEM デシメーション失敗時は numpy 均等サブサンプリングにフォールバック。
@@ -135,6 +149,9 @@ def _decimate_solid(
     mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     current_faces = len(mesh.faces)
 
+    # 削減後の目標 face 数を計算（下限保護）
+    target_faces = max(min_faces, int(current_faces * (1.0 - target_reduction)))
+
     if current_faces <= target_faces:
         return name, mesh
 
@@ -142,7 +159,8 @@ def _decimate_solid(
     try:
         decimated = mesh.simplify_quadric_decimation(face_count=target_faces)
         if len(decimated.faces) > 0:
-            logger.debug("  Part %s: %d → %d faces (QEM)", name, current_faces, len(decimated.faces))
+            actual_reduction = (1.0 - len(decimated.faces) / current_faces) * 100
+            logger.debug("  Part %s: %d → %d faces (QEM, %.1f%% reduced)", name, current_faces, len(decimated.faces), actual_reduction)
             return name, decimated
     except Exception as e:
         logger.warning("QEM failed for part %s: %s — falling back to subsampling.", name, e)
@@ -156,7 +174,8 @@ def _decimate_solid(
     new_vertices = vertices[used_indices]
     new_faces = index_map[sampled_faces]
     fallback = trimesh.Trimesh(vertices=new_vertices, faces=new_faces, process=False)
-    logger.debug("  Part %s: %d → %d faces (subsampling)", name, current_faces, len(fallback.faces))
+    actual_reduction = (1.0 - len(fallback.faces) / current_faces) * 100
+    logger.debug("  Part %s: %d → %d faces (subsampling, %.1f%% reduced)", name, current_faces, len(fallback.faces), actual_reduction)
     return name, fallback
 
 
@@ -171,9 +190,13 @@ def build_viewer_glb(geometry: Geometry, lod: Literal["low", "medium", "high"] =
     import trimesh
 
     stl_path = _get_stl_path(geometry)
-    target_faces = LOD_TARGET_FACES.get(lod, LOD_TARGET_FACES["medium"])
+    target_reduction = LOD_TARGET_REDUCTION.get(lod, LOD_TARGET_REDUCTION["medium"])
+    min_faces = LOD_MIN_FACES_PER_PART.get(lod, LOD_MIN_FACES_PER_PART["medium"])
 
-    logger.info("Building GLB for geometry=%s lod=%s target_faces=%d", geometry.id, lod, target_faces)
+    logger.info(
+        "Building GLB for geometry=%s lod=%s target_reduction=%.0f%% min_faces=%d",
+        geometry.id, lod, target_reduction * 100, min_faces,
+    )
 
     # バイナリ STL は非対応
     fmt = _detect_stl_format(stl_path)
@@ -186,15 +209,11 @@ def build_viewer_glb(geometry: Geometry, lod: Literal["low", "medium", "high"] =
     solids = _parse_solids_for_decimation(stl_path)
     logger.info("  Parsed %d solid(s) from %s", len(solids), stl_path.name)
 
-    # パーツ数に応じて per-part ターゲット面数を配分
-    n_parts = max(len(solids), 1)
-    per_part_target = max(500, target_faces // n_parts)
-
-    # 並列デシメーション
+    # 並列デシメーション（各パーツが独立して同じ削減率を適用）
     meshes: dict[str, trimesh.Trimesh] = {}
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(_decimate_solid, name, verts, faces, per_part_target): name
+            executor.submit(_decimate_solid, name, verts, faces, target_reduction, min_faces): name
             for name, verts, faces in solids
         }
         for future in concurrent.futures.as_completed(futures):
@@ -227,7 +246,7 @@ def build_viewer_glb(geometry: Geometry, lod: Literal["low", "medium", "high"] =
 
 def invalidate_cache(geometry_id: str) -> None:
     """指定ジオメトリの全LODキャッシュを削除する。"""
-    for lod in LOD_TARGET_FACES:
+    for lod in LOD_TARGET_REDUCTION:
         cache_path = _get_cache_path(geometry_id, lod)
         if cache_path.exists():
             cache_path.unlink()
