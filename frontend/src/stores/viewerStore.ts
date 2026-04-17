@@ -53,7 +53,7 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
   selectedTemplateId: null,
   setSelectedTemplateId: (id) => set({ selectedTemplateId: id }),
 
-  lod: "medium",
+  lod: "low",
   setLod: (lod) => set({ lod }),
 
   partStates: {},

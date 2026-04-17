@@ -87,10 +87,13 @@ def main() -> None:
 
     print(f"[2/2] Done.\n")
     print(f"{'='*60}")
+    stl_mb = stl_path.stat().st_size / 1024 / 1024
+    glb_mb = len(glb_bytes) / 1024 / 1024
+    ratio = (1 - glb_mb / stl_mb) * 100
     print(f"  Processing time : {elapsed_fmt}")
-    print(f"  Input STL size  : {stl_path.stat().st_size / 1024 / 1024:.1f} MB")
-    print(f"  Output GLB size : {len(glb_bytes) / 1024 / 1024:.2f} MB")
-    print(f"  Reduction ratio : {(1 - len(glb_bytes) / stl_path.stat().st_size) * 100:.1f}%")
+    print(f"  Input STL size  : {stl_mb:.1f} MB")
+    print(f"  Output GLB size : {glb_mb:.2f} MB")
+    print(f"  Reduction ratio : {ratio:.2f}%  ({stl_mb:.1f} MB → {glb_mb:.2f} MB)")
     print(f"  Saved to        : {out_path}")
     print(f"{'='*60}\n")
 

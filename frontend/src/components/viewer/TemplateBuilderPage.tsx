@@ -2,13 +2,10 @@ import { useEffect, useMemo } from "react";
 import {
   Stack,
   Select,
-  SegmentedControl,
   Switch,
   Divider,
-  Text,
   Title,
   Paper,
-  Group,
   ScrollArea,
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
@@ -24,7 +21,6 @@ function ControlPanel() {
   const {
     selectedAssemblyId, setSelectedAssemblyId,
     selectedTemplateId, setSelectedTemplateId,
-    lod, setLod,
     overlays, setOverlay,
   } = useViewerStore();
 
@@ -76,21 +72,6 @@ function ControlPanel() {
         size="sm"
       />
 
-      <div>
-        <Text size="xs" c="dimmed" mb={4}>Level of Detail</Text>
-        <SegmentedControl
-          size="xs"
-          value={lod}
-          onChange={(v) => setLod(v as "low" | "medium" | "high")}
-          data={[
-            { label: "Low", value: "low" },
-            { label: "Med", value: "medium" },
-            { label: "High", value: "high" },
-          ]}
-          fullWidth
-        />
-      </div>
-
       <Divider label="Overlays" labelPosition="left" />
 
       <Stack gap={6}>
@@ -135,8 +116,8 @@ export function TemplateBuilderPage() {
   const {
     selectedAssemblyId,
     selectedTemplateId,
-    lod,
   } = useViewerStore();
+  const lod = "low" as const;
 
   const { data: assemblies = [] } = useQuery<AssemblyResponse[]>({
     queryKey: ["assemblies"],
