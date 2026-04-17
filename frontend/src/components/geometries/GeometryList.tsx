@@ -45,6 +45,7 @@ import {
   type GeometryFolderResponse,
 } from "../../api/geometries";
 import { useAuthStore } from "../../stores/auth";
+import { useJobsStore } from "../../stores/jobs";
 import { GeometryUploadModal } from "./GeometryUploadModal";
 import { GeometryLinkModal } from "./GeometryLinkModal";
 
@@ -140,10 +141,12 @@ function GeometryRow({ geometry, canDelete, folders }: GeometryRowProps) {
   const [expanded, setExpanded] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const queryClient = useQueryClient();
+  const removeJob = useJobsStore((s) => s.removeJob);
 
   const deleteMutation = useMutation({
     mutationFn: () => geometriesApi.delete(geometry.id),
     onSuccess: () => {
+      removeJob(geometry.id);
       queryClient.invalidateQueries({ queryKey: ["geometries"] });
       notifications.show({ message: "Geometry deleted", color: "green" });
     },
