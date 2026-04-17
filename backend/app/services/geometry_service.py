@@ -179,10 +179,10 @@ def run_analysis(db: Session, geometry_id: str) -> None:
         db.commit()
         return
 
-    # GLBキャッシュを事前生成（まずlowのみ。成果を確認したらmedium/highを追加）
+    # GLBキャッシュを事前生成（mediumのみ事前生成; lowは軽量すぎて判別不能なため使用しない）
     try:
         from app.services.viewer_service import build_viewer_glb
-        for lod in ("low",):
+        for lod in ("medium",):
             try:
                 build_viewer_glb(geometry, lod=lod)  # type: ignore[arg-type]
             except Exception as exc:

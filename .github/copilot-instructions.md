@@ -1499,7 +1499,7 @@ upload / link
       ↓
   analyzing       → blue badge "Analyzing…"
       ↓
-ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for `low` LOD only
+ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for `medium` LOD only
       ↓
   ready           → green badge "Complete"
  (error)          → red badge "Failed"
@@ -1523,7 +1523,7 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for 
 
 **`backend/app/services/geometry_service.py`** — `run_analysis()` changes:
 - After STL analysis succeeds → sets `status = "ready-decimating"` → commits
-- Pre-generates GLB for **`low` LOD only** via `build_viewer_glb(geometry, lod="low")` (blocking, runs in background task)
+- Pre-generates GLB for **`medium` LOD only** via `build_viewer_glb(geometry, lod="medium")` (blocking, runs in background task)
 - Sets `status = "ready"` in `finally` block regardless of GLB success/failure
 - `delete_geometry()` calls `invalidate_cache(geometry.id)` before DB delete
 
@@ -1533,7 +1533,7 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for 
 | `GET` | `/geometries/{id}/file` | Download original STL (`FileResponse`) |
 | `GET` | `/geometries/{id}/glb?lod=low` | Get decimated GLB — serves from cache, generates if missing |
 
-- `lod` query param: `"low" | "medium" | "high"` (default `"low"`); frontend always requests `"low"`
+- `lod` query param: `"low" | "medium" | "high"` (default `"low"`); frontend always requests `"medium"`
 - Returns `Response(content=glb_bytes, media_type="model/gltf-binary")`
 - 400 if geometry `status != "ready"` or `"ready-decimating"` when cache already exists
 
@@ -1584,7 +1584,7 @@ lod: "low"  // fixed — no UI selector; medium/high reserved for future use
 **`src/components/viewer/TemplateBuilderPage.tsx`** (new)
 - Route: `/template-builder`
 - Layout: fixed 300px left panel + flex-1 right `<SceneCanvas>`
-- Left panel: Assembly `Select` → Template `Select` → overlay `Switch` group → `<PartListPanel>` (LOD selector removed; always uses `"low"`)
+- Left panel: Assembly `Select` → Template `Select` → overlay `Switch` group → `<PartListPanel>` (LOD selector removed; always uses `"medium"`)
 - Template overlay: fetches `listVersions`, finds active version, passes `settings` to `<OverlayObjects>`
 - `vehicleBbox`: union of `analysis_result.vehicle_bbox` across all geometries in selected assembly
 

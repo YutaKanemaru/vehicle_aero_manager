@@ -117,7 +117,7 @@ export function TemplateBuilderPage() {
     selectedAssemblyId,
     selectedTemplateId,
   } = useViewerStore();
-  const lod = "low" as const;
+  const lod = "medium" as const;
 
   const { data: assemblies = [] } = useQuery<AssemblyResponse[]>({
     queryKey: ["assemblies"],
