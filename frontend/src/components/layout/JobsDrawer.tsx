@@ -10,6 +10,7 @@ import {
   ScrollArea,
   ThemeIcon,
   Divider,
+  ActionIcon,
 } from "@mantine/core";
 import {
   IconCheck,
@@ -80,7 +81,7 @@ const typeLabel: Record<string, string> = {
 
 // ─── JobRow ──────────────────────────────────────────────────────────────────
 
-function JobRow({ job }: { job: Job }) {
+function JobRow({ job, onRemove }: { job: Job; onRemove: () => void }) {
   const cfg = statusConfig[job.status];
   const progressValue =
     job.status === "uploading" ? (job.uploadProgress ?? 0) : cfg.progressValue;
@@ -93,7 +94,7 @@ function JobRow({ job }: { job: Job }) {
         borderRadius: 8,
       }}
     >
-      <Group justify="space-between" mb={6}>
+      <Group justify="space-between" mb={6} wrap="nowrap">
         <Box style={{ flex: 1, minWidth: 0 }}>
           <Text size="sm" fw={500} truncate>
             {job.name}
@@ -102,17 +103,28 @@ function JobRow({ job }: { job: Job }) {
             {typeLabel[job.type] ?? job.type}
           </Text>
         </Box>
-        <Badge
-          color={cfg.color}
-          size="sm"
-          leftSection={
-            <ThemeIcon size={12} color={cfg.color} variant="transparent">
-              {cfg.icon}
-            </ThemeIcon>
-          }
-        >
-          {job.status === "uploading" ? `${progressValue}%` : cfg.label}
-        </Badge>
+        <Group gap={4} wrap="nowrap">
+          <Badge
+            color={cfg.color}
+            size="sm"
+            leftSection={
+              <ThemeIcon size={12} color={cfg.color} variant="transparent">
+                {cfg.icon}
+              </ThemeIcon>
+            }
+          >
+            {job.status === "uploading" ? `${progressValue}%` : cfg.label}
+          </Badge>
+          <ActionIcon
+            size="xs"
+            variant="subtle"
+            color="gray"
+            aria-label="Dismiss job"
+            onClick={onRemove}
+          >
+            <IconX size={10} />
+          </ActionIcon>
+        </Group>
       </Group>
 
       <Progress
@@ -142,11 +154,12 @@ interface Props {
 export function JobsDrawer({ opened, onClose }: Props) {
   const jobs = useJobsStore((s) => s.jobs);
   const clearCompleted = useJobsStore((s) => s.clearCompleted);
+  const removeJob = useJobsStore((s) => s.removeJob);
 
   // 新しい順に並べる
   const sorted = [...jobs].sort((a, b) => b.addedAt - a.addedAt);
   const activeJobs = sorted.filter(
-    (j) => j.status === "uploading" || j.status === "pending" || j.status === "analyzing"
+    (j) => j.status === "uploading" || j.status === "pending" || j.status === "analyzing" || j.status === "ready-decimating"
   );
   const doneJobs = sorted.filter(
     (j) => j.status === "ready" || j.status === "error"
@@ -183,7 +196,7 @@ export function JobsDrawer({ opened, onClose }: Props) {
               In Progress
             </Text>
             {activeJobs.map((job) => (
-              <JobRow key={job.id} job={job} />
+              <JobRow key={job.id} job={job} onRemove={() => removeJob(job.id)} />
             ))}
           </Stack>
         )}
@@ -211,7 +224,7 @@ export function JobsDrawer({ opened, onClose }: Props) {
             <ScrollArea h={320}>
               <Stack gap="xs">
                 {doneJobs.map((job) => (
-                  <JobRow key={job.id} job={job} />
+                  <JobRow key={job.id} job={job} onRemove={() => removeJob(job.id)} />
                 ))}
               </Stack>
             </ScrollArea>
