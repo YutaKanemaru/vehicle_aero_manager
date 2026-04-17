@@ -71,7 +71,7 @@ export const useJobsStore = create<JobsState>()(
 
 // セレクタ helpers
 export const selectActiveJobs = (s: JobsState) =>
-  s.jobs.filter((j) => j.status === "uploading" || j.status === "pending" || j.status === "analyzing");
+  s.jobs.filter((j) => j.status === "uploading" || j.status === "pending" || j.status === "analyzing" || j.status === "ready-decimating");
 
 export const selectActiveCount = (s: JobsState) =>
-  s.jobs.filter((j) => j.status === "uploading" || j.status === "pending" || j.status === "analyzing").length;
+  s.jobs.filter((j) => j.status === "uploading" || j.status === "pending" || j.status === "analyzing" || j.status === "ready-decimating").length;

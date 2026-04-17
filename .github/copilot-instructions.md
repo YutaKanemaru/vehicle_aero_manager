@@ -940,7 +940,7 @@ export interface Job {
 
 **Actions**: `addJob(id, name, type)` — starts as `uploading` · `updateJob(id, status, error_message?)` · `updateUploadProgress(id, progress)` · `removeJob(id)` · `clearCompleted()` (removes `ready` + `error` only; use per-job X button for other statuses)
 
-**Selectors**: `selectActiveJobs(s)` · `selectActiveCount(s)` — both include `uploading` + `pending` + `analyzing`
+**Selectors**: `selectActiveJobs(s)` · `selectActiveCount(s)` — both include `uploading` + `pending` + `analyzing` + `ready-decimating`
 
 **Persistence**: `zustand/middleware persist` with `partialize` — stores only jobs younger than 24 hours
 
