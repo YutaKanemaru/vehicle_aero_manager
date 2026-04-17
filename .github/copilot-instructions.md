@@ -44,7 +44,7 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | Package manager | uv | Never use pip directly |
 | Deploy | Docker Compose | |
 | 3D Rendering | `three` + `@react-three/fiber` + `@react-three/drei` | Phase 2A — Template Builder viewer |
-| Mesh Decimation | `trimesh` + `fast-simplification` (backend deps) | Custom streaming parser + ThreadPoolExecutor parallel QEM; numpy subsampling fallback |
+| Mesh Decimation | `trimesh` + `fast-simplification` (backend deps) | Custom streaming parser + ThreadPoolExecutor parallel curvature-aware QEM (`fast_simplification.simplify`); trimesh QEM → numpy subsampling fallback chain |
 
 ### Scale-trigger technologies
 
@@ -1513,13 +1513,20 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for 
 
 **`backend/app/services/viewer_service.py`** (new)
 - `_parse_solids_for_decimation(stl_path) -> list[tuple[str, np.ndarray, np.ndarray]]`: streaming ASCII STL parser — same token logic as `compute_engine._parse_stl_ascii_streaming` but **retains** `vertices_buf` and `faces_buf` per solid as numpy arrays; peak memory = O(largest single solid), not O(file). Returns `[(name, vertices_float32, faces_int32), ...]`.
-- `_decimate_solid(name, vertices, faces, target_faces) -> tuple[str, Trimesh]`: constructs `trimesh.Trimesh(vertices, faces, process=False)` directly (no `trimesh.load()`); applies `simplify_quadric_decimation(face_count=target_faces)`; falls back to numpy uniform subsampling on failure.
-- `build_viewer_glb(geometry, lod) -> bytes`: (1) `_detect_stl_format` check → (2) `_parse_solids_for_decimation` → (3) `ThreadPoolExecutor` parallel `_decimate_solid` per solid → (4) assemble `trimesh.Scene` with node_name=part_name → `.export(file_type='glb')` → cache → return. **`trimesh.load()` is never called.**
+- `_decimate_solid(name, vertices, faces, target_reduction, min_faces, agg) -> tuple[str, Trimesh]`: constructs `trimesh.Trimesh(vertices, faces, process=False)` directly (no `trimesh.load()`). Decimation priority chain:
+  1. `fast_simplification.simplify(points, triangles, target_reduction, agg=agg)` — curvature-aware QEM; lower `agg` preserves curved surfaces / edges more aggressively (0=most precise, 5=default, 10=fastest)
+  2. `mesh.simplify_quadric_decimation(face_count=target_faces)` — trimesh QEM fallback
+  3. numpy uniform subsampling (`faces[::step]`) — last resort
+- `build_viewer_glb(geometry, lod) -> bytes`: resolves `LOD_DECIMATION_PARAMS[lod]` → (1) `_detect_stl_format` check → (2) `_parse_solids_for_decimation` → (3) `ThreadPoolExecutor` parallel `_decimate_solid` (each part independently with same `target_reduction` + `agg`) → (4) assemble `trimesh.Scene` with node_name=part_name → `.export(file_type='glb')` → cache → return. **`trimesh.load()` is never called.**
 - `get_cached_glb(geometry_id, lod) -> bytes | None`: returns cached GLB bytes if exists
 - `invalidate_cache(geometry_id)`: removes all LOD cache files for a geometry
-- LOD target faces: `low=50_000`, `medium=200_000`, `high=500_000`
+- `LOD_DECIMATION_PARAMS`: per-LOD dict with `target_reduction` (0.0–1.0), `agg` (0–10), `min_faces` (per-part lower bound)
+  - `low`:    `{target_reduction: 0.75, agg: 7, min_faces: 100}` — fast, less precise
+  - `medium`: `{target_reduction: 0.75, agg: 5, min_faces: 500}` — balanced **(production default)**
+  - `high`:   `{target_reduction: 0.75, agg: 3, min_faces: 1000}` — slow, preserves curvature most
+- `LOD_TARGET_REDUCTION` / `LOD_MIN_FACES_PER_PART`: alias dicts derived from `LOD_DECIMATION_PARAMS` (backward compat)
 - Cache path: `{viewer_cache_dir}/{geometry_id}_{lod}.glb`
-- **`fast-simplification`** must be installed (`uv add fast-simplification`) for QEM to work; numpy subsampling is the automatic fallback if QEM fails
+- **`fast-simplification`** must be installed (`uv add fast-simplification`) as primary QEM engine; trimesh QEM → subsampling are automatic fallbacks
 
 **`backend/app/config.py`**: `viewer_cache_dir: Path = _BACKEND_DIR / "data" / "viewer_cache"`
 
@@ -1551,7 +1558,7 @@ searchMode: "include" | "exclude"
 overlays: { domainBox, refinementBoxes, wheelAxes, groundPlane }
 selectedAssemblyId: string | null
 selectedTemplateId: string | null
-lod: "low"  // fixed — no UI selector; medium/high reserved for future use
+lod: "medium"  // fixed — no UI selector; medium is production default (agg=5, 75% reduction)
 ```
 
 **`src/api/geometries.ts`** — new helper:
@@ -1599,11 +1606,15 @@ lod: "low"  // fixed — no UI selector; medium/high reserved for future use
 
 `viewer_service.build_viewer_glb()` pipeline:
 1. **Streaming parse** — `_parse_solids_for_decimation()` reads STL line by line; no `trimesh.load()`; peak memory = O(largest solid)
-2. **Parallel QEM** — `ThreadPoolExecutor` → `_decimate_solid()` per solid; `trimesh.Trimesh(vertices, faces, process=False)` → `simplify_quadric_decimation(face_count=target_faces)` (requires `fast-simplification` package)
-3. **Fallback** — numpy uniform subsampling: `faces[::step]`, re-index vertices — O(n) memory, predictable face count
-4. If all else fails → `ValueError` logged, geometry remains `status="ready"` (GLB simply not cached)
+2. **Parallel curvature-aware QEM** — `ThreadPoolExecutor` → `_decimate_solid()` per solid; each part processed **independently with same `target_reduction`** (not a global face budget). Priority chain per part:
+   - `fast_simplification.simplify(points, triangles, target_reduction, agg=agg)` — primary; flat regions decimated aggressively, curved surfaces/edges preserved
+   - `mesh.simplify_quadric_decimation(face_count=target_faces)` — fallback if fast-simplification fails
+   - numpy uniform subsampling — last resort
+3. If all else fails → `ValueError` logged, geometry remains `status="ready"` (GLB simply not cached)
 
-**`fast-simplification`** is installed in backend dependencies (`uv add fast-simplification`). Without it, all QEM calls fall back to subsampling.
+**`agg` parameter** (aggressiveness, 0–10): lower = more precise, higher = faster but less shape-preserving. `medium` LOD uses `agg=5` (balanced), `high` uses `agg=3` (curvature-preserving), `low` uses `agg=7` (fast).
+
+**`fast-simplification`** is installed in backend dependencies (`uv add fast-simplification`). Without it, pipeline falls back to trimesh QEM then subsampling.
 
 ---
 
