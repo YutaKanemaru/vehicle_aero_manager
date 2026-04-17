@@ -897,8 +897,8 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
 
 | File | Description |
 |---|---|
-| `GeometryList.tsx` | Folder-hierarchy view: geometries grouped into collapsible `FolderSection` panels (Paper + Collapse). Uncategorized geometries shown last. Each geometry row has expand-for-analysis-details + move-to-folder Popover (Select dropdown). Header has "New Folder" + "Upload STL" buttons. Auto-refreshes every 3s when any item is `pending`/`analyzing`. |
-| `GeometryUploadModal.tsx` | Upload form: name, description, folder select (from `foldersApi.list()`), STL file input. Uses XHR upload with progress callback — button shows "Uploading…" and all fields disabled during transfer. On success: registers job via `addJob` then `updateJob` to `pending`. |
+| `GeometryList.tsx` | Folder-hierarchy view: geometries grouped into collapsible `FolderSection` panels (Paper + Collapse). Uncategorized geometries shown last. Each geometry row has expand-for-analysis-details + move-to-folder Popover (Select dropdown). Header has "New Folder" + "Upload STL" buttons. Auto-refreshes every 3s when any item is `pending`/`analyzing`. On delete: calls `removeJob(geometry.id)` immediately so the job disappears from the drawer even if geometry is still in `pending`/`analyzing` state. |
+| `GeometryUploadModal.tsx` | Upload form: name, description, folder select (from `foldersApi.list()`), STL file input. **Modal closes immediately** after registering jobs in the drawer — XHR transfers continue in background (fire-and-forget). No `uploading` blocking state on the modal. Progress tracked exclusively in Jobs Drawer via `updateUploadProgress`. |
 | `GeometryLinkModal.tsx` | Link only登録フォーム: name, description, file_path (server absolute path), folder select. JSON POST を使用（XHR不要）。成功後は uploadと同様に job トラッカーに登録。 |
 | `AssemblyList.tsx` | Folder-hierarchy view: assemblies grouped into collapsible `FolderSection` panels (Paper + Collapse). Uncategorized assemblies shown last. Each assembly row has manage-geometries action + move-to-folder Popover. Header has "New Folder" (IconFolderPlus) + "New Assembly" buttons. Folder delete: `delete_assembly_folder` sets all children to uncategorized. |
 | `AssemblyCreateModal.tsx` | Create assembly with optional template link (dropdown from templates list) + optional folder select (`assemblyFoldersApi.list()`) |
@@ -925,7 +925,7 @@ A lightweight client-side job tracker for long-running background tasks (STL ana
 
 ```typescript
 export type JobType = "stl_analysis";
-export type JobStatus = "uploading" | "pending" | "analyzing" | "ready" | "error";
+export type JobStatus = "uploading" | "pending" | "analyzing" | "ready-decimating" | "ready" | "error";
 
 export interface Job {
   id: string;
@@ -938,7 +938,7 @@ export interface Job {
 }
 ```
 
-**Actions**: `addJob(id, name, type)` — starts as `uploading` · `updateJob(id, status, error_message?)` · `updateUploadProgress(id, progress)` · `removeJob(id)` · `clearCompleted()`
+**Actions**: `addJob(id, name, type)` — starts as `uploading` · `updateJob(id, status, error_message?)` · `updateUploadProgress(id, progress)` · `removeJob(id)` · `clearCompleted()` (removes `ready` + `error` only; use per-job X button for other statuses)
 
 **Selectors**: `selectActiveJobs(s)` · `selectActiveCount(s)` — both include `uploading` + `pending` + `analyzing`
 
@@ -946,22 +946,26 @@ export interface Job {
 
 ### Upload Flow
 1. `addJob(tempId, name, "stl_analysis")` — job immediately appears as "Uploading…" in drawer
-2. XHR `upload.onprogress` → `updateUploadProgress(tempId, pct)` — progress bar updates in real time
-3. On XHR success → `removeJob(tempId)` + `addJob(realId, name, ...)` + `updateJob(realId, "pending")`
-4. `useJobsPoller` picks up the real ID and polls until `ready`/`error`
+2. **Modal closes immediately** — user can continue using the app
+3. XHR `upload.onprogress` → `updateUploadProgress(tempId, pct)` — progress bar updates in real time
+4. On XHR success → `removeJob(tempId)` + `addJob(realId, name, ...)` + `updateJob(realId, "pending")`
+5. `useJobsPoller` picks up the real ID and polls until `ready`/`error`
 
 ### Poller Hook (`src/hooks/useJobsPoller.ts`)
 - Mounted in `AppShell` — runs for the lifetime of the app
-- Polls `GET /geometries/` every 3 s when any job is `pending` or `analyzing`
+- Polls `GET /geometries/` every 3 s when any job is `pending`, `analyzing`, or `ready-decimating`
 - **Does NOT poll** `uploading` jobs — those are tracked entirely via XHR callbacks
 - Uses `useInterval` from `@mantine/hooks`
-- **Deleted geometry cleanup**: if a `pending`/`analyzing` job ID is not found in the API response (geometry was deleted mid-analysis), `removeJob()` is called immediately. `ready`/`error` jobs for deleted geometries are also removed on the same poll cycle.
+- **Deleted geometry cleanup (during polling)**: if a `pending`/`analyzing`/`ready-decimating` job ID is not found in the API response, `removeJob()` is called immediately. `ready`/`error` stale jobs are also cleaned on the same cycle.
+- **Deleted geometry cleanup (after polling stops)**: when `hasActive` transitions `true→false`, runs one final `geometriesApi.list()` to remove any `ready`/`error` jobs whose geometry was deleted while no polling was active.
 
 ### Jobs Drawer (`src/components/layout/JobsDrawer.tsx`)
 - Triggered from AppShell header button with active-count `Indicator` badge
-- Status configs: `uploading` (cyan, real progress %) · `pending` (yellow, 15% animated) · `analyzing` (blue, 60% striped) · `ready` (green, 100%) · `error` (red, 100%)
+- **In Progress** section: `uploading`, `pending`, `analyzing`, `ready-decimating` jobs
+- **Completed** section: `ready`, `error` jobs + "Clear" button removes them all
+- Status configs: `uploading` (cyan, real progress %) · `pending` (yellow, 15% animated) · `analyzing` (blue, 60% striped) · `ready-decimating` (violet, 85% striped) · `ready` (green, 100%) · `error` (red, 100%)
 - Badge for `uploading` status shows live `XX%` instead of label text
-- "Clear" button removes `ready` + `error` jobs
+- **Per-job ✕ button**: every job row has an `ActionIcon` dismiss button — calls `removeJob(id)`. Allows manual removal of any job regardless of status (e.g. stuck `uploading 100%`).
 
 ---
 
