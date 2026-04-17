@@ -35,7 +35,6 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
   const updateUploadProgress = useJobsStore((s) => s.updateUploadProgress);
   const removeJob = useJobsStore((s) => s.removeJob);
 
-  const [uploading, setUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   const { data: folders = [] } = useQuery({
@@ -64,66 +63,45 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
     }
 
     const folderId = values.folderId || null;
-    setUploading(true);
+    const filesToUpload = [...selectedFiles];
 
-    // ファイルごとに一時ジョブを登録してから並列アップロード
-    const jobs = selectedFiles.map((file) => {
+    // ジョブをドロワーに登録
+    const jobs = filesToUpload.map((file) => {
       const tempId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const name = stemName(file.name);
       addJob(tempId, name, "stl_analysis");
       return { tempId, name, file };
     });
 
-    const results = await Promise.allSettled(
-      jobs.map(({ tempId, name, file }) =>
-        geometriesApi
-          .upload(name, values.description || null, folderId, file, (pct) =>
-            updateUploadProgress(tempId, pct),
-          )
-          .then((data) => {
-            removeJob(tempId);
-            addJob(data.id, data.name, "stl_analysis");
-            updateJob(data.id, "pending");
-            return data;
-          })
-          .catch((e: Error) => {
-            updateJob(tempId, "error", e.message);
-            throw e;
-          }),
-      ),
-    );
-
-    const succeeded = results.filter((r) => r.status === "fulfilled").length;
-    const failed = results.filter((r) => r.status === "rejected").length;
-
-    queryClient.invalidateQueries({ queryKey: ["geometries"] });
-
-    if (failed === 0) {
-      notifications.show({
-        message: `${succeeded} 件のアップロード完了 — バックグラウンドで解析中`,
-        color: "green",
-      });
-    } else {
-      notifications.show({
-        message: `${succeeded} 件成功 / ${failed} 件失敗`,
-        color: failed === results.length ? "red" : "yellow",
-      });
-    }
-
-    setUploading(false);
+    // モーダルを即座に閉じる — 転送はバックグラウンドで継続
     form.reset();
     setSelectedFiles([]);
     if (fileRef.current) fileRef.current.value = "";
     onClose();
+
+    // 各ファイルのアップロードをバックグラウンドで実行
+    jobs.forEach(({ tempId, name, file }) => {
+      geometriesApi
+        .upload(name, values.description || null, folderId, file, (pct) =>
+          updateUploadProgress(tempId, pct),
+        )
+        .then((data) => {
+          removeJob(tempId);
+          addJob(data.id, data.name, "stl_analysis");
+          updateJob(data.id, "pending");
+          queryClient.invalidateQueries({ queryKey: ["geometries"] });
+        })
+        .catch((e: Error) => {
+          updateJob(tempId, "error", e.message);
+        });
+    });
   }
 
   function handleClose() {
-    if (!uploading) {
-      onClose();
-      form.reset();
-      setSelectedFiles([]);
-      if (fileRef.current) fileRef.current.value = "";
-    }
+    onClose();
+    form.reset();
+    setSelectedFiles([]);
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   return (
@@ -140,7 +118,6 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
               accept=".stl"
               multiple
               style={{ fontSize: 14 }}
-              disabled={uploading}
               onChange={handleFileChange}
             />
             <Text size="xs" c="dimmed">
@@ -176,7 +153,6 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
           <Textarea
             label="説明（全ファイル共通・任意）"
             placeholder="Optional description"
-            disabled={uploading}
             {...form.getInputProps("description")}
           />
           <Select
@@ -184,19 +160,16 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
             placeholder="— No folder —"
             data={folderOptions}
             clearable
-            disabled={uploading}
             {...form.getInputProps("folderId")}
           />
           <Group justify="flex-end" mt="md">
-            <Button variant="default" onClick={handleClose} disabled={uploading}>
+            <Button variant="default" onClick={handleClose}>
               キャンセル
             </Button>
-            <Button type="submit" loading={uploading} disabled={uploading || selectedFiles.length === 0}>
-              {uploading
-                ? "アップロード中…"
-                : selectedFiles.length > 1
-                  ? `${selectedFiles.length} 件をアップロード`
-                  : "アップロード"}
+            <Button type="submit" disabled={selectedFiles.length === 0}>
+              {selectedFiles.length > 1
+                ? `${selectedFiles.length} 件をアップロード`
+                : "アップロード"}
             </Button>
           </Group>
         </Stack>
