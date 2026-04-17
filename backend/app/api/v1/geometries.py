@@ -1,6 +1,10 @@
-from fastapi import APIRouter, Depends, Form, UploadFile, File, BackgroundTasks
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Form, UploadFile, File, BackgroundTasks, HTTPException
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.auth.deps import get_current_user
 from app.models.user import User
@@ -9,6 +13,7 @@ from app.schemas.geometry import (
     GeometryFolderCreate, GeometryFolderUpdate, GeometryFolderResponse,
 )
 from app.services import geometry_service
+from app.services import viewer_service
 
 router = APIRouter()
 
@@ -122,3 +127,55 @@ def delete_geometry(
     current_user: User = Depends(get_current_user),
 ):
     geometry_service.delete_geometry(db, geometry_id, current_user)
+
+
+@router.get("/{geometry_id}/file")
+def download_geometry_file(
+    geometry_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """元のSTLファイルをダウンロードする。"""
+    geometry = geometry_service.get_geometry(db, geometry_id)
+    if geometry.is_linked:
+        stl_path = geometry.file_path
+    else:
+        stl_path = str(settings.upload_dir / geometry.file_path)
+    import os
+    if not os.path.exists(stl_path):
+        raise HTTPException(status_code=404, detail="STL file not found on server")
+    return FileResponse(
+        path=stl_path,
+        media_type="model/stl",
+        filename=geometry.original_filename or "geometry.stl",
+    )
+
+
+@router.get("/{geometry_id}/glb")
+def get_geometry_glb(
+    geometry_id: str,
+    lod: Literal["low", "medium", "high"] = "medium",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """STLをデシメーションしたGLBファイルを返す。初回は生成してキャッシュする。"""
+    geometry = geometry_service.get_geometry(db, geometry_id)
+    if geometry.status != "ready":
+        raise HTTPException(status_code=400, detail="Geometry analysis not complete")
+
+    # キャッシュ確認
+    cached = viewer_service.get_cached_glb(geometry_id, lod)
+    if cached is not None:
+        return Response(content=cached, media_type="model/gltf-binary")
+
+    # キャッシュなし → 生成
+    try:
+        from app.models.geometry import Geometry
+        db_geometry = db.get(Geometry, geometry_id)
+        glb_bytes = viewer_service.build_viewer_glb(db_geometry, lod=lod)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"GLB generation failed: {e}")
+
+    return Response(content=glb_bytes, media_type="model/gltf-binary")

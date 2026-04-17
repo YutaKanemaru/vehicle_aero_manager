@@ -170,13 +170,31 @@ def run_analysis(db: Session, geometry_id: str) -> None:
             file_path = settings.upload_dir / geometry.file_path
         result_json = analyze_stl_to_json(file_path)
         geometry.analysis_result = result_json
-        geometry.status = "ready"
+        geometry.status = "ready-decimating"
         geometry.error_message = None
+        db.commit()
     except Exception as exc:
         geometry.status = "error"
         geometry.error_message = str(exc)
+        db.commit()
+        return
 
-    db.commit()
+    # GLBキャッシュを事前生成（まずlowのみ。成果を確認したらmedium/highを追加）
+    try:
+        from app.services.viewer_service import build_viewer_glb
+        for lod in ("low",):
+            try:
+                build_viewer_glb(geometry, lod=lod)  # type: ignore[arg-type]
+            except Exception as exc:
+                # GLB生成失敗は解析成功に影響させない
+                import logging
+                logging.getLogger(__name__).warning(
+                    "GLB pre-build failed for geometry=%s lod=%s: %s",
+                    geometry.id, lod, exc,
+                )
+    finally:
+        geometry.status = "ready"
+        db.commit()
 
 
 def update_geometry(
@@ -214,6 +232,13 @@ def delete_geometry(db: Session, geometry_id: str, current_user: User) -> None:
                 shutil.rmtree(upload_subdir)
         except Exception:
             pass  # ファイルが消えていても DB からは削除する
+
+    # ビューワーキャッシュを削除
+    try:
+        from app.services.viewer_service import invalidate_cache
+        invalidate_cache(geometry.id)
+    except Exception:
+        pass
 
     db.delete(geometry)
     db.commit()

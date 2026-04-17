@@ -138,6 +138,21 @@ export const geometriesApi = {
 
   updateFolder: (id: string, folderId: string | null): Promise<GeometryResponse> =>
     client.patch(`/geometries/${id}`, { folder_id: folderId }),
+
+  /**
+   * geometryのGLBをフェッチしてBlobURLを返す。
+   * Three.jsのローダーに渡せるURL形式で返す。
+   * 呼び出し側でURL.revokeObjectURL()すること。
+   */
+  getGlbBlobUrl: async (id: string, lod: "low" | "medium" | "high" = "medium"): Promise<string> => {
+    const token = localStorage.getItem("vam_token");
+    const res = await fetch(`/api/v1/geometries/${id}/glb?lod=${lod}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`GLB fetch failed: HTTP ${res.status}`);
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  },
 };
 
 // ─── Assembly API ────────────────────────────────────────────────────────────

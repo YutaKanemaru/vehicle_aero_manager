@@ -10,7 +10,7 @@ import {
   Indicator,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconTemplate, IconLogout, IconBox, IconStack2, IconActivity, IconCar, IconMap } from "@tabler/icons-react";
+import { IconTemplate, IconLogout, IconBox, IconStack2, IconActivity, IconCar, IconMap, IconCube } from "@tabler/icons-react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "../../stores/auth";
 import { useJobsStore, selectActiveCount } from "../../stores/jobs";
@@ -23,6 +23,7 @@ const navItems = [
   { label: "Assemblies", path: "/assemblies", icon: IconStack2 },
   { label: "Maps", path: "/maps", icon: IconMap },
   { label: "Cases", path: "/cases", icon: IconCar },
+  { label: "Template Builder", path: "/template-builder", icon: IconCube },
 ];
 
 export function AppLayout() {

@@ -12,14 +12,14 @@ export function useJobsPoller() {
   const updateJob = useJobsStore((s) => s.updateJob);
   const removeJob = useJobsStore((s) => s.removeJob);
 
-  // Only poll when there are pending/analyzing jobs (uploading is handled by XHR callbacks)
+  // Only poll when there are pending/analyzing/ready-decimating jobs (uploading is handled by XHR callbacks)
   const hasActive = jobs.some(
-    (j) => j.status === "pending" || j.status === "analyzing"
+    (j) => j.status === "pending" || j.status === "analyzing" || j.status === "ready-decimating"
   );
 
   const interval = useInterval(async () => {
     const activeJobs = jobs.filter(
-      (j) => j.status === "pending" || j.status === "analyzing"
+      (j) => j.status === "pending" || j.status === "analyzing" || j.status === "ready-decimating"
     );
     if (activeJobs.length === 0) return;
 

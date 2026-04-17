@@ -43,6 +43,8 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | Task Queue | FastAPI BackgroundTasks (MVP) → Celery (scale) | |
 | Package manager | uv | Never use pip directly |
 | Deploy | Docker Compose | |
+| 3D Rendering | `three` + `@react-three/fiber` + `@react-three/drei` | Phase 2A — Template Builder viewer |
+| Mesh Decimation | `trimesh` + `fast-simplification` (backend deps) | Custom streaming parser + ThreadPoolExecutor parallel QEM; numpy subsampling fallback |
 
 ### Scale-trigger technologies
 
@@ -50,8 +52,8 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 - PostgreSQL, MinIO, Keycloak, Celery, Redis, Kubernetes, Helm
 
 **Introduce when implementation requires it** (no fixed phase restriction):
-- Three.js / React Three Fiber — for 3D check-setup visualization and post-processing viewer
-- VTK / PyVista — for server-side geometry and result processing
+- ~~Three.js / React Three Fiber~~ — **✅ introduced in Phase 2A**
+- VTK / PyVista — for server-side EnSight result processing (Phase 2B)
 
 ---
 
@@ -67,7 +69,17 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | Step 4 (W9-12) | Geometry upload + STL analysis + Compute engine + Kinematics | ✅ Complete |
 | Step 5 (W13-16) | XML generation + Case/Configuration/Run management + Diff view + Porous coefficients UI | ✅ Complete |
 
-**All Phase 1 steps are complete. Next work will be Phase 2 (post-processing) or incremental improvements.**
+**All Phase 1 steps are complete.**
+
+### Phase 2A: 3D Viewer / Template Builder
+
+| Step | Description | Status |
+|---|---|---|
+| 2A-1 | Backend GLB generation + cache (`viewer_service.py`) + `/glb` endpoint | ✅ Complete |
+| 2A-2 | Frontend Three.js setup + `viewerStore` + GLB fetch helper | ✅ Complete |
+| 2A-3 | `SceneCanvas`, `OverlayObjects`, `PartListPanel` components | ✅ Complete |
+| 2A-4 | `TemplateBuilderPage` (`/template-builder`) + AppShell nav | ✅ Complete |
+| 2B | Post-processing EnSight viewer (PyVista backend) | 🔲 Planned |
 
 ---
 
@@ -88,6 +100,7 @@ vehicle_aero_manager/
 │       ├── models/              # SQLAlchemy ORM models only
 │       ├── schemas/             # Pydantic request/response schemas only
 │       ├── services/            # Business logic — DB operations belong here, not in routers
+│       │   ├── viewer_service.py  # GLB generation, decimation, cache management
 │       ├── storage/             # StorageBackend abstraction
 │       └── ultrafluid/          # XML schema (Pydantic), parser, serializer — isolated module
 ├── frontend/
@@ -96,7 +109,8 @@ vehicle_aero_manager/
 │       ├── components/          # UI components
 │       ├── hooks/               # Custom React hooks (useTemplateSettingsForm, useJobsPoller, etc.)
 │       ├── scripts/             # Build-time Node.js scripts (extract-defaults.mjs)
-│       ├── stores/              # Zustand stores only
+│       ├── stores/              # Zustand stores only (auth, jobs, viewerStore)
+│       ├── components/viewer/   # 3D viewer components (Phase 2A)
 │       └── types/               # Shared TypeScript types
 └── tests/
 ```
@@ -1470,18 +1484,139 @@ uv add <package-name>
 
 ---
 
+## Phase 2A: 3D Viewer / Template Builder — Implementation Details (Complete)
+
+### Overview
+
+A 3D viewer for pre-processing (STL geometry + Template overlay) accessible at `/template-builder`. Backend converts ASCII STL to decimated GLB and caches it. Frontend renders with React Three Fiber.
+
+### Geometry Status Flow
+
+```
+upload / link
+      ↓
+  pending         → yellow badge "Pending"
+      ↓
+  analyzing       → blue badge "Analyzing…"
+      ↓
+ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for all 3 LODs
+      ↓
+  ready           → green badge "Complete"
+ (error)          → red badge "Failed"
+```
+
+### Backend
+
+**`backend/app/services/viewer_service.py`** (new)
+- `_parse_solids_for_decimation(stl_path) -> list[tuple[str, np.ndarray, np.ndarray]]`: streaming ASCII STL parser — same token logic as `compute_engine._parse_stl_ascii_streaming` but **retains** `vertices_buf` and `faces_buf` per solid as numpy arrays; peak memory = O(largest single solid), not O(file). Returns `[(name, vertices_float32, faces_int32), ...]`.
+- `_decimate_solid(name, vertices, faces, target_faces) -> tuple[str, Trimesh]`: constructs `trimesh.Trimesh(vertices, faces, process=False)` directly (no `trimesh.load()`); applies `simplify_quadric_decimation(face_count=target_faces)`; falls back to numpy uniform subsampling on failure.
+- `build_viewer_glb(geometry, lod) -> bytes`: (1) `_detect_stl_format` check → (2) `_parse_solids_for_decimation` → (3) `ThreadPoolExecutor` parallel `_decimate_solid` per solid → (4) assemble `trimesh.Scene` with node_name=part_name → `.export(file_type='glb')` → cache → return. **`trimesh.load()` is never called.**
+- `get_cached_glb(geometry_id, lod) -> bytes | None`: returns cached GLB bytes if exists
+- `invalidate_cache(geometry_id)`: removes all LOD cache files for a geometry
+- LOD target faces: `low=50_000`, `medium=200_000`, `high=500_000`
+- Cache path: `{viewer_cache_dir}/{geometry_id}_{lod}.glb`
+- **`fast-simplification`** must be installed (`uv add fast-simplification`) for QEM to work; numpy subsampling is the automatic fallback if QEM fails
+
+**`backend/app/config.py`**: `viewer_cache_dir: Path = _BACKEND_DIR / "data" / "viewer_cache"`
+
+**`backend/app/database.py`**: `settings.viewer_cache_dir.mkdir(parents=True, exist_ok=True)` on startup
+
+**`backend/app/services/geometry_service.py`** — `run_analysis()` changes:
+- After STL analysis succeeds → sets `status = "ready-decimating"` → commits
+- Pre-generates GLB for all 3 LODs via `build_viewer_glb()` (blocking, runs in background task)
+- Sets `status = "ready"` in `finally` block regardless of GLB success/failure
+- `delete_geometry()` calls `invalidate_cache(geometry.id)` before DB delete
+
+**`backend/app/api/v1/geometries.py`** — new endpoints:
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/geometries/{id}/file` | Download original STL (`FileResponse`) |
+| `GET` | `/geometries/{id}/glb?lod=medium` | Get decimated GLB — serves from cache, generates if missing |
+
+- `lod` query param: `"low" | "medium" | "high"` (default `"medium"`)
+- Returns `Response(content=glb_bytes, media_type="model/gltf-binary")`
+- 400 if geometry `status != "ready"` or `"ready-decimating"` when cache already exists
+
+### Frontend
+
+**`src/stores/viewerStore.ts`** (new — Zustand)
+```typescript
+partStates: Record<string, { visible, color, opacity }>  // per-part 3D state
+searchQuery: string
+searchMode: "include" | "exclude"
+overlays: { domainBox, refinementBoxes, wheelAxes, groundPlane }
+selectedAssemblyId: string | null
+selectedTemplateId: string | null
+lod: "low" | "medium" | "high"
+```
+
+**`src/api/geometries.ts`** — new helper:
+- `geometriesApi.getGlbBlobUrl(id, lod?)`: fetches GLB with auth header → `Blob` → `URL.createObjectURL()`, returns URL string. Caller must `URL.revokeObjectURL()` on cleanup.
+
+**`src/stores/jobs.ts`** — `JobStatus` now includes `"ready-decimating"`
+
+**`src/hooks/useJobsPoller.ts`** — polls while `pending | analyzing | ready-decimating`
+
+**`src/components/layout/JobsDrawer.tsx`** — `"ready-decimating"` status: violet, 85%, "Building 3D…"
+
+**`src/components/geometries/GeometryList.tsx`** — violet badge + "Building 3D viewer cache..." text + refetchInterval triggers on `ready-decimating`
+
+**`src/components/viewer/SceneCanvas.tsx`** (new)
+- R3F `<Canvas>` + `<OrbitControls>` + lights + `<Grid>`
+- `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → `scene.traverse()` applies `partStates` (visible / color / opacity) to each `Mesh` node
+- `<CameraFitter>`: `Box3.setFromObject(scene)` → positions camera to fit all geometry on first load
+- Accepts array of `GeometryResponse` (Assembly support) — fetches and overlays all GLBs in parallel
+- Shows `<Loader>` while fetching, error text on failure, placeholder text when no assembly selected
+
+**`src/components/viewer/OverlayObjects.tsx`** (new)
+- Renders Three.js overlays from `templateSettings` + `vehicleBbox`:
+  - **Domain Box** (`overlays.domainBox`): `setup.domain_bounding_box` × vehicle bbox → white wireframe `<boxGeometry>`
+  - **Refinement Boxes** (`overlays.refinementBoxes`): `setup.meshing.box_refinement` — per-level color (RL1=light blue → RL7=red) wireframe boxes
+  - **Ground Plane** (`overlays.groundPlane`): semi-transparent green plane at `z = vehicle_bbox.z_min`
+- `vehicleBbox` is union of all geometries in the assembly (computed in `TemplateBuilderPage`)
+
+**`src/components/viewer/PartListPanel.tsx`** (new)
+- Full part list from `analysis_result.parts`, grouped with count badge
+- Per-part: eye toggle / `ColorInput` / opacity `Slider`
+- Search bar + `SegmentedControl` (Include / Exclude) — filters visible list
+- "Toggle all filtered" + "Reset all" toolbar buttons
+
+**`src/components/viewer/TemplateBuilderPage.tsx`** (new)
+- Route: `/template-builder`
+- Layout: fixed 300px left panel + flex-1 right `<SceneCanvas>`
+- Left panel: Assembly `Select` → Template `Select` → LOD `SegmentedControl` → overlay `Switch` group → `<PartListPanel>`
+- Template overlay: fetches `listVersions`, finds active version, passes `settings` to `<OverlayObjects>`
+- `vehicleBbox`: union of `analysis_result.vehicle_bbox` across all geometries in selected assembly
+
+**Navigation**: `AppShell.tsx` → `IconCube` + "Template Builder" → `/template-builder`  
+**Route**: `App.tsx` → `<Route path="/template-builder" element={<TemplateBuilderPage />} />`
+
+### Decimation Pipeline
+
+`viewer_service.build_viewer_glb()` pipeline:
+1. **Streaming parse** — `_parse_solids_for_decimation()` reads STL line by line; no `trimesh.load()`; peak memory = O(largest solid)
+2. **Parallel QEM** — `ThreadPoolExecutor` → `_decimate_solid()` per solid; `trimesh.Trimesh(vertices, faces, process=False)` → `simplify_quadric_decimation(face_count=target_faces)` (requires `fast-simplification` package)
+3. **Fallback** — numpy uniform subsampling: `faces[::step]`, re-index vertices — O(n) memory, predictable face count
+4. If all else fails → `ValueError` logged, geometry remains `status="ready"` (GLB simply not cached)
+
+**`fast-simplification`** is installed in backend dependencies (`uv add fast-simplification`). Without it, all QEM calls fall back to subsampling.
+
+---
+
 ## Phase 2+ Roadmap
 
-The following features are planned for future phases. They are documented here for context but **must not be implemented during Phase 1**.
+### Phase 2A: 3D Viewer / Template Builder — ✅ Complete
 
-### Post-Processing
+See **Phase 2A: 3D Viewer / Template Builder** implementation details section below.
+
+### Phase 2B: Post-Processing EnSight Viewer — 🔲 Planned
 
 **Two modes of post-processing are planned:**
 
-1. **GUI post-processing** (Three.js / React Three Fiber)
-   - 3D result datasets loaded in a GUI session for detailed analysis
+1. **GUI post-processing** (Three.js / React Three Fiber — reuse Phase 2A `SceneCanvas`)
+   - 3D CFD result datasets (EnSight `.case` / `.h3d`) loaded in the existing viewer
    - Data coarsening to handle multiple full datasets efficiently
-   - Robust multi-dataset comparison
+   - Robust multi-dataset comparison with synchronized camera state (Zustand)
    - Simulation info inherited from Ultrafluid log files
    - Photo-realistic rendering (low priority)
 
@@ -1490,6 +1625,12 @@ The following features are planned for future phases. They are documented here f
    - Automated image/movie generation from Ultrafluid output
    - Image viewer with view/position sync and overlay mode for case comparison
    - GSP dataset viewer (probe results, area-weighted power spectrum) — eliminates need for Excel
+
+**Implementation approach for 2B:**
+- `uv add pyvista` — backend reads 8-partition EnSight via `pv.EnSightReader`
+- Surface extraction + field data baked to vertex colors → GLB export (reuse `viewer_service` pattern)
+- `GET /api/v1/runs/{run_id}/result-glb?field=pressure&timestep=last`
+- Multiple synchronized viewports: shared `cameraState` in Zustand
 
 **Note**: A lightweight post-processing viewer prototype already exists and can be provided when needed.
 

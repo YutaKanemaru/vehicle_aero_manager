@@ -48,6 +48,14 @@ const statusConfig = {
     striped: true,
     icon: <IconLoader size={14} />,
   },
+  "ready-decimating": {
+    label: "Building 3D…",
+    color: "violet",
+    progressValue: 85,
+    animated: true,
+    striped: true,
+    icon: <IconLoader size={14} />,
+  },
   ready: {
     label: "Complete",
     color: "green",

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type JobType = "stl_analysis";
-export type JobStatus = "uploading" | "pending" | "analyzing" | "ready" | "error";
+export type JobStatus = "uploading" | "pending" | "analyzing" | "ready-decimating" | "ready" | "error";
 
 export interface Job {
   id: string;

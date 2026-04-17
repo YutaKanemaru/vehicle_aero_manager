@@ -33,3 +33,5 @@ backend/data/
 
 # Large sample ZIP files
 docs/samples/**/*.zip
+
+backend/data/viewer_cache/

@@ -9,6 +9,7 @@ import { GeometryList } from "./components/geometries/GeometryList";
 import { AssemblyList } from "./components/assemblies/AssemblyList";
 import { CaseList } from "./components/cases/CaseList";
 import { MapList } from "./components/maps/MapList";
+import { TemplateBuilderPage } from "./components/viewer/TemplateBuilderPage";
 import { useAuthStore } from "./stores/auth";
 import { authApi } from "./api/auth";
 
@@ -22,6 +23,7 @@ function AuthenticatedApp() {
         <Route path="/assemblies" element={<AssemblyList />} />
         <Route path="/maps" element={<MapList />} />
         <Route path="/cases" element={<CaseList />} />
+        <Route path="/template-builder" element={<TemplateBuilderPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>

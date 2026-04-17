@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     upload_dir: Path = _BACKEND_DIR / "data" / "uploads"
     result_dir: Path = _BACKEND_DIR / "data" / "results"
     runs_dir: Path = _BACKEND_DIR / "data" / "runs"
+    viewer_cache_dir: Path = _BACKEND_DIR / "data" / "viewer_cache"
 
     # CORS
     cors_origins: list[str] = ["http://localhost:5173"]  # Vite dev server

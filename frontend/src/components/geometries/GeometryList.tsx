@@ -54,6 +54,7 @@ function statusColor(status: string) {
   if (status === "ready") return "green";
   if (status === "error") return "red";
   if (status === "analyzing") return "blue";
+  if (status === "ready-decimating") return "violet";
   return "yellow";
 }
 
@@ -254,6 +255,9 @@ function GeometryRow({ geometry, canDelete, folders }: GeometryRowProps) {
                 {geometry.status === "ready" && <AnalysisDetails geometry={geometry} />}
                 {(geometry.status === "pending" || geometry.status === "analyzing") && (
                   <Text size="sm" c="dimmed">Analysis in progress...</Text>
+                )}
+                {geometry.status === "ready-decimating" && (
+                  <Text size="sm" c="violet">Building 3D viewer cache...</Text>
                 )}
               </Box>
             </Collapse>
@@ -457,7 +461,9 @@ export function GeometryList() {
     queryFn: geometriesApi.list,
     refetchInterval: (query) => {
       const data = query.state.data as GeometryResponse[] | undefined;
-      const hasPending = data?.some((g) => g.status === "pending" || g.status === "analyzing");
+      const hasPending = data?.some(
+        (g) => g.status === "pending" || g.status === "analyzing" || g.status === "ready-decimating"
+      );
       return hasPending ? 3000 : false;
     },
   });
