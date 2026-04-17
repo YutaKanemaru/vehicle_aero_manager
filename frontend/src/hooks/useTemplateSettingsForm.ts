@@ -484,6 +484,13 @@ export type FormValues = typeof FORM_DEFAULTS;
 
 /** Shared validate rules for all template settings modals. */
 export const FORM_VALIDATE: Partial<Record<keyof FormValues, (value: unknown, values: FormValues) => string | null>> = {
+  bl_suction_no_slip_xmin_pos: (v, values) => {
+    if (!values.bl_suction_apply) return null;
+    const autoderived = values.ground_mode === "rotating_belt_5" && values.bl_suction_from_belt_xmin;
+    if (!autoderived && (v === null || v === undefined || v === ""))
+      return "Required when BL suction is active";
+    return null;
+  },
   tn_wt_fr_lh: (v, values) =>
     values.ground_mode === "rotating_belt_5" && !(v as string).trim()
       ? "Required when 5-belt mode is active"

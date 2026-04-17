@@ -529,7 +529,7 @@
       <turbulence_instance>
         <name>tg_ground</name>
         <num_eddies>800</num_eddies>
-        <length_scale>0.003</length_scale>
+        <length_scale>0.012</length_scale>
         <turbulence_intensity>0.05</turbulence_intensity>
         <point>
           <x_pos>-4.01</x_pos>
@@ -544,7 +544,7 @@
       <turbulence_instance>
         <name>tg_body</name>
         <num_eddies>800</num_eddies>
-        <length_scale>0.003</length_scale>
+        <length_scale>0.012</length_scale>
         <turbulence_intensity>0.01</turbulence_intensity>
         <point>
           <x_pos>-1.1556912</x_pos>

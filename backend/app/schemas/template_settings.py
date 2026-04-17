@@ -12,7 +12,7 @@ The settings field stored in TemplateVersion follows 5 sections:
 from __future__ import annotations
 
 from typing import Any, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.ultrafluid.schema import (
     OutputVariablesFull,
@@ -149,6 +149,24 @@ class GroundConfig(BaseModel):
     # Ground box refinement (aero only)
     # Automatically forced ON when enable_ground_tg is True
     apply_static_ground_refinement: bool = True
+
+    @model_validator(mode="after")
+    def _require_no_slip_xmin_pos(self) -> "GroundConfig":
+        """no_slip_xmin_pos is required when BL suction is active and cannot be
+        auto-derived from a belt (i.e. belt5 + no_slip_xmin_from_belt_xmin=True)."""
+        bl = self.bl_suction
+        if not bl.apply:
+            return self
+        auto_derived = (
+            self.ground_mode == "rotating_belt_5"
+            and bl.no_slip_xmin_from_belt_xmin
+        )
+        if not auto_derived and bl.no_slip_xmin_pos is None:
+            raise ValueError(
+                "bl_suction.no_slip_xmin_pos is required when BL suction is enabled "
+                "and no_slip_xmin_from_belt_xmin is False (or ground_mode is not rotating_belt_5)."
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -518,7 +536,10 @@ def _ghn_preset() -> TemplateSettings:
         setup_option=SetupOption(
             meshing=MeshingOption(triangle_splitting=False),
             boundary_condition=BoundaryConditionOption(
-                ground=GroundConfig(ground_mode="static"),
+                ground=GroundConfig(
+                    ground_mode="static",
+                    bl_suction=BLSuctionConfig(apply=False),
+                ),
                 turbulence_generator=TurbulenceGeneratorOption(
                     enable_ground_tg=False,
                     enable_body_tg=False,
