@@ -1544,7 +1544,7 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for 
 | `GET` | `/geometries/{id}/file` | Download original STL (`FileResponse`) |
 | `GET` | `/geometries/{id}/glb?lod=low` | Get decimated GLB — serves from cache, generates if missing |
 
-- `lod` query param: `"low" | "medium" | "high"` (default `"low"`); frontend always requests `"medium"`
+- `lod` query param: `"low" | "medium" | "high"` (default `"medium"`); frontend always requests `"medium"`
 - Returns `Response(content=glb_bytes, media_type="model/gltf-binary")`
 - 400 if geometry `status != "ready"` or `"ready-decimating"` when cache already exists
 
@@ -1558,7 +1558,7 @@ searchMode: "include" | "exclude"
 overlays: { domainBox, refinementBoxes, wheelAxes, groundPlane }
 selectedAssemblyId: string | null
 selectedTemplateId: string | null
-lod: "medium"  // fixed — no UI selector; medium is production default (agg=5, 75% reduction)
+lod: "medium"  // fixed — no UI selector; medium is production default (agg=5, 50% reduction, min_faces=1000)
 ```
 
 **`src/api/geometries.ts`** — new helper:
