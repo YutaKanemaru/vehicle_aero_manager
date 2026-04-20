@@ -70,6 +70,7 @@ def upload_geometry(
     name: str = Form(...),
     description: str | None = Form(None),
     folder_id: str | None = Form(None),
+    decimation_ratio: float = Form(0.05),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -78,7 +79,7 @@ def upload_geometry(
     geometry = geometry_service.upload_geometry(
         db, name, description, file, current_user, folder_id=folder_id
     )
-    background_tasks.add_task(geometry_service.run_analysis, db, geometry.id)
+    background_tasks.add_task(geometry_service.run_analysis, db, geometry.id, decimation_ratio)
     return geometry
 
 
@@ -95,7 +96,7 @@ def link_geometry(
     解析はアップロード時と同様に自動実行。
     """
     geometry = geometry_service.link_geometry(db, data, current_user)
-    background_tasks.add_task(geometry_service.run_analysis, db, geometry.id)
+    background_tasks.add_task(geometry_service.run_analysis, db, geometry.id, data.decimation_ratio)
     return geometry
 
 

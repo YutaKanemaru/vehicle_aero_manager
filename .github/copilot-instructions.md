@@ -1503,7 +1503,7 @@ upload / link
       ↓
   analyzing       → blue badge "Analyzing…"
       ↓
-ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for `medium` LOD only
+ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (skipped when decimation_ratio >= 1.0)
       ↓
   ready           → green badge "Complete"
  (error)          → red badge "Failed"
@@ -1512,28 +1512,22 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for 
 ### Backend
 
 **`backend/app/services/viewer_service.py`** (new)
-- `_parse_solids_for_decimation(stl_path) -> list[tuple[str, np.ndarray, np.ndarray]]`: streaming ASCII STL parser — same token logic as `compute_engine._parse_stl_ascii_streaming` but **retains** `vertices_buf` and `faces_buf` per solid as numpy arrays; peak memory = O(largest single solid), not O(file). Returns `[(name, vertices_float32, faces_int32), ...]`.
-- `_decimate_solid(name, vertices, faces, target_reduction, min_faces, agg) -> tuple[str, Trimesh]`: constructs `trimesh.Trimesh(vertices, faces, process=False)` directly (no `trimesh.load()`). Decimation priority chain:
-  1. `fast_simplification.simplify(points, triangles, target_reduction, agg=agg)` — curvature-aware QEM; lower `agg` preserves curved surfaces / edges more aggressively (0=most precise, 5=default, 10=fastest)
-  2. `mesh.simplify_quadric_decimation(face_count=target_faces)` — trimesh QEM fallback
-  3. numpy uniform subsampling (`faces[::step]`) — last resort
-- `build_viewer_glb(geometry, lod) -> bytes`: resolves `LOD_DECIMATION_PARAMS[lod]` → (1) `STLReader.read(stl_path)` (ASCII+Binary auto-detect) → (2) `ProcessPoolExecutor` parallel `_decimate_worker` (each part independently with same `ratio`) → (3) `GLBExporter.export(valid_solids, cache_path)` → read bytes → return. **trimesh and fast-simplification are not used.**
-- `get_cached_glb(geometry_id, lod) -> bytes | None`: returns cached GLB bytes if exists
-- `invalidate_cache(geometry_id)`: removes all LOD cache files for a geometry
-- `LOD_DECIMATION_PARAMS`: per-LOD dict with `ratio` (fraction to keep, 0.0–1.0) and `min_faces` (per-part lower bound, enforced inside `QEMDecimator.simplify`)
-  - `low`:    `{ratio: 0.50, min_faces: 1000}` — **(production default, same as medium)**
-  - `medium`: `{ratio: 0.50, min_faces: 1000}` — balanced **(production default)**
-  - `high`:   `{ratio: 0.50, min_faces: 1000}` — **(same as medium; tune ratio to differentiate)**
-- Cache path: `{viewer_cache_dir}/{geometry_id}_{lod}.glb`
-- **No `fast-simplification` dependency** — `stl_decimator.QEMDecimator` is the sole decimation engine (pure Python + NumPy)
+- `DEFAULT_RATIO: float = 0.05` — global default (keep 5% of faces)
+- `build_viewer_glb(geometry, ratio=DEFAULT_RATIO) -> bytes`: (1) `STLReader.read(stl_path)` (ASCII+Binary auto-detect) → (2) `ProcessPoolExecutor` parallel `_decimate_worker` (each part independently with same `ratio`) → (3) `GLBExporter.export(valid_solids, cache_path)` → read bytes → return. **No trimesh or fast-simplification dependency.**
+- `get_cached_glb(geometry_id, ratio) -> bytes | None`: returns cached GLB bytes if cache file exists
+- `invalidate_cache(geometry_id)`: removes all cache files for a geometry via glob `{id}_*.glb`
+- Cache path: `{viewer_cache_dir}/{geometry_id}_{ratio:.3f}.glb` (e.g. `abc123_0.050.glb`)
+- **No `fast-simplification` or `trimesh` dependency** — `stl_decimator.QEMDecimator` is the sole decimation engine (pure Python + NumPy)
 
 **`backend/app/config.py`**: `viewer_cache_dir: Path = _BACKEND_DIR / "data" / "viewer_cache"`
 
 **`backend/app/database.py`**: `settings.viewer_cache_dir.mkdir(parents=True, exist_ok=True)` on startup
 
 **`backend/app/services/geometry_service.py`** — `run_analysis()` changes:
+- Signature: `run_analysis(db, geometry_id, decimation_ratio: float = 0.05) -> None`
 - After STL analysis succeeds → sets `status = "ready-decimating"` → commits
-- Pre-generates GLB for **`medium` LOD only** via `build_viewer_glb(geometry, lod="medium")` (blocking, runs in background task)
+- If `decimation_ratio >= 1.0` → skips GLB build entirely, sets `status = "ready"` immediately
+- Otherwise pre-generates GLB via `build_viewer_glb(geometry, ratio=decimation_ratio)` (blocking, runs in background task)
 - Sets `status = "ready"` in `finally` block regardless of GLB success/failure
 - `delete_geometry()` calls `invalidate_cache(geometry.id)` before DB delete; also performs `shutil.rmtree(upload_subdir)` on the geometry’s upload directory (with absolute/relative path resolution and safety guard against deleting `upload_dir` root); deletion failures are logged as `WARNING` rather than silently ignored
 
@@ -1541,11 +1535,13 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/geometries/{id}/file` | Download original STL (`FileResponse`) |
-| `GET` | `/geometries/{id}/glb?lod=low` | Get decimated GLB — serves from cache, generates if missing |
+| `GET` | `/geometries/{id}/glb?ratio=0.05` | Get decimated GLB — serves from cache, generates if missing |
 
-- `lod` query param: `"low" | "medium" | "high"` (default `"medium"`); frontend always requests `"medium"`
+- `ratio` query param: `float` 0.01–1.0 (default `0.05`); frontend requests with the geometry's stored ratio
+- Upload endpoint: `decimation_ratio: float = Form(0.05)` — passed to `run_analysis()` background task
+- Link endpoint: `data.decimation_ratio` passed to `run_analysis()` background task
 - Returns `Response(content=glb_bytes, media_type="model/gltf-binary")`
-- 400 if geometry `status != "ready"` or `"ready-decimating"` when cache already exists
+- 400 if geometry `status != "ready"`
 
 ### Frontend
 
@@ -1557,11 +1553,16 @@ searchMode: "include" | "exclude"
 overlays: { domainBox, refinementBoxes, wheelAxes, groundPlane }
 selectedAssemblyId: string | null
 selectedTemplateId: string | null
-lod: "medium"  // fixed — no UI selector; medium is production default (ratio=0.50, min_faces=1000)
+ratio: 0.05  // decimation ratio used for GLB fetch; no UI selector in viewer
 ```
 
-**`src/api/geometries.ts`** — new helper:
-- `geometriesApi.getGlbBlobUrl(id, lod?)`: fetches GLB with auth header → `Blob` → `URL.createObjectURL()`, returns URL string. Caller must `URL.revokeObjectURL()` on cleanup.
+**`src/api/geometries.ts`** — helpers:
+- `geometriesApi.getGlbBlobUrl(id, ratio?)`: fetches GLB with auth header → `Blob` → `URL.createObjectURL()`, returns URL string. Caller must `URL.revokeObjectURL()` on cleanup. Default `ratio = 0.05`.
+- `geometriesApi.upload(..., decimationRatio: number = 0.05)`: appends `decimation_ratio` to FormData before sending.
+- `GeometryLinkRequest` type extended with `decimation_ratio?: number`.
+
+**`src/schemas/geometry.py`** — `GeometryLinkRequest`:
+- Added `decimation_ratio: float = 0.05` — passed to `run_analysis()` background task
 
 **`src/stores/jobs.ts`** — `JobStatus` now includes `"ready-decimating"`
 
@@ -1594,9 +1595,20 @@ lod: "medium"  // fixed — no UI selector; medium is production default (ratio=
 **`src/components/viewer/TemplateBuilderPage.tsx`** (new)
 - Route: `/template-builder`
 - Layout: fixed 300px left panel + flex-1 right `<SceneCanvas>`
-- Left panel: Assembly `Select` → Template `Select` → overlay `Switch` group → `<PartListPanel>` (LOD selector removed; always uses `"medium"`)
+- Left panel: Assembly `Select` → Template `Select` → overlay `Switch` group → `<PartListPanel>` (no LOD selector; viewer always fetches with `ratio = 0.05`)
 - Template overlay: fetches `listVersions`, finds active version, passes `settings` to `<OverlayObjects>`
 - `vehicleBbox`: union of `analysis_result.vehicle_bbox` across all geometries in selected assembly
+
+**`src/components/geometries/GeometryUploadModal.tsx`** — Decimation Ratio Slider:
+- `form.initialValues.decimationRatio: 0.05`
+- `Slider` (min=0.01, max=1.0, step=0.01) with marks at 5% / 25% / 50% / Skip
+- Badge shows "Keep X% of faces" or "Skip — no 3D preview" when `>= 1.0`
+- Warning text shown when Skip is selected: "3D preview will not be generated."
+- `decimationRatio` passed as last arg to `geometriesApi.upload()`
+
+**`src/components/geometries/GeometryLinkModal.tsx`** — Decimation Ratio Slider:
+- Same Slider UI as UploadModal
+- `decimation_ratio: form.values.decimationRatio` included in `geometriesApi.link({...})`
 
 **Navigation**: `AppShell.tsx` → `IconCube` + "Template Builder" → `/template-builder`  
 **Route**: `App.tsx` → `<Route path="/template-builder" element={<TemplateBuilderPage />} />`

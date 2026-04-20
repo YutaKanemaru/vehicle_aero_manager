@@ -60,6 +60,7 @@ class GeometryLinkRequest(BaseModel):
     description: str | None = None
     file_path: str          # サーバー上の絶対パス（バックエンドから読める必要あり）
     folder_id: str | None = None
+    decimation_ratio: float = 0.05  # GLB変換時の保持率 (1.0 以上 = 変換しない)
 
 
 # ─── GeometryFolder ─────────────────────────────────────────────────────

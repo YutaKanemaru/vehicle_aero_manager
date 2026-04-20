@@ -9,6 +9,8 @@ import {
   Badge,
   List,
   ThemeIcon,
+  Slider,
+  Box,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -49,7 +51,7 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
   ];
 
   const form = useForm({
-    initialValues: { description: "", folderId: "" },
+    initialValues: { description: "", folderId: "", decimationRatio: 0.05 },
   });
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -84,6 +86,7 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
       geometriesApi
         .upload(name, values.description || null, folderId, file, (pct) =>
           updateUploadProgress(tempId, pct),
+          values.decimationRatio,
         )
         .then((data) => {
           removeJob(tempId);
@@ -162,6 +165,41 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
             clearable
             {...form.getInputProps("folderId")}
           />
+
+          <Stack gap={6}>
+            <Group justify="space-between" align="center">
+              <Text size="sm" fw={500}>3D Preview Quality</Text>
+              {form.values.decimationRatio >= 1.0 ? (
+                <Badge color="yellow" variant="light">Skip — no 3D preview</Badge>
+              ) : (
+                <Badge color="blue" variant="light">
+                  Keep {Math.round(form.values.decimationRatio * 100)}% of faces
+                </Badge>
+              )}
+            </Group>
+            <Box pb={24}>
+              <Slider
+                min={0.01}
+                max={1.0}
+                step={0.01}
+                value={form.values.decimationRatio}
+                onChange={(v) => form.setFieldValue("decimationRatio", v)}
+                marks={[
+                  { value: 0.05, label: "5%" },
+                  { value: 0.25, label: "25%" },
+                  { value: 0.5, label: "50%" },
+                  { value: 1.0, label: "Skip" },
+                ]}
+                label={(v) => v >= 1.0 ? "Skip" : `${Math.round(v * 100)}%`}
+              />
+            </Box>
+            {form.values.decimationRatio >= 1.0 && (
+              <Text size="xs" c="orange">
+                3D preview will not be generated. The geometry cannot be viewed in the 3D viewer.
+              </Text>
+            )}
+          </Stack>
+
           <Group justify="flex-end" mt="md">
             <Button variant="default" onClick={handleClose}>
               キャンセル
