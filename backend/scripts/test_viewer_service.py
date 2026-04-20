@@ -34,7 +34,7 @@ def find_first_stl() -> Path | None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Test viewer_service decimation")
     parser.add_argument("stl_path", nargs="?", help="Path to ASCII STL file")
-    parser.add_argument("--lod", choices=["low", "medium", "high"], default="low")
+    parser.add_argument("--lod", choices=["low", "medium", "high"], default="medium")
     args = parser.parse_args()
 
     # STLパス解決
@@ -89,16 +89,20 @@ def main() -> None:
     print(f"{'='*60}")
     stl_mb = stl_path.stat().st_size / 1024 / 1024
     glb_mb = len(glb_bytes) / 1024 / 1024
-    ratio = (1 - glb_mb / stl_mb) * 100
+    size_ratio = (1 - glb_mb / stl_mb) * 100
     print(f"  Processing time : {elapsed_fmt}")
     print(f"  Input STL size  : {stl_mb:.1f} MB")
-    print(f"  Output GLB size : {glb_mb:.2f} MB")
-    print(f"  Reduction ratio : {ratio:.2f}%  ({stl_mb:.1f} MB → {glb_mb:.2f} MB)")
+    print(f"  Output GLB size : {glb_mb:.2f} MB  ({size_ratio:.1f}% size reduction)")
     print(f"  Saved to        : {out_path}")
     print(f"{'='*60}\n")
 
     # GLBが壊れていないかtrimeshで検証
-    print("Verifying GLB integrity via trimesh...")
+    from app.services.viewer_service import LOD_DECIMATION_PARAMS
+    params = LOD_DECIMATION_PARAMS.get(args.lod, LOD_DECIMATION_PARAMS["medium"])
+    ratio     = params["ratio"]
+    min_faces = params["min_faces"]
+    print(f"Verifying GLB integrity via trimesh...")
+    print(f"  ratio (keep) : {ratio*100:.0f}%  min_faces_per_part={min_faces}")
     try:
         import trimesh
         scene = trimesh.load(str(out_path))

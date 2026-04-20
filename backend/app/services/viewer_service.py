@@ -1,42 +1,37 @@
 """
 3D Viewer用のGLBファイル生成・キャッシュサービス。
 
-trimesh.load() を使わずカスタムストリーミングパーサーで STL を読み込み、
-ThreadPoolExecutor でパーツ並列デシメーション → GLB に変換してキャッシュする。
-compute_engine._parse_stl_ascii_streaming と同じトークン解析ロジックを使用するが、
-こちらは頂点配列 (vertices_buf / faces_buf) を保持してメッシュを構築する点が異なる。
+stl_decimator.STLReader で ASCII/Binary STL を読み込み (trimesh 不使用)、
+ProcessPoolExecutor でパーツ並列 QEM デシメーション → GLBExporter で出力する。
+外部依存: numpy のみ (fast-simplification / trimesh 不要)。
 """
 from __future__ import annotations
 
-import concurrent.futures
 import logging
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Literal
 
-import numpy as np
-
 from app.config import settings
 from app.models.geometry import Geometry
-from app.services.compute_engine import _detect_stl_format
+from app.services.stl_decimator import (
+    GLBExporter,
+    QEMDecimator,
+    Solid,
+    STLReader,
+    _decimate_worker,
+)
 
 logger = logging.getLogger(__name__)
 
 # 各LODのデシメーションパラメータ
-# target_reduction : 削減率 (0.0〜1.0) — 元の face 数に対して何割削減するか
-# agg              : fast-simplification aggressiveness (0〜10)
-#                    低いほど精密 (曲面・エッジを保持、平面を優先削減)
-#                    高いほど高速だが形状精度が低下
-#                    0=最精密, 5=デフォルト, 10=最高速
-# min_faces        : パーツあたりの最低 face 数（削減しすぎを防ぐ下限）
+# ratio      : 保持率 (0.0〜1.0) — 元の face 数のうち何割を残すか
+# min_faces  : パーツあたりの最低 face 数（削減しすぎを防ぐ下限、QEMDecimator内で適用）
 LOD_DECIMATION_PARAMS: dict[str, dict] = {
-    "low":    {"target_reduction": 0.50, "agg": 7,   "min_faces": 1_000},
-    "medium": {"target_reduction": 0.50, "agg": 5,   "min_faces": 1_000},
-    "high":   {"target_reduction": 0.50, "agg": 3,   "min_faces": 1_000},
+    "low":    {"ratio": 0.50, "min_faces": 1_000},
+    "medium": {"ratio": 0.50, "min_faces": 1_000},
+    "high":   {"ratio": 0.50, "min_faces": 1_000},
 }
-
-# 後方互換用エイリアス
-LOD_TARGET_REDUCTION: dict[str, float] = {k: v["target_reduction"] for k, v in LOD_DECIMATION_PARAMS.items()}
-LOD_MIN_FACES_PER_PART: dict[str, int] = {k: v["min_faces"] for k, v in LOD_DECIMATION_PARAMS.items()}
 
 
 def _get_stl_path(geometry: Geometry) -> Path:
@@ -57,233 +52,66 @@ def get_cached_glb(geometry_id: str, lod: str) -> bytes | None:
     return None
 
 
-def _parse_solids_for_decimation(
-    stl_path: Path,
-) -> list[tuple[str, np.ndarray, np.ndarray]]:
-    """
-    ASCII STL をストリーミング解析し、各 solid の頂点・面配列を返す。
-
-    compute_engine._parse_stl_ascii_streaming と同じトークン解析ロジックだが、
-    デシメーション用に頂点配列を保持する。
-    ピークメモリは最大 solid 1 つ分の頂点数に比例 (ファイル全体ではない)。
-
-    Returns: [(name, vertices_np float32, faces_np int32), ...]
-    """
-    result: list[tuple[str, np.ndarray, np.ndarray]] = []
-    seen_names: set[str] = set()
-
-    current_name: str | None = None
-    vertices_buf: list[list[float]] = []
-    faces_buf: list[list[int]] = []
-    # 1 facet につき 3 頂点 → face = [v_base, v_base+1, v_base+2]
-    _v_base = 0
-
-    with stl_path.open("r", encoding="ascii", errors="replace") as f:
-        for raw_line in f:
-            line = raw_line.strip()
-            lower = line.lower()
-
-            if lower.startswith("solid"):
-                name_part = line[5:].strip()
-                base_name = name_part if name_part else stl_path.stem
-                candidate = base_name
-                suffix = 0
-                while candidate in seen_names:
-                    suffix += 1
-                    candidate = f"{base_name}_{suffix}"
-                current_name = candidate
-                seen_names.add(current_name)
-                vertices_buf = []
-                faces_buf = []
-                _v_base = 0
-
-            elif lower.startswith("vertex"):
-                parts = line.split()
-                if len(parts) == 4:
-                    try:
-                        vertices_buf.append([float(parts[1]), float(parts[2]), float(parts[3])])
-                    except ValueError:
-                        pass
-
-            elif lower.startswith("endfacet"):
-                # endfacet の直前に 3 頂点が積まれているはず
-                n = len(vertices_buf)
-                # 今回の facet の頂点インデックスを 3 つ取得
-                if n - _v_base == 3:
-                    faces_buf.append([_v_base, _v_base + 1, _v_base + 2])
-                _v_base = len(vertices_buf)
-
-            elif lower.startswith("endsolid") and current_name is not None:
-                if vertices_buf and faces_buf:
-                    v_arr = np.array(vertices_buf, dtype=np.float32)
-                    f_arr = np.array(faces_buf, dtype=np.int32)
-                    result.append((current_name, v_arr, f_arr))
-                current_name = None
-                vertices_buf = []
-                faces_buf = []
-                _v_base = 0
-
-    if not result:
-        raise ValueError("No valid solid definitions found in STL file.")
-
-    return result
-
-
-def _decimate_solid(
-    name: str,
-    vertices: np.ndarray,
-    faces: np.ndarray,
-    target_reduction: float,
-    min_faces: int,
-    agg: int = 5,
-) -> tuple[str, "trimesh.Trimesh"]:
-    """
-    1 パーツのデシメーションを実行する (ThreadPoolExecutor から呼ばれる)。
-
-    デシメーション優先順序:
-      1. fast_simplification.simplify() — 曲率考慮、agg 低いほど曲面ほど保持
-      2. trimesh.simplify_quadric_decimation() — QEM フォールバック
-      3. numpy 均等サブサンプリング — 最終フォールバック
-
-    agg: fast-simplification aggressiveness (0〜10)。
-         低いほど精密 (曲面・エッジ保持)、7 推奨わずか5デフォルト。
-    """
-    import trimesh  # ワーカースレッドでインポート
-
-    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-    current_faces = len(mesh.faces)
-    target_faces = max(min_faces, int(current_faces * (1.0 - target_reduction)))
-
-    if current_faces <= target_faces:
-        logger.debug("  Part %s: %d faces — skip (already at/below target)", name, current_faces)
-        return name, mesh
-
-    # --- Step 1: fast-simplification (curvature-aware) ---
-    try:
-        import fast_simplification
-        points_out, faces_out = fast_simplification.simplify(
-            mesh.vertices.astype(np.float64),
-            mesh.faces,
-            target_reduction=target_reduction,
-            agg=agg,
-        )
-        result = trimesh.Trimesh(vertices=points_out, faces=faces_out, process=False)
-        if len(result.faces) >= min_faces:
-            actual_pct = (1.0 - len(result.faces) / current_faces) * 100
-            logger.debug(
-                "  Part %s: %d → %d faces (fast-simplification agg=%d, %.1f%% reduced)",
-                name, current_faces, len(result.faces), agg, actual_pct,
-            )
-            return name, result
-        logger.warning(
-            "fast-simplification returned too few faces for %s (%d < min %d), trying trimesh QEM",
-            name, len(result.faces), min_faces,
-        )
-    except ImportError:
-        logger.debug("fast-simplification not available, using trimesh QEM")
-    except Exception as e:
-        logger.warning("fast-simplification failed for part %s: %s — trying trimesh QEM", name, e)
-
-    # --- Step 2: trimesh QEM フォールバック ---
-    try:
-        decimated = mesh.simplify_quadric_decimation(face_count=target_faces)
-        if len(decimated.faces) > 0:
-            actual_pct = (1.0 - len(decimated.faces) / current_faces) * 100
-            logger.debug(
-                "  Part %s: %d → %d faces (trimesh QEM, %.1f%% reduced)",
-                name, current_faces, len(decimated.faces), actual_pct,
-            )
-            return name, decimated
-    except Exception as e:
-        logger.warning("trimesh QEM failed for part %s: %s — falling back to subsampling", name, e)
-
-    # --- Step 3: numpy 均等サブサンプリング (最終フォールバック) ---
-    step = max(1, current_faces // target_faces)
-    sampled_faces = faces[::step]
-    used_indices = np.unique(sampled_faces)
-    index_map = np.zeros(len(vertices), dtype=np.int64)
-    index_map[used_indices] = np.arange(len(used_indices))
-    new_vertices = vertices[used_indices]
-    new_faces = index_map[sampled_faces]
-    fallback = trimesh.Trimesh(vertices=new_vertices, faces=new_faces, process=False)
-    actual_pct = (1.0 - len(fallback.faces) / current_faces) * 100
-    logger.debug(
-        "  Part %s: %d → %d faces (subsampling, %.1f%% reduced)",
-        name, current_faces, len(fallback.faces), actual_pct,
-    )
-    return name, fallback
-
-
 def build_viewer_glb(geometry: Geometry, lod: Literal["low", "medium", "high"] = "medium") -> bytes:
     """
-    STL をストリーミング解析 → パーツ並列デシメーション → GLB 変換・キャッシュ。
+    STL を読み込み → パーツ並列 QEM デシメーション → GLB 変換・キャッシュ。
 
-    trimesh.load() を使用しない。
-    _parse_solids_for_decimation() でパーツ別頂点配列を取得し、
-    ThreadPoolExecutor で _decimate_solid() を並列実行する。
+    STLReader が ASCII / Binary 両形式を自動判定する。
+    ProcessPoolExecutor で各パーツを独立して decimation する
+    (trimesh / fast-simplification 不使用)。
     """
-    import trimesh
-
     stl_path = _get_stl_path(geometry)
-    params           = LOD_DECIMATION_PARAMS.get(lod, LOD_DECIMATION_PARAMS["medium"])
-    target_reduction = params["target_reduction"]
-    min_faces        = params["min_faces"]
-    agg              = params["agg"]
+    params   = LOD_DECIMATION_PARAMS.get(lod, LOD_DECIMATION_PARAMS["medium"])
+    ratio    = params["ratio"]
 
     logger.info(
-        "Building GLB for geometry=%s lod=%s target_reduction=%.0f%% agg=%d min_faces=%d",
-        geometry.id, lod, target_reduction * 100, agg, min_faces,
+        "Building GLB for geometry=%s lod=%s ratio=%.0f%%",
+        geometry.id, lod, ratio * 100,
     )
 
-    # バイナリ STL は非対応
-    fmt = _detect_stl_format(stl_path)
-    if fmt == "binary":
-        raise ValueError(
-            "Binary STL format is not supported. Please convert to ASCII STL before uploading."
-        )
-
-    # ストリーミング解析
-    solids = _parse_solids_for_decimation(stl_path)
+    # STL 読み込み (ASCII + Binary 自動判定)
+    solids: list[Solid] = STLReader.read(stl_path)
     logger.info("  Parsed %d solid(s) from %s", len(solids), stl_path.name)
 
-    # 並列デシメーション（各パーツが独立して同じ削減率を適用）
-    meshes: dict[str, trimesh.Trimesh] = {}
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = {
-            executor.submit(_decimate_solid, name, verts, faces, target_reduction, min_faces, agg): name
-            for name, verts, faces in solids
-        }
-        for future in concurrent.futures.as_completed(futures):
-            part_name = futures[future]
+    if not solids:
+        raise ValueError(f"No valid solid found in STL: {stl_path}")
+
+    # 並列 QEM デシメーション
+    decimated: list[Solid | None] = [None] * len(solids)
+    jobs = [(i, s, ratio) for i, s in enumerate(solids)]
+
+    with ProcessPoolExecutor() as executor:
+        futures = {executor.submit(_decimate_worker, job): job[0] for job in jobs}
+        for future in as_completed(futures):
             try:
-                result_name, mesh = future.result()
-                if len(mesh.faces) > 0:
-                    meshes[result_name] = mesh
+                idx, result, elapsed = future.result()
+                decimated[idx] = result
+                logger.debug(
+                    "  Part %d/%d: %d → %d faces [%.1fs]",
+                    idx + 1, len(solids),
+                    len(solids[idx].faces), len(result.faces), elapsed,
+                )
             except Exception as e:
-                logger.error("Decimation failed for part %s: %s", part_name, e)
+                idx = futures[future]
+                logger.error("Decimation failed for part %d (%s): %s", idx, solids[idx].name, e)
 
-    if not meshes:
-        raise ValueError(f"No valid mesh found in STL: {stl_path}")
+    valid: list[Solid] = [s for s in decimated if s is not None and len(s.faces) > 0]
+    if not valid:
+        raise ValueError(f"No valid mesh after decimation for STL: {stl_path}")
 
-    # パーツ名付き Scene を構築して GLB 出力
-    out_scene = trimesh.scene.scene.Scene()
-    for name, mesh in meshes.items():
-        out_scene.add_geometry(mesh, node_name=name, geom_name=name)
-
-    glb_bytes: bytes = out_scene.export(file_type="glb")
-
-    # キャッシュに保存
+    # GLB 出力 → キャッシュ保存
     cache_path = _get_cache_path(geometry.id, lod)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_bytes(glb_bytes)
-    logger.info("GLB cached at %s (%d bytes)", cache_path, len(glb_bytes))
+    GLBExporter.export(valid, cache_path)
 
+    glb_bytes = cache_path.read_bytes()
+    logger.info("GLB cached at %s (%d bytes)", cache_path, len(glb_bytes))
     return glb_bytes
 
 
 def invalidate_cache(geometry_id: str) -> None:
     """指定ジオメトリの全LODキャッシュを削除する。"""
-    for lod in LOD_TARGET_REDUCTION:
+    for lod in LOD_DECIMATION_PARAMS:
         cache_path = _get_cache_path(geometry_id, lod)
         if cache_path.exists():
             cache_path.unlink()
