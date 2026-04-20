@@ -52,7 +52,7 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
   selectedTemplateId: null,
   setSelectedTemplateId: (id) => set({ selectedTemplateId: id }),
 
-  ratio: 0.5,
+  ratio: 0.05,
   setRatio: (ratio) => set({ ratio }),
 
   partStates: {},

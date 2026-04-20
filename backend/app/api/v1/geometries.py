@@ -152,7 +152,7 @@ def download_geometry_file(
 @router.get("/{geometry_id}/glb")
 def get_geometry_glb(
     geometry_id: str,
-    ratio: float = Query(0.5, ge=0.01, le=1.0, description="Keep ratio (0.01–1.0). e.g. 0.5 = keep 50%"),
+    ratio: float = Query(0.05, ge=0.01, le=1.0, description="Keep ratio (0.01–1.0). e.g. 0.5 = keep 50%"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

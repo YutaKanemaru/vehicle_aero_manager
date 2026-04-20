@@ -34,7 +34,7 @@ def find_first_stl() -> Path | None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Test viewer_service decimation")
     parser.add_argument("stl_path", nargs="?", help="Path to ASCII STL file")
-    parser.add_argument("--ratio", type=float, default=0.5, help="Keep ratio 0.01-1.0 (default: 0.5 = keep 50%%)",)
+    parser.add_argument("--ratio", type=float, default=0.05, help="Keep ratio 0.01-1.0 (default: 0.05 = keep 5%%)",)
     args = parser.parse_args()
 
     # STLパス解決

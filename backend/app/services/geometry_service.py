@@ -183,12 +183,12 @@ def run_analysis(db: Session, geometry_id: str) -> None:
     try:
         from app.services.viewer_service import build_viewer_glb
         try:
-            build_viewer_glb(geometry, ratio=0.5)
+            build_viewer_glb(geometry, ratio=0.05)
         except Exception as exc:
             # GLB生成失敗は解析成功に影響させない
             import logging
             logging.getLogger(__name__).warning(
-                "GLB pre-build failed for geometry=%s ratio=0.5: %s",
+                "GLB pre-build failed for geometry=%s ratio=0.05: %s",
                 geometry.id, exc,
             )
     finally:

@@ -23,7 +23,7 @@ from app.services.stl_decimator import (
 logger = logging.getLogger(__name__)
 
 # デフォルト保持率 (ratio = fraction to keep, 0.01〜1.0)
-DEFAULT_RATIO: float = 0.50
+DEFAULT_RATIO: float = 0.05
 
 
 def _get_stl_path(geometry: Geometry) -> Path:
