@@ -44,7 +44,7 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | Package manager | uv | Never use pip directly |
 | Deploy | Docker Compose | |
 | 3D Rendering | `three` + `@react-three/fiber` + `@react-three/drei` | Phase 2A — Template Builder viewer |
-| Mesh Decimation | `trimesh` + `fast-simplification` (backend deps) | Custom streaming parser + ThreadPoolExecutor parallel curvature-aware QEM (`fast_simplification.simplify`); trimesh QEM → numpy subsampling fallback chain |
+| Mesh Decimation | `stl_decimator` (pure Python + NumPy, no extra deps) | `STLReader` (ASCII+Binary auto-detect) + `ProcessPoolExecutor` parallel pure-Python QEM (`QEMDecimator.simplify`) + `GLBExporter` (flat normals, PALETTE colors, stdlib-only GLB writer) |
 
 ### Scale-trigger technologies
 
@@ -1517,16 +1517,15 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for 
   1. `fast_simplification.simplify(points, triangles, target_reduction, agg=agg)` — curvature-aware QEM; lower `agg` preserves curved surfaces / edges more aggressively (0=most precise, 5=default, 10=fastest)
   2. `mesh.simplify_quadric_decimation(face_count=target_faces)` — trimesh QEM fallback
   3. numpy uniform subsampling (`faces[::step]`) — last resort
-- `build_viewer_glb(geometry, lod) -> bytes`: resolves `LOD_DECIMATION_PARAMS[lod]` → (1) `_detect_stl_format` check → (2) `_parse_solids_for_decimation` → (3) `ThreadPoolExecutor` parallel `_decimate_solid` (each part independently with same `target_reduction` + `agg`) → (4) assemble `trimesh.Scene` with node_name=part_name → `.export(file_type='glb')` → cache → return. **`trimesh.load()` is never called.**
+- `build_viewer_glb(geometry, lod) -> bytes`: resolves `LOD_DECIMATION_PARAMS[lod]` → (1) `STLReader.read(stl_path)` (ASCII+Binary auto-detect) → (2) `ProcessPoolExecutor` parallel `_decimate_worker` (each part independently with same `ratio`) → (3) `GLBExporter.export(valid_solids, cache_path)` → read bytes → return. **trimesh and fast-simplification are not used.**
 - `get_cached_glb(geometry_id, lod) -> bytes | None`: returns cached GLB bytes if exists
 - `invalidate_cache(geometry_id)`: removes all LOD cache files for a geometry
-- `LOD_DECIMATION_PARAMS`: per-LOD dict with `target_reduction` (0.0–1.0), `agg` (0–10), `min_faces` (per-part lower bound)
-  - `low`:    `{target_reduction: 0.50, agg: 7, min_faces: 1000}` — fast, less precise
-  - `medium`: `{target_reduction: 0.50, agg: 5, min_faces: 1000}` — balanced **(production default)**
-  - `high`:   `{target_reduction: 0.50, agg: 3, min_faces: 1000}` — slow, preserves curvature most
-- `LOD_TARGET_REDUCTION` / `LOD_MIN_FACES_PER_PART`: alias dicts derived from `LOD_DECIMATION_PARAMS` (backward compat)
+- `LOD_DECIMATION_PARAMS`: per-LOD dict with `ratio` (fraction to keep, 0.0–1.0) and `min_faces` (per-part lower bound, enforced inside `QEMDecimator.simplify`)
+  - `low`:    `{ratio: 0.50, min_faces: 1000}` — **(production default, same as medium)**
+  - `medium`: `{ratio: 0.50, min_faces: 1000}` — balanced **(production default)**
+  - `high`:   `{ratio: 0.50, min_faces: 1000}` — **(same as medium; tune ratio to differentiate)**
 - Cache path: `{viewer_cache_dir}/{geometry_id}_{lod}.glb`
-- **`fast-simplification`** must be installed (`uv add fast-simplification`) as primary QEM engine; trimesh QEM → subsampling are automatic fallbacks
+- **No `fast-simplification` dependency** — `stl_decimator.QEMDecimator` is the sole decimation engine (pure Python + NumPy)
 
 **`backend/app/config.py`**: `viewer_cache_dir: Path = _BACKEND_DIR / "data" / "viewer_cache"`
 
@@ -1558,7 +1557,7 @@ searchMode: "include" | "exclude"
 overlays: { domainBox, refinementBoxes, wheelAxes, groundPlane }
 selectedAssemblyId: string | null
 selectedTemplateId: string | null
-lod: "medium"  // fixed — no UI selector; medium is production default (agg=5, 50% reduction, min_faces=1000)
+lod: "medium"  // fixed — no UI selector; medium is production default (ratio=0.50, min_faces=1000)
 ```
 
 **`src/api/geometries.ts`** — new helper:
@@ -1605,16 +1604,12 @@ lod: "medium"  // fixed — no UI selector; medium is production default (agg=5,
 ### Decimation Pipeline
 
 `viewer_service.build_viewer_glb()` pipeline:
-1. **Streaming parse** — `_parse_solids_for_decimation()` reads STL line by line; no `trimesh.load()`; peak memory = O(largest solid)
-2. **Parallel curvature-aware QEM** — `ThreadPoolExecutor` → `_decimate_solid()` per solid; each part processed **independently with same `target_reduction`** (not a global face budget). Priority chain per part:
-   - `fast_simplification.simplify(points, triangles, target_reduction, agg=agg)` — primary; flat regions decimated aggressively, curved surfaces/edges preserved
-   - `mesh.simplify_quadric_decimation(face_count=target_faces)` — fallback if fast-simplification fails
-   - numpy uniform subsampling — last resort
-3. If all else fails → `ValueError` logged, geometry remains `status="ready"` (GLB simply not cached)
+1. **STL read** — `stl_decimator.STLReader.read(stl_path)` auto-detects ASCII vs Binary; no `trimesh.load()`. Returns `list[Solid]` (per-part numpy arrays).
+2. **Parallel pure-Python QEM** — `ProcessPoolExecutor` → `_decimate_worker(idx, solid, ratio)` per solid (top-level function, Windows spawn-safe); each part processed **independently with same `ratio`** (fraction to keep). `QEMDecimator.simplify` uses heap-based edge-collapse QEM; minimum face count = `max(4, int(n_faces * ratio))`.
+3. **GLB export** — `GLBExporter.export(valid_solids, cache_path)` writes a spec-compliant GLB 2.0 with flat normals and PALETTE auto-coloring (pure stdlib, no pygltflib).
+4. If decimation fails for a part → logged as error, part excluded from GLB; if all parts fail → `ValueError` raised, geometry remains `status="ready"` (GLB not cached).
 
-**`agg` parameter** (aggressiveness, 0–10): lower = more precise, higher = faster but less shape-preserving. `medium` LOD uses `agg=5` (balanced), `high` uses `agg=3` (curvature-preserving), `low` uses `agg=7` (fast).
-
-**`fast-simplification`** is installed in backend dependencies (`uv add fast-simplification`). Without it, pipeline falls back to trimesh QEM then subsampling.
+**`stl_decimator.py`** lives at `backend/app/services/stl_decimator.py`. It is also a standalone CLI tool (`python stl_decimator.py input.stl output.glb --ratio 0.2`). No `fast-simplification` or `trimesh` dependency — pure Python + NumPy only.
 
 ---
 
