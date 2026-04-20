@@ -3,8 +3,11 @@ Geometry / GeometryAssembly のビジネスロジック。
 """
 from __future__ import annotations
 
+import logging
 import shutil
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import select
@@ -149,12 +152,13 @@ def link_geometry(
     return geometry
 
 
-def run_analysis(db: Session, geometry_id: str) -> None:
+def run_analysis(db: Session, geometry_id: str, decimation_ratio: float = 0.05) -> None:
     """
     バックグラウンドタスクとして呼ばれる。
     STL を解析して analysis_result を更新する。
     - is_linked=False: file_path は upload_dir 相対パス
     - is_linked=True:  file_path はリンク先の絶対パス
+    - decimation_ratio >= 1.0 の場合は GLB 変換をスキップ
     """
     geometry = db.get(Geometry, geometry_id)
     if not geometry:
@@ -179,17 +183,23 @@ def run_analysis(db: Session, geometry_id: str) -> None:
         db.commit()
         return
 
-    # GLBキャッシュを事前生成（mediumのみ事前生成; lowは軽量すぎて判別不能なため使用しない）
+    # decimation_ratio >= 1.0 の場合は GLB 変換をスキップ
+    if decimation_ratio >= 1.0:
+        geometry.status = "ready"
+        db.commit()
+        return
+
+    # GLBキャッシュを事前生成
     try:
         from app.services.viewer_service import build_viewer_glb
         try:
-            build_viewer_glb(geometry, ratio=0.05)
+            build_viewer_glb(geometry, ratio=decimation_ratio)
         except Exception as exc:
             # GLB生成失敗は解析成功に影響させない
             import logging
             logging.getLogger(__name__).warning(
-                "GLB pre-build failed for geometry=%s ratio=0.05: %s",
-                geometry.id, exc,
+                "GLB pre-build failed for geometry=%s ratio=%.3f: %s",
+                geometry.id, decimation_ratio, exc,
             )
     finally:
         geometry.status = "ready"
@@ -225,12 +235,21 @@ def delete_geometry(db: Session, geometry_id: str, current_user: User) -> None:
     # アップロードファイルのみ削除。リンクの場合はリンク元ファイルは触れない。
     if not geometry.is_linked:
         try:
-            file_path = settings.upload_dir / geometry.file_path
-            upload_subdir = file_path.parent
-            if upload_subdir.exists():
+            fp = Path(geometry.file_path)
+            # 絶対パスはそのまま、相対パスは upload_dir から解決
+            resolved = fp if fp.is_absolute() else settings.upload_dir / fp
+            upload_subdir = resolved.parent
+            # upload_dir そのものを削除しないように安全ガード
+            if upload_subdir.exists() and upload_subdir != settings.upload_dir:
                 shutil.rmtree(upload_subdir)
-        except Exception:
-            pass  # ファイルが消えていても DB からは削除する
+                logger.info("Deleted geometry files: %s", upload_subdir)
+            else:
+                logger.warning(
+                    "Geometry file directory not found or unsafe path, skipping: %s", upload_subdir
+                )
+        except Exception as e:
+            logger.warning("Failed to delete geometry files for %s: %s", geometry_id, e)
+            # ファイル削除失敗でも DB 行は削除する
 
     # ビューワーキャッシュを削除
     try:
