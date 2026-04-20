@@ -7,7 +7,6 @@ import { Center, Text } from "@mantine/core";
 import { Loader } from "@mantine/core";
 import { geometriesApi, type GeometryResponse } from "../../api/geometries";
 import { useViewerStore } from "../../stores/viewerStore";
-import type { Lod } from "../../stores/viewerStore";
 import { OverlayObjects } from "./OverlayObjects";
 
 // ─── GLB model inner component (rendered inside Suspense) ────────────────────
@@ -82,7 +81,7 @@ function CameraFitter({ blobUrl }: { blobUrl: string }) {
 
 interface SceneCanvasProps {
   geometries: GeometryResponse[];
-  lod: Lod;
+  ratio: number;
   templateSettings?: Record<string, unknown> | null;
   vehicleBbox?: Record<string, number> | null;
 }
@@ -93,7 +92,7 @@ interface BlobEntry {
   parts: string[];
 }
 
-export function SceneCanvas({ geometries, lod, templateSettings, vehicleBbox }: SceneCanvasProps) {
+export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }: SceneCanvasProps) {
   const [blobEntries, setBlobEntries] = useState<BlobEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,7 +118,7 @@ export function SceneCanvas({ geometries, lod, templateSettings, vehicleBbox }: 
 
     Promise.all(
       readyGeometries.map(async (g) => {
-        const url = await geometriesApi.getGlbBlobUrl(g.id, lod);
+        const url = await geometriesApi.getGlbBlobUrl(g.id, ratio);
         const parts: string[] =
           (g.analysis_result as { parts?: string[] } | null)?.parts ?? [];
         return { geometryId: g.id, url, parts };
@@ -141,7 +140,7 @@ export function SceneCanvas({ geometries, lod, templateSettings, vehicleBbox }: 
     return () => {
       cancelled = true;
     };
-  }, [readyGeometries.map((g) => g.id).join(","), lod]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [readyGeometries.map((g) => g.id).join(","), ratio]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (

@@ -10,13 +10,11 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Literal
 
 from app.config import settings
 from app.models.geometry import Geometry
 from app.services.stl_decimator import (
     GLBExporter,
-    QEMDecimator,
     Solid,
     STLReader,
     _decimate_worker,
@@ -24,14 +22,8 @@ from app.services.stl_decimator import (
 
 logger = logging.getLogger(__name__)
 
-# 各LODのデシメーションパラメータ
-# ratio      : 保持率 (0.0〜1.0) — 元の face 数のうち何割を残すか
-# min_faces  : パーツあたりの最低 face 数（削減しすぎを防ぐ下限、QEMDecimator内で適用）
-LOD_DECIMATION_PARAMS: dict[str, dict] = {
-    "low":    {"ratio": 0.50, "min_faces": 1_000},
-    "medium": {"ratio": 0.50, "min_faces": 1_000},
-    "high":   {"ratio": 0.50, "min_faces": 1_000},
-}
+# デフォルト保持率 (ratio = fraction to keep, 0.01〜1.0)
+DEFAULT_RATIO: float = 0.50
 
 
 def _get_stl_path(geometry: Geometry) -> Path:
@@ -40,33 +32,35 @@ def _get_stl_path(geometry: Geometry) -> Path:
     return settings.upload_dir / geometry.file_path
 
 
-def _get_cache_path(geometry_id: str, lod: str) -> Path:
-    return settings.viewer_cache_dir / f"{geometry_id}_{lod}.glb"
+def _get_cache_path(geometry_id: str, ratio: float) -> Path:
+    return settings.viewer_cache_dir / f"{geometry_id}_{ratio:.3f}.glb"
 
 
-def get_cached_glb(geometry_id: str, lod: str) -> bytes | None:
+def get_cached_glb(geometry_id: str, ratio: float) -> bytes | None:
     """キャッシュされたGLBバイト列を返す。なければ None。"""
-    cache_path = _get_cache_path(geometry_id, lod)
+    cache_path = _get_cache_path(geometry_id, ratio)
     if cache_path.exists():
         return cache_path.read_bytes()
     return None
 
 
-def build_viewer_glb(geometry: Geometry, lod: Literal["low", "medium", "high"] = "medium") -> bytes:
+def build_viewer_glb(geometry: Geometry, ratio: float = DEFAULT_RATIO) -> bytes:
     """
     STL を読み込み → パーツ並列 QEM デシメーション → GLB 変換・キャッシュ。
 
+    ratio: 保持率 (0.01〜1.0)。例: 0.5 = 元の50%を残す, 0.1 = 10%を残す。
     STLReader が ASCII / Binary 両形式を自動判定する。
     ProcessPoolExecutor で各パーツを独立して decimation する
     (trimesh / fast-simplification 不使用)。
     """
+    if not (0.01 <= ratio <= 1.0):
+        raise ValueError(f"ratio must be between 0.01 and 1.0, got {ratio}")
+
     stl_path = _get_stl_path(geometry)
-    params   = LOD_DECIMATION_PARAMS.get(lod, LOD_DECIMATION_PARAMS["medium"])
-    ratio    = params["ratio"]
 
     logger.info(
-        "Building GLB for geometry=%s lod=%s ratio=%.0f%%",
-        geometry.id, lod, ratio * 100,
+        "Building GLB for geometry=%s ratio=%.1f%%",
+        geometry.id, ratio * 100,
     )
 
     # STL 読み込み (ASCII + Binary 自動判定)
@@ -100,7 +94,7 @@ def build_viewer_glb(geometry: Geometry, lod: Literal["low", "medium", "high"] =
         raise ValueError(f"No valid mesh after decimation for STL: {stl_path}")
 
     # GLB 出力 → キャッシュ保存
-    cache_path = _get_cache_path(geometry.id, lod)
+    cache_path = _get_cache_path(geometry.id, ratio)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     GLBExporter.export(valid, cache_path)
 
@@ -110,9 +104,7 @@ def build_viewer_glb(geometry: Geometry, lod: Literal["low", "medium", "high"] =
 
 
 def invalidate_cache(geometry_id: str) -> None:
-    """指定ジオメトリの全LODキャッシュを削除する。"""
-    for lod in LOD_DECIMATION_PARAMS:
-        cache_path = _get_cache_path(geometry_id, lod)
-        if cache_path.exists():
-            cache_path.unlink()
-            logger.debug("Removed viewer cache: %s", cache_path)
+    """指定ジオメトリの全キャッシュ（全ratio）を削除する。"""
+    for cache_file in settings.viewer_cache_dir.glob(f"{geometry_id}_*.glb"):
+        cache_file.unlink()
+        logger.debug("Removed viewer cache: %s", cache_file)

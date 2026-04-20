@@ -117,7 +117,7 @@ export function TemplateBuilderPage() {
     selectedAssemblyId,
     selectedTemplateId,
   } = useViewerStore();
-  const lod = "medium" as const;
+  const { ratio } = useViewerStore();
 
   const { data: assemblies = [] } = useQuery<AssemblyResponse[]>({
     queryKey: ["assemblies"],
@@ -180,7 +180,7 @@ export function TemplateBuilderPage() {
       >
         <SceneCanvas
           geometries={geometries}
-          lod={lod}
+          ratio={ratio}
           templateSettings={templateSettings as Record<string, unknown> | null}
           vehicleBbox={vehicleBbox}
         />

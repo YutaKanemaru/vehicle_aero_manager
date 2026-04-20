@@ -1,6 +1,4 @@
-from typing import Literal
-
-from fastapi import APIRouter, Depends, Form, UploadFile, File, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Depends, Form, Query, UploadFile, File, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
@@ -154,7 +152,7 @@ def download_geometry_file(
 @router.get("/{geometry_id}/glb")
 def get_geometry_glb(
     geometry_id: str,
-    lod: Literal["low", "medium", "high"] = "medium",
+    ratio: float = Query(0.5, ge=0.01, le=1.0, description="Keep ratio (0.01–1.0). e.g. 0.5 = keep 50%"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -164,7 +162,7 @@ def get_geometry_glb(
         raise HTTPException(status_code=400, detail="Geometry analysis not complete")
 
     # キャッシュ確認
-    cached = viewer_service.get_cached_glb(geometry_id, lod)
+    cached = viewer_service.get_cached_glb(geometry_id, ratio)
     if cached is not None:
         return Response(content=cached, media_type="model/gltf-binary")
 
@@ -172,7 +170,7 @@ def get_geometry_glb(
     try:
         from app.models.geometry import Geometry
         db_geometry = db.get(Geometry, geometry_id)
-        glb_bytes = viewer_service.build_viewer_glb(db_geometry, lod=lod)
+        glb_bytes = viewer_service.build_viewer_glb(db_geometry, ratio=ratio)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:

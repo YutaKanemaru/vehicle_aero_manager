@@ -144,9 +144,9 @@ export const geometriesApi = {
    * Three.jsのローダーに渡せるURL形式で返す。
    * 呼び出し側でURL.revokeObjectURL()すること。
    */
-  getGlbBlobUrl: async (id: string, lod: "low" | "medium" | "high" = "medium"): Promise<string> => {
+  getGlbBlobUrl: async (id: string, ratio: number = 0.5): Promise<string> => {
     const token = localStorage.getItem("vam_token");
-    const res = await fetch(`/api/v1/geometries/${id}/glb?lod=${lod}`, {
+    const res = await fetch(`/api/v1/geometries/${id}/glb?ratio=${ratio}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) throw new Error(`GLB fetch failed: HTTP ${res.status}`);

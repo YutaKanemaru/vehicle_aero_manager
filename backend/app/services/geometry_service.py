@@ -182,16 +182,15 @@ def run_analysis(db: Session, geometry_id: str) -> None:
     # GLBキャッシュを事前生成（mediumのみ事前生成; lowは軽量すぎて判別不能なため使用しない）
     try:
         from app.services.viewer_service import build_viewer_glb
-        for lod in ("medium",):
-            try:
-                build_viewer_glb(geometry, lod=lod)  # type: ignore[arg-type]
-            except Exception as exc:
-                # GLB生成失敗は解析成功に影響させない
-                import logging
-                logging.getLogger(__name__).warning(
-                    "GLB pre-build failed for geometry=%s lod=%s: %s",
-                    geometry.id, lod, exc,
-                )
+        try:
+            build_viewer_glb(geometry, ratio=0.5)
+        except Exception as exc:
+            # GLB生成失敗は解析成功に影響させない
+            import logging
+            logging.getLogger(__name__).warning(
+                "GLB pre-build failed for geometry=%s ratio=0.5: %s",
+                geometry.id, exc,
+            )
     finally:
         geometry.status = "ready"
         db.commit()

@@ -1,6 +1,5 @@
 import { create } from "zustand";
 
-export type Lod = "low" | "medium" | "high";
 export type SearchMode = "include" | "exclude";
 
 export interface PartState {
@@ -25,9 +24,9 @@ interface ViewerStore {
   selectedTemplateId: string | null;
   setSelectedTemplateId: (id: string | null) => void;
 
-  // LOD
-  lod: Lod;
-  setLod: (lod: Lod) => void;
+  // Decimation ratio (fraction to keep, 0.01–1.0)
+  ratio: number;
+  setRatio: (ratio: number) => void;
 
   // Part visibility/color/opacity — keyed by part name
   partStates: Record<string, PartState>;
@@ -53,8 +52,8 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
   selectedTemplateId: null,
   setSelectedTemplateId: (id) => set({ selectedTemplateId: id }),
 
-  lod: "medium",
-  setLod: (lod) => set({ lod }),
+  ratio: 0.5,
+  setRatio: (ratio) => set({ ratio }),
 
   partStates: {},
   setPartState: (name, state) =>

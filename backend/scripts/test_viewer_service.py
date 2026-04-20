@@ -2,10 +2,10 @@
 Standalone test script for viewer_service.py decimation + GLB export.
 
 Usage:
-    uv run python scripts/test_viewer_service.py [<stl_path>] [--lod low|medium|high]
+    uv run python scripts/test_viewer_service.py [<stl_path>] [--ratio 0.5]
 
 If no STL path is given, auto-detects first STL in data/uploads/geometries/.
-Output GLB is saved to: backend/data/viewer_cache/test_{lod}.glb
+Output GLB is saved to: backend/data/viewer_cache/test_{ratio:.3f}.glb
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def find_first_stl() -> Path | None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Test viewer_service decimation")
     parser.add_argument("stl_path", nargs="?", help="Path to ASCII STL file")
-    parser.add_argument("--lod", choices=["low", "medium", "high"], default="medium")
+    parser.add_argument("--ratio", type=float, default=0.5, help="Keep ratio 0.01-1.0 (default: 0.5 = keep 50%%)",)
     args = parser.parse_args()
 
     # STLパス解決
@@ -56,7 +56,7 @@ def main() -> None:
     print(f"\n{'='*60}")
     print(f"  STL file : {stl_path}")
     print(f"  File size: {stl_path.stat().st_size / 1024 / 1024:.1f} MB")
-    print(f"  LOD      : {args.lod}")
+    print(f"  ratio    : {args.ratio} (keep {args.ratio*100:.0f}%)")
     print(f"{'='*60}\n")
 
     # ダミー Geometry オブジェクトを作成（DB不要）
@@ -69,10 +69,10 @@ def main() -> None:
     settings.viewer_cache_dir.mkdir(parents=True, exist_ok=True)
 
     # デシメーション実行
-    print(f"[1/2] Running decimation (LOD={args.lod})...")
+    print(f"[1/2] Running decimation (ratio={args.ratio})...")
     t0 = time.perf_counter()
     try:
-        glb_bytes = build_viewer_glb(geometry, lod=args.lod)
+        glb_bytes = build_viewer_glb(geometry, ratio=args.ratio)
         elapsed = time.perf_counter() - t0
     except Exception as e:
         print(f"\nERROR during build_viewer_glb: {e}")
@@ -81,7 +81,7 @@ def main() -> None:
         sys.exit(1)
 
     # 結果保存
-    out_path = settings.viewer_cache_dir / f"test_{args.lod}.glb"
+    out_path = settings.viewer_cache_dir / f"test_{args.ratio:.3f}.glb"
     out_path.write_bytes(glb_bytes)
     elapsed_fmt = f"{elapsed:.1f}s"
 
@@ -97,12 +97,8 @@ def main() -> None:
     print(f"{'='*60}\n")
 
     # GLBが壊れていないかtrimeshで検証
-    from app.services.viewer_service import LOD_DECIMATION_PARAMS
-    params = LOD_DECIMATION_PARAMS.get(args.lod, LOD_DECIMATION_PARAMS["medium"])
-    ratio     = params["ratio"]
-    min_faces = params["min_faces"]
     print(f"Verifying GLB integrity via trimesh...")
-    print(f"  ratio (keep) : {ratio*100:.0f}%  min_faces_per_part={min_faces}")
+    print(f"  ratio (keep) : {args.ratio*100:.0f}%")
     try:
         import trimesh
         scene = trimesh.load(str(out_path))
