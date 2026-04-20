@@ -830,7 +830,7 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
 - `link_geometry(db, data: GeometryLinkRequest, current_user)`: validates path exists on server, creates `Geometry` row with `is_linked=True` and absolute `file_path`, triggers `BackgroundTasks`
 - `run_analysis()`: background task — `pending` → `analyzing` → `ready`/`error`; `is_linked=True` 時は `file_path` を絶対パスとしてそのまま使用、`is_linked=False` 時は `settings.upload_dir / file_path`
 - `update_geometry()`: uses `model_fields_set` — only updates `folder_id` when field is explicitly in request body
-- `delete_geometry()`: `is_linked=False` の時のみ `shutil.rmtree` 実行。`is_linked=True` の場合は DB 行のみ削除し元ファイルはそのまま
+- `delete_geometry()`: `is_linked=False` の時のみファイル削除。`file_path` が相対パスなら `upload_dir` から解決、絶対パスならそのまま使用。`upload_dir` そのものを削除しない安全ガードあり。ファイル削除失敗時は `logger.warning` で報告（サイレントにスキップしない）。`is_linked=True` の場合は DB 行のみ削除し元ファイルはそのまま
 - `list_folders`, `create_folder`, `update_folder`, `delete_folder` — folder delete sets `geometry.folder_id = None` for all children
 - `_folder_or_404(db, folder_id)` helper validates folder existence
 - All CRUD for both `Geometry` and `GeometryAssembly`
@@ -1535,7 +1535,7 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation for 
 - After STL analysis succeeds → sets `status = "ready-decimating"` → commits
 - Pre-generates GLB for **`medium` LOD only** via `build_viewer_glb(geometry, lod="medium")` (blocking, runs in background task)
 - Sets `status = "ready"` in `finally` block regardless of GLB success/failure
-- `delete_geometry()` calls `invalidate_cache(geometry.id)` before DB delete
+- `delete_geometry()` calls `invalidate_cache(geometry.id)` before DB delete; also performs `shutil.rmtree(upload_subdir)` on the geometry’s upload directory (with absolute/relative path resolution and safety guard against deleting `upload_dir` root); deletion failures are logged as `WARNING` rather than silently ignored
 
 **`backend/app/api/v1/geometries.py`** — new endpoints:
 | Method | Path | Description |
