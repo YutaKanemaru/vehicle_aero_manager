@@ -12,14 +12,14 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 # パスを通す
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.config import settings
-from app.services.viewer_service import build_viewer_glb
-from app.models.geometry import Geometry
+from app.services.stl_decimator import STLReader, _decimate_worker, GLBExporter
 
 
 def find_first_stl() -> Path | None:
@@ -59,33 +59,58 @@ def main() -> None:
     print(f"  ratio    : {args.ratio} (keep {args.ratio*100:.0f}%)")
     print(f"{'='*60}\n")
 
-    # ダミー Geometry オブジェクトを作成（DB不要）
-    geometry = Geometry()
-    geometry.id = "test"
-    geometry.file_path = str(stl_path)
-    geometry.is_linked = True  # 絶対パスとして扱う
-
-    # キャッシュディレクトリ確保
-    settings.viewer_cache_dir.mkdir(parents=True, exist_ok=True)
-
     # デシメーション実行
-    print(f"[1/2] Running decimation (ratio={args.ratio})...")
+    print(f"[1/3] Reading STL...")
     t0 = time.perf_counter()
     try:
-        glb_bytes = build_viewer_glb(geometry, ratio=args.ratio)
-        elapsed = time.perf_counter() - t0
+        solids = STLReader.read(stl_path)
     except Exception as e:
-        print(f"\nERROR during build_viewer_glb: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        print(f"\nERROR reading STL: {e}")
+        import traceback; traceback.print_exc(); sys.exit(1)
 
-    # 結果保存
+    total_in = sum(len(s.faces) for s in solids)
+    print(f"  {len(solids)} solid(s), {total_in:,} faces total\n")
+
+    print(f"[2/3] Running decimation (ratio={args.ratio}, keep {args.ratio*100:.0f}%)...")
+    decimated = [None] * len(solids)
+    jobs = [(i, s, args.ratio) for i, s in enumerate(solids)]
+    t1 = time.perf_counter()
+    try:
+        with ProcessPoolExecutor() as executor:
+            futures = {executor.submit(_decimate_worker, job): job[0] for job in jobs}
+            for future in as_completed(futures):
+                idx, result, elapsed_part = future.result()
+                orig = len(solids[idx].faces)
+                new  = len(result.faces)
+                pct  = new / max(1, orig) * 100
+                decimated[idx] = result
+                print(
+                    f"  [{idx+1:>3}/{len(solids)}] {solids[idx].name:<45}"
+                    f"  {orig:>8,} -> {new:>8,} faces ({pct:4.1f}%)  [{elapsed_part:.1f}s]"
+                )
+    except Exception as e:
+        print(f"\nERROR during decimation: {e}")
+        import traceback; traceback.print_exc(); sys.exit(1)
+
+    valid = [s for s in decimated if s is not None and len(s.faces) > 0]
+    t_dec = time.perf_counter() - t1
+    total_out = sum(len(s.faces) for s in valid)
+    print(f"\n  Decimation done in {t_dec:.1f}s  ({total_out:,} faces total)\n")
+
+    print(f"[3/3] Exporting GLB...")
     out_path = settings.viewer_cache_dir / f"test_{args.ratio:.3f}.glb"
-    out_path.write_bytes(glb_bytes)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        GLBExporter.export(valid, out_path)
+        glb_bytes = out_path.read_bytes()
+    except Exception as e:
+        print(f"\nERROR during GLB export: {e}")
+        import traceback; traceback.print_exc(); sys.exit(1)
+
+    elapsed = time.perf_counter() - t0
     elapsed_fmt = f"{elapsed:.1f}s"
 
-    print(f"[2/2] Done.\n")
+    print(f"Done.\n")
     print(f"{'='*60}")
     stl_mb = stl_path.stat().st_size / 1024 / 1024
     glb_mb = len(glb_bytes) / 1024 / 1024
