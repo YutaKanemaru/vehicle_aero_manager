@@ -133,8 +133,8 @@ export interface PartialSurfaceFormItem {
   file_format: string;
   merge_output: boolean;
   delete_unmerged: boolean;
-  include_parts: string;           // comma-separated
-  exclude_parts: string;           // comma-separated
+  include_parts: string[];         // tag list
+  exclude_parts: string[];         // tag list
   baffle_export_option: "front_only" | "back_only" | "both" | "";
   output_variables: OutputVarsPartialSurface;
 }
@@ -151,7 +151,7 @@ export interface PartialVolumeFormItem {
   delete_unmerged: boolean;
   bbox_mode: "from_meshing_box" | "around_parts" | "user_defined";
   bbox_source_box_name: string;
-  bbox_source_parts: string;       // comma-separated
+  bbox_source_parts: string[];     // tag list
   bbox_offset_xmin: number;        // m — offset from parts bbox in -X (around_parts only)
   bbox_offset_xmax: number;        // m — offset from parts bbox in +X
   bbox_offset_ymin: number;        // m — offset from parts bbox in -Y
@@ -224,13 +224,13 @@ export interface OffsetRefinementFormItem {
   name: string;
   level: number;
   normal_distance: number;
-  parts: string;                   // comma-separated (empty = body offset)
+  parts: string[];                 // tag list (empty = body offset)
 }
 
 export interface CustomRefinementFormItem {
   name: string;
   level: number;
-  parts: string;                   // comma-separated
+  parts: string[];                 // tag list
 }
 
 export interface BoxRefinementFormItem {
@@ -245,7 +245,7 @@ export interface BoxRefinementFormItem {
   box_zmin: number;
   box_zmax: number;
   // ─── around_parts mode ───────────────────────────────────────────
-  parts: string;               // comma-separated part name patterns
+  parts: string[];             // tag list of part name patterns
   offset_xmin: number;         // m — extend beyond parts bbox in -X
   offset_xmax: number;         // m — extend beyond parts bbox in +X
   offset_ymin: number;         // m — extend beyond parts bbox in -Y
@@ -265,7 +265,7 @@ export interface TriangleSplittingInstanceFormItem {
   active: boolean;
   max_absolute_edge_length: number;
   max_relative_edge_length: number;
-  parts: string; // comma-separated
+  parts: string[]; // tag list
 }
 
 // ---- defaults ----------------------------------------------------------------
@@ -362,7 +362,7 @@ export const FORM_DEFAULTS = {
       box_xmin: v.box[0], box_xmax: v.box[1],
       box_ymin: v.box[2], box_ymax: v.box[3],
       box_zmin: v.box[4], box_zmax: v.box[5],
-      parts: "",
+      parts: [] as string[],
       offset_xmin: 0.5, offset_xmax: 0.5,
       offset_ymin: 0.5, offset_ymax: 0.5,
       offset_zmin: 0.5, offset_zmax: 0.5,
@@ -374,7 +374,7 @@ export const FORM_DEFAULTS = {
       name,
       level: v.level,
       normal_distance: v.normal_distance,
-      parts: Array.isArray(v.parts) ? v.parts.join(", ") : "",
+      parts: Array.isArray(v.parts) ? [...v.parts] : [],
     })
   ) as OffsetRefinementFormItem[],
   // Custom refinement dynamic list
@@ -462,11 +462,11 @@ export const FORM_DEFAULTS = {
   section_cuts: [] as SectionCutFormItem[],
   probe_files: [] as ProbeFileFormItem[],
 
-  // ── Target names (comma-separated for list fields) ────────────────────
-  tn_wheel: D.target_names.wheel.join(", "),
-  tn_rim: D.target_names.rim.join(", "),
-  tn_baffle: D.target_names.baffle.join(", "),
-  tn_windtunnel: D.target_names.windtunnel.join(", "),
+  // ── Target names (tag list fields) ───────────────────────────────────
+  tn_wheel: [...D.target_names.wheel] as string[],
+  tn_rim: [...D.target_names.rim] as string[],
+  tn_baffle: [...D.target_names.baffle] as string[],
+  tn_windtunnel: [...D.target_names.windtunnel] as string[],
   tn_wt_fr_lh: D.target_names.wheel_tire_fr_lh,
   tn_wt_fr_rh: D.target_names.wheel_tire_fr_rh,
   tn_wt_rr_lh: D.target_names.wheel_tire_rr_lh,
@@ -593,14 +593,14 @@ export function valuesFromSettings(settings: any): FormValues {
     name,
     level: v.level ?? 6,
     normal_distance: v.normal_distance ?? 0.05,
-    parts: joinList(v.parts),
+    parts: Array.isArray(v.parts) ? [...v.parts] : [],
   }));
   const customRefinements: CustomRefinementFormItem[] = Object.entries(
     meshingSetup.custom_refinement ?? {}
   ).map(([name, v]: [string, any]) => ({
     name,
     level: v.level ?? 7,
-    parts: joinList(v.parts),
+    parts: Array.isArray(v.parts) ? [...v.parts] : [],
   }));
   const boxRefinements: BoxRefinementFormItem[] = [
     ...Object.entries(
@@ -615,7 +615,7 @@ export function valuesFromSettings(settings: any): FormValues {
       box_ymax: v.box?.[3] ?? 0,
       box_zmin: v.box?.[4] ?? 0,
       box_zmax: v.box?.[5] ?? 0,
-      parts: "",
+      parts: [] as string[],
       offset_xmin: 0.5, offset_xmax: 0.5,
       offset_ymin: 0.5, offset_ymax: 0.5,
       offset_zmin: 0.5, offset_zmax: 0.5,
@@ -627,7 +627,8 @@ export function valuesFromSettings(settings: any): FormValues {
       level: v.level ?? 1,
       box_type: "around_parts" as const,
       box_xmin: 0, box_xmax: 0, box_ymin: 0, box_ymax: 0, box_zmin: 0, box_zmax: 0,
-      parts: joinList(v.parts),
+      parts: Array.isArray(v.parts) ? [...v.parts] : [],
+
       offset_xmin: v.offset_xmin ?? 0.5,
       offset_xmax: v.offset_xmax ?? 0.5,
       offset_ymin: v.offset_ymin ?? 0.5,
@@ -646,8 +647,8 @@ export function valuesFromSettings(settings: any): FormValues {
     file_format: ps.file_format ?? "h3d",
     merge_output: ps.merge_output ?? true,
     delete_unmerged: ps.delete_unmerged ?? true,
-    include_parts: joinList(ps.include_parts),
-    exclude_parts: joinList(ps.exclude_parts),
+    include_parts: Array.isArray(ps.include_parts) ? [...ps.include_parts] : [],
+    exclude_parts: Array.isArray(ps.exclude_parts) ? [...ps.exclude_parts] : [],
     baffle_export_option: ps.baffle_export_option ?? "",
     output_variables: ovPS(ps.output_variables),
   }));
@@ -665,7 +666,7 @@ export function valuesFromSettings(settings: any): FormValues {
     delete_unmerged: pv.delete_unmerged ?? true,
     bbox_mode: pv.bbox_mode ?? "user_defined",
     bbox_source_box_name: pv.bbox_source_box_name ?? "",
-    bbox_source_parts: joinList(pv.bbox_source_parts),
+    bbox_source_parts: Array.isArray(pv.bbox_source_parts) ? [...pv.bbox_source_parts] : [],
     bbox_offset_xmin: pv.bbox_offset_xmin ?? 0.0,
     bbox_offset_xmax: pv.bbox_offset_xmax ?? 0.0,
     bbox_offset_ymin: pv.bbox_offset_ymin ?? 0.0,
@@ -766,7 +767,7 @@ export function valuesFromSettings(settings: any): FormValues {
       active: inst.active ?? true,
       max_absolute_edge_length: inst.max_absolute_edge_length ?? 0.0,
       max_relative_edge_length: inst.max_relative_edge_length ?? 9.0,
-      parts: joinList(inst.parts),
+      parts: Array.isArray(inst.parts) ? [...inst.parts] : [],
     })) as TriangleSplittingInstanceFormItem[],
     refinement_level_transition_layers: m.refinement_level_transition_layers ?? FORM_DEFAULTS.refinement_level_transition_layers,
     box_refinement_porous: m.box_refinement_porous ?? FORM_DEFAULTS.box_refinement_porous,
@@ -849,10 +850,10 @@ export function valuesFromSettings(settings: any): FormValues {
     section_cuts: sectionCuts,
     probe_files: probeFiles,
 
-    tn_wheel: joinList(tn.wheel),
-    tn_rim: joinList(tn.rim),
-    tn_baffle: joinList(tn.baffle),
-    tn_windtunnel: joinList(tn.windtunnel),
+    tn_wheel: [...(tn.wheel ?? [])],
+    tn_rim: [...(tn.rim ?? [])],
+    tn_baffle: [...(tn.baffle ?? [])],
+    tn_windtunnel: [...(tn.windtunnel ?? [])],
     tn_wt_fr_lh: tn.wheel_tire_fr_lh ?? FORM_DEFAULTS.tn_wt_fr_lh,
     tn_wt_fr_rh: tn.wheel_tire_fr_rh ?? FORM_DEFAULTS.tn_wt_fr_rh,
     tn_wt_rr_lh: tn.wheel_tire_rr_lh ?? FORM_DEFAULTS.tn_wt_rr_lh,
@@ -882,7 +883,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     offsetRefinementDict[item.name] = {
       level: item.level,
       normal_distance: item.normal_distance,
-      parts: splitList(item.parts),
+      parts: item.parts,
     };
   }
   const customRefinementDict: Record<string, object> = {};
@@ -890,7 +891,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     if (!item.name) continue;
     customRefinementDict[item.name] = {
       level: item.level,
-      parts: splitList(item.parts),
+      parts: item.parts,
     };
   }
 
@@ -902,7 +903,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     if (item.box_type === "around_parts") {
       partBasedBoxRefinementDict[item.name] = {
         level: item.level,
-        parts: splitList(item.parts),
+        parts: item.parts,
         offset_xmin: item.offset_xmin,
         offset_xmax: item.offset_xmax,
         offset_ymin: item.offset_ymin,
@@ -931,8 +932,8 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     file_format: ps.file_format,
     merge_output: ps.merge_output,
     delete_unmerged: ps.delete_unmerged,
-    include_parts: splitList(ps.include_parts),
-    exclude_parts: splitList(ps.exclude_parts),
+    include_parts: ps.include_parts,
+    exclude_parts: ps.exclude_parts,
     baffle_export_option: ps.baffle_export_option || null,
     output_variables: ps.output_variables,
   }));
@@ -951,7 +952,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     delete_unmerged: pv.delete_unmerged,
     bbox_mode: pv.bbox_mode,
     bbox_source_box_name: pv.bbox_mode === "from_meshing_box" ? pv.bbox_source_box_name || null : null,
-    bbox_source_parts: pv.bbox_mode === "around_parts" ? splitList(pv.bbox_source_parts) : [],
+    bbox_source_parts: pv.bbox_mode === "around_parts" ? pv.bbox_source_parts : [],
     bbox_offset_xmin: pv.bbox_mode === "around_parts" ? pv.bbox_offset_xmin : 0.0,
     bbox_offset_xmax: pv.bbox_mode === "around_parts" ? pv.bbox_offset_xmax : 0.0,
     bbox_offset_ymin: pv.bbox_mode === "around_parts" ? pv.bbox_offset_ymin : 0.0,
@@ -1011,7 +1012,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
           active: inst.active,
           max_absolute_edge_length: inst.max_absolute_edge_length,
           max_relative_edge_length: inst.max_relative_edge_length,
-          parts: splitList(inst.parts),
+          parts: inst.parts,
         })),
         refinement_level_transition_layers: values.refinement_level_transition_layers,
         domain_bounding_box_relative: true,
@@ -1125,10 +1126,10 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
       probe_files: probeFiles,
     },
     target_names: {
-      wheel: splitList(values.tn_wheel),
-      rim: splitList(values.tn_rim),
-      baffle: splitList(values.tn_baffle),
-      windtunnel: splitList(values.tn_windtunnel),
+      wheel: values.tn_wheel,
+      rim: values.tn_rim,
+      baffle: values.tn_baffle,
+      windtunnel: values.tn_windtunnel,
       wheel_tire_fr_lh: values.tn_wt_fr_lh.trim(),
       wheel_tire_fr_rh: values.tn_wt_fr_rh.trim(),
       wheel_tire_rr_lh: values.tn_wt_rr_lh.trim(),

@@ -830,7 +830,7 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
 - `link_geometry(db, data: GeometryLinkRequest, current_user)`: validates path exists on server, creates `Geometry` row with `is_linked=True` and absolute `file_path`, triggers `BackgroundTasks`
 - `run_analysis()`: background task — `pending` → `analyzing` → `ready`/`error`; `is_linked=True` 時は `file_path` を絶対パスとしてそのまま使用、`is_linked=False` 時は `settings.upload_dir / file_path`
 - `update_geometry()`: uses `model_fields_set` — only updates `folder_id` when field is explicitly in request body
-- `delete_geometry()`: `is_linked=False` の時のみファイル削除。`file_path` が相対パスなら `upload_dir` から解決、絶対パスならそのまま使用。`upload_dir` そのものを削除しない安全ガードあり。ファイル削除失敗時は `logger.warning` で報告（サイレントにスキップしない）。`is_linked=True` の場合は DB 行のみ削除し元ファイルはそのまま
+- `delete_geometry()`: `is_linked=False` の時のみファイル削除。`file_path` が相対パスなら `upload_dir` から解決、絶対パスならそのまま使用。`upload_dir` そのものを削除しない安全ガードあり。ファイル削除は `_rmtree_force(path)` ヘルパー（Windows read-only 属性対策: `onerror` で `os.chmod(S_IWRITE)` してリトライ）で実行。削除失敗時は `logger.warning` で報告（サイレントにスキップしない）。`is_linked=True` の場合は DB 行のみ削除し元ファイルはそのまま
 - `list_folders`, `create_folder`, `update_folder`, `delete_folder` — folder delete sets `geometry.folder_id = None` for all children
 - `_folder_or_404(db, folder_id)` helper validates folder existence
 - All CRUD for both `Geometry` and `GeometryAssembly`
@@ -1406,12 +1406,12 @@ turbulence_generator:
 
 Form state is managed by `src/hooks/useTemplateSettingsForm.ts` (`useTemplateSettingsForm` hook). Key interfaces:
 ```typescript
-interface OffsetRefinementFormItem          { name, level, normal_distance, parts: string }
-interface CustomRefinementFormItem          { name, level, parts: string }
+interface OffsetRefinementFormItem          { name, level, normal_distance, parts: string[] }  // TagsInput
+interface CustomRefinementFormItem          { name, level, parts: string[] }                     // TagsInput
 interface PorousCoeffFormItem               { part_name, inertial_resistance, viscous_resistance }
-interface TriangleSplittingInstanceFormItem { name, active, max_absolute_edge_length, max_relative_edge_length, parts: string }
-interface PartialSurfaceFormItem    { name, output_start_time, output_interval, file_format, include_parts, exclude_parts, baffle_export_option, output_variables, ... }
-interface PartialVolumeFormItem     { name, bbox_mode, bbox_source_box, bbox, bbox_offset_xmin/xmax/ymin/ymax/zmin/zmax, output_variables, ... }
+interface TriangleSplittingInstanceFormItem { name, active, max_absolute_edge_length, max_relative_edge_length, parts: string[] }  // TagsInput
+interface PartialSurfaceFormItem    { name, output_start_time, output_interval, file_format, include_parts: string[], exclude_parts: string[], baffle_export_option, output_variables, ... }
+interface PartialVolumeFormItem     { name, bbox_mode, bbox_source_box, bbox, bbox_source_parts: string[], bbox_offset_xmin/xmax/ymin/ymax/zmin/zmax, output_variables, ... }
 interface SectionCutFormItem        { name, output_start_time, output_interval, file_format, axis_x/y/z, point_x/y/z, bbox, output_variables, ... }
 interface ProbeFileFormItem         { name, probe_type, radius, output_frequency, output_variables, points: ProbePointFormItem[] }
 interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
@@ -1445,6 +1445,8 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 - `tn_wt_*` tire parts moved to BC tab > Belt Configuration accordion (isBelt5, marked `required`)
 - `tn_osm_*` OSM parts moved to BC tab > Ground Condition, shown when `overset_wheels` is ON
 - `compute_adjust_ride_height` moved from BC tab to Ride Height tab
+- **Part name list fields use `TagsInput`** (not `TextInput`) — `tn_wheel`, `tn_rim`, `tn_baffle`, `tn_windtunnel`, `offset_refinements[].parts`, `custom_refinements[].parts`, `box_refinements[].parts` (around_parts mode), `triangle_splitting_instances[].parts`, `partial_surfaces[].include_parts/exclude_parts`, `partial_volumes[].bbox_source_parts`. All backed by `string[]` — no `joinList`/`splitList` needed.
+- **Part name pattern matching** (`compute_engine._matches_pattern`): `*` あり → `fnmatch` glob (`Body_*` = starts-with, `*_Body_*` = contains, `*_Body` = ends-with); `*` なし → `startswith OR endswith`; case-insensitive。`offset_refinement[]`, `custom_refinement[]`, `triangle_splitting_instances[]` の `parts` は `part_info` に対して展開済み実パーツ名を XML に書き出す（B案）。
 
 ---
 

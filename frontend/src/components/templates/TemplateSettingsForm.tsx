@@ -19,6 +19,7 @@ import {
   SimpleGrid,
   Stack,
   Switch,
+  TagsInput,
   Text,
   TextInput,
   Title,
@@ -543,7 +544,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                         <NumberInput label="Max relative edge length" decimalScale={2} step={0.5}
                           {...form.getInputProps(`triangle_splitting_instances.${idx}.max_relative_edge_length`)} />
                       </SimpleGrid>
-                      <TextInput label="Parts (comma-separated)" placeholder="Part_A, Part_B"
+                      <TagsInput label="Parts" placeholder="Part_A" splitChars={[",", " "]}
                         {...form.getInputProps(`triangle_splitting_instances.${idx}.parts`)} />
                     </Stack>
                   </Paper>
@@ -613,9 +614,10 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                 </Box>
                 {item.box_type === "around_parts" ? (
                   <Stack gap={6}>
-                    <TextInput
-                      label="Parts (comma-separated patterns)"
-                      placeholder="Wheel_, Body_"
+                    <TagsInput
+                      label="Parts"
+                      placeholder="Wheel_"
+                      splitChars={[",", " "]}
                       {...form.getInputProps(`box_refinements.${idx}.parts`)}
                     />
                     <Text size="xs" c="dimmed">Offset from parts bounding box (m)</Text>
@@ -683,7 +685,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                   <NumberInput label="Refinement level" {...form.getInputProps(`offset_refinements.${idx}.level`)} />
                 </SimpleGrid>
                 <NumberInput label="Normal distance (m)" decimalScale={5} step={0.001} {...form.getInputProps(`offset_refinements.${idx}.normal_distance`)} />
-                <TextInput label="Parts (comma-separated; empty = body offset)" placeholder="Leave empty for body offset, or specify part patterns" {...form.getInputProps(`offset_refinements.${idx}.parts`)} />
+                <TagsInput label="Parts (empty = apply to all body)" placeholder="Body_" splitChars={[",", " "]} {...form.getInputProps(`offset_refinements.${idx}.parts`)} />
               </Paper>
             ))}
 
@@ -716,7 +718,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                   <TextInput label="Name" {...form.getInputProps(`custom_refinements.${idx}.name`)} />
                   <NumberInput label="Refinement level" {...form.getInputProps(`custom_refinements.${idx}.level`)} />
                 </SimpleGrid>
-                <TextInput label="Parts (comma-separated)" placeholder="Part_A, Part_B" {...form.getInputProps(`custom_refinements.${idx}.parts`)} />
+                <TagsInput label="Parts" placeholder="Part_A" splitChars={[",", " "]} {...form.getInputProps(`custom_refinements.${idx}.parts`)} />
               </Paper>
             ))}
               </Stack></Accordion.Panel>
@@ -798,11 +800,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                       {...form.getInputProps("ground_mode")}
                     />
                     <Text size="xs" c="dimmed">
-                      Use comma-separated substrings/prefixes that match part names in the STL.
+                      Enter part name patterns. Use <code>Body_*</code> (starts with), <code>*_Body_*</code> (contains), <code>*_Body</code> (ends with), or <code>Body_</code> (starts/ends with — no wildcard).
                     </Text>
                     <SimpleGrid cols={2}>
-                      <TextInput label="Wheel parts" placeholder="Wheel_" {...form.getInputProps("tn_wheel")} />
-                      <TextInput label="Rim parts (for wheel axis detection)" placeholder="_Spokes_" {...form.getInputProps("tn_rim")} />
+                      <TagsInput label="Wheel parts" placeholder="Wheel_" splitChars={[",", " "]} {...form.getInputProps("tn_wheel")} />
+                      <TagsInput label="Rim parts (for wheel axis detection)" placeholder="_Spokes_" splitChars={[",", " "]} {...form.getInputProps("tn_rim")} />
                     </SimpleGrid>
                     {!isFullMoving && (
                       <Switch label="Overset mesh for rotating wheels (OSM)" {...form.getInputProps("overset_wheels", { type: "checkbox" })} />
@@ -1134,8 +1136,8 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                     <Switch label="Merge output" {...form.getInputProps(`partial_surfaces.${idx}.merge_output`, { type: "checkbox" })} />
                     <Switch label="Delete unmerged" {...form.getInputProps(`partial_surfaces.${idx}.delete_unmerged`, { type: "checkbox" })} />
                   </SimpleGrid>
-                  <TextInput label="Include parts (comma-separated; empty = all)" {...form.getInputProps(`partial_surfaces.${idx}.include_parts`)} />
-                  <TextInput label="Exclude parts (comma-separated)" {...form.getInputProps(`partial_surfaces.${idx}.exclude_parts`)} />
+                  <TagsInput label="Include parts (empty = all parts)" placeholder="Body_" splitChars={[",", " "]} {...form.getInputProps(`partial_surfaces.${idx}.include_parts`)} />
+                  <TagsInput label="Exclude parts" placeholder="Baffle_" splitChars={[",", " "]} {...form.getInputProps(`partial_surfaces.${idx}.exclude_parts`)} />
                   <Select
                     label="Baffle exclude option"
                     clearable
@@ -1226,7 +1228,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                   )}
                   {pv.bbox_mode === "around_parts" && (
                     <Stack gap="xs">
-                      <TextInput label="Parts for bbox computation (comma-separated)" {...form.getInputProps(`partial_volumes.${idx}.bbox_source_parts`)} />
+                      <TagsInput label="Parts for bbox computation" placeholder="Body_" splitChars={[",", " "]} {...form.getInputProps(`partial_volumes.${idx}.bbox_source_parts`)} />
                       <Text size="xs" c="dimmed">Offset from parts bounding box (m)</Text>
                       <SimpleGrid cols={3}>
                         <NumberInput label="-X offset" decimalScale={3} step={0.05} {...form.getInputProps(`partial_volumes.${idx}.bbox_offset_xmin`)} />
@@ -1471,10 +1473,10 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
       <Tabs.Panel value="parts" pt="md">
         <PanelWrapper disabled={readOnly}><Stack gap="xs">
           <Text size="xs" c="dimmed">
-            Use comma-separated substrings/prefixes that match part names in the STL.
+            Enter part name patterns. Use <code>Body_*</code> (starts with), <code>*_Body_*</code> (contains), <code>*_Body</code> (ends with), or <code>Body_</code> (starts/ends with — no wildcard).
           </Text>
-          <TextInput label="Baffle parts" placeholder="_Baffle_" {...form.getInputProps("tn_baffle")} />
-          <TextInput label="Wind tunnel parts (excluded from forces + offset refinement)" placeholder="WindTunnel_" {...form.getInputProps("tn_windtunnel")} />
+          <TagsInput label="Baffle parts" placeholder="_Baffle_" splitChars={[",", " "]} {...form.getInputProps("tn_baffle")} />
+          <TagsInput label="Wind tunnel parts (excluded from forces + offset refinement)" placeholder="WindTunnel_" splitChars={[",", " "]} {...form.getInputProps("tn_windtunnel")} />
         </Stack></PanelWrapper>
       </Tabs.Panel>
 

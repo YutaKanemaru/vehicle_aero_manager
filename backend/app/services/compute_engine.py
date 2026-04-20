@@ -6,6 +6,7 @@ numpy-stl / scikit-learn は使用しない。
 """
 from __future__ import annotations
 
+import fnmatch
 import json
 import math
 import struct
@@ -334,9 +335,29 @@ def compute_domain_bbox(
     }
 
 
+def _matches_pattern(part_name: str, pattern: str) -> bool:
+    """1つのパターンとパーツ名を照合する。
+
+    - pattern に * が含まれる場合: glob ワイルドカードマッチ (fnmatch)
+        例: 'Body_*'   → 'Body_' で始まる
+            '*_Body_*' → '_Body_' を含む
+            '*_Body'   → '_Body' で終わる
+    - pattern に * がない場合: startswith OR endswith のいずれかに一致
+        例: 'Body_' → 'Body_Hood' (startswith) または 'Front_Body_' (endswith)
+    大文字小文字は区別しない。
+    """
+    if not pattern:
+        return False
+    p_lower = pattern.lower()
+    n_lower = part_name.lower()
+    if "*" in p_lower:
+        return fnmatch.fnmatch(n_lower, p_lower)
+    return n_lower.startswith(p_lower) or n_lower.endswith(p_lower)
+
+
 def _matches_any(part_name: str, patterns: list[str]) -> bool:
-    """パーツ名がパターンリストのいずれかに部分一致するか判定"""
-    return any(p and p.lower() in part_name.lower() for p in patterns)
+    """パーツ名がパターンリストのいずれかに一致するか判定"""
+    return any(_matches_pattern(part_name, p) for p in patterns if p)
 
 
 def _resolve_file_format(fmt: str):
@@ -1190,14 +1211,14 @@ def assemble_ufx_solver_deck(
     for ps_cfg in out_cfg.partial_surfaces:
         ps_start = time_to_iterations(ps_cfg.output_start_time, dt)
         ps_freq = time_to_iterations(ps_cfg.output_interval, dt)
-        # include_parts: empty = all parts; non-empty = filter by substring match
+        # include_parts: empty = all parts; non-empty = filter by pattern match
         if ps_cfg.include_parts:
-            parts_list = [p for p in all_part_names if any(pat in p for pat in ps_cfg.include_parts)]
+            parts_list = [p for p in all_part_names if _matches_any(p, ps_cfg.include_parts)]
         else:
             parts_list = list(all_part_names)
         # exclude_parts: remove matching
         if ps_cfg.exclude_parts:
-            parts_list = [p for p in parts_list if not any(pat in p for pat in ps_cfg.exclude_parts)]
+            parts_list = [p for p in parts_list if not _matches_any(p, ps_cfg.exclude_parts)]
         # baffle_export_option: auto-exclude baffle parts when set
         if ps_cfg.baffle_export_option is not None and baffle_patterns:
             parts_list = [p for p in parts_list if not _matches_any(p, baffle_patterns)]
@@ -1245,7 +1266,7 @@ def assemble_ufx_solver_deck(
         elif pv_cfg.bbox_mode == "around_parts" and pv_cfg.bbox_source_parts and part_info:
             matched = [
                 p for n, p in part_info.items()
-                if any(pat in n for pat in pv_cfg.bbox_source_parts)
+                if _matches_any(n, pv_cfg.bbox_source_parts)
             ]
             if matched:
                 pv_bb = BoundingBox(
@@ -1340,14 +1361,22 @@ def assemble_ufx_solver_deck(
             normal_distance=orf.normal_distance,
             refinement_level=orf.level,
             parts=[
-                p for p in orf.parts
-                if not _matches_any(p, tn.windtunnel)
+                pname for pname in part_info
+                if _matches_any(pname, orf.parts)
+                and not _matches_any(pname, tn.windtunnel)
             ] if orf.parts else [],
         )
         for name, orf in setup.meshing.offset_refinement.items()
     ]
     custom_instances = [
-        CustomInstance(name=name, refinement_level=cr.level, parts=cr.parts)
+        CustomInstance(
+            name=name,
+            refinement_level=cr.level,
+            parts=[
+                pname for pname in part_info
+                if _matches_any(pname, cr.parts)
+            ] if cr.parts else [],
+        )
         for name, cr in setup.meshing.custom_refinement.items()
     ]
 
@@ -1362,7 +1391,10 @@ def assemble_ufx_solver_deck(
             active=inst.active,
             max_absolute_edge_length=inst.max_absolute_edge_length,
             max_relative_edge_length=inst.max_relative_edge_length,
-            parts=inst.parts,
+            parts=[
+                pname for pname in part_info
+                if _matches_any(pname, inst.parts)
+            ] if inst.parts else [],
         )
         for inst in so.meshing.triangle_splitting_instances
     ]

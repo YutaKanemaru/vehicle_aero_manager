@@ -4,10 +4,29 @@ Geometry / GeometryAssembly のビジネスロジック。
 from __future__ import annotations
 
 import logging
+import os
 import shutil
+import stat
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+
+def _rmtree_force(path: Path) -> None:
+    """shutil.rmtree with read-only override.
+
+    Windows 環境では読み取り専用属性のファイルを rmtree しようとすると
+    WinError 5 (アクセス拒否) が発生する。onerror で属性を解除してリトライする。
+    """
+    def _on_error(func, p, exc_info):
+        try:
+            os.chmod(p, stat.S_IWRITE)
+            func(p)
+        except Exception:
+            pass
+
+    shutil.rmtree(path, onerror=_on_error)
+
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import select
@@ -241,7 +260,7 @@ def delete_geometry(db: Session, geometry_id: str, current_user: User) -> None:
             upload_subdir = resolved.parent
             # upload_dir そのものを削除しないように安全ガード
             if upload_subdir.exists() and upload_subdir != settings.upload_dir:
-                shutil.rmtree(upload_subdir)
+                _rmtree_force(upload_subdir)
                 logger.info("Deleted geometry files: %s", upload_subdir)
             else:
                 logger.warning(
