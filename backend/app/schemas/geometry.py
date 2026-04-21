@@ -91,14 +91,12 @@ class GeometryFolderResponse(BaseModel):
 class AssemblyCreate(BaseModel):
     name: str
     description: str | None = None
-    template_id: str | None = None
     folder_id: str | None = None
 
 
 class AssemblyUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
-    template_id: str | None = None
     folder_id: str | None = None
 
 
@@ -108,7 +106,6 @@ class AssemblyResponse(BaseModel):
     id: str
     name: str
     description: str | None
-    template_id: str | None
     folder_id: str | None
     created_by: str
     created_at: datetime

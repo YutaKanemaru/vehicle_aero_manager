@@ -1035,8 +1035,6 @@ export interface components {
             name: string;
             /** Description */
             description?: string | null;
-            /** Template Id */
-            template_id?: string | null;
             /** Folder Id */
             folder_id?: string | null;
         };
@@ -1083,8 +1081,6 @@ export interface components {
             name: string;
             /** Description */
             description: string | null;
-            /** Template Id */
-            template_id: string | null;
             /** Folder Id */
             folder_id: string | null;
             /** Created By */
@@ -1111,8 +1107,6 @@ export interface components {
             name?: string | null;
             /** Description */
             description?: string | null;
-            /** Template Id */
-            template_id?: string | null;
             /** Folder Id */
             folder_id?: string | null;
         };

@@ -142,7 +142,6 @@ function FolderSection({
             <Table.Thead>
               <Table.Tr>
                 <SortTh label="Name" sortKey="name" activeKey={sort.key} dir={sort.dir} onToggle={toggle} />
-                <Table.Th>Template</Table.Th>
                 <Table.Th>Geometries</Table.Th>
                 <SortTh label="Created" sortKey="created_at" activeKey={sort.key} dir={sort.dir} onToggle={toggle} />
                 <Table.Th />
@@ -155,13 +154,6 @@ function FolderSection({
                     <Text size="sm" fw={500}>{a.name}</Text>
                     {a.description && (
                       <Text size="xs" c="dimmed" lineClamp={1}>{a.description}</Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    {a.template_id ? (
-                      <Badge variant="outline" size="sm">Linked</Badge>
-                    ) : (
-                      <Text size="sm" c="dimmed">—</Text>
                     )}
                   </Table.Td>
                   <Table.Td>

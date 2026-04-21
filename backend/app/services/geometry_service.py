@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import settings
 from app.models.geometry import Geometry, GeometryAssembly, GeometryFolder, AssemblyFolder
 from app.models.user import User
+from app.models.configuration import Case
 from app.schemas.geometry import (
     AssemblyCreate, AssemblyUpdate,
     AssemblyFolderCreate, AssemblyFolderUpdate,
@@ -399,7 +400,6 @@ def create_assembly(
     assembly = GeometryAssembly(
         name=data.name,
         description=data.description,
-        template_id=data.template_id,
         folder_id=data.folder_id,
         created_by=current_user.id,
     )
@@ -418,8 +418,6 @@ def update_assembly(
         assembly.name = data.name
     if data.description is not None:
         assembly.description = data.description
-    if data.template_id is not None:
-        assembly.template_id = data.template_id
     # folder_id: None は「フォルダから外す」を意味する。model_fields_set で判定。
     if "folder_id" in data.model_fields_set:
         if data.folder_id is not None:
@@ -433,6 +431,14 @@ def update_assembly(
 def delete_assembly(db: Session, assembly_id: str, current_user: User) -> None:
     assembly = _assembly_or_404(db, assembly_id)
     _check_owner_or_admin(assembly.created_by, current_user)
+    # Prevent deletion if Cases still reference this assembly
+    linked_cases = db.query(Case).filter(Case.assembly_id == assembly_id).count()
+    if linked_cases > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete assembly: {linked_cases} case(s) are still linked to it. "
+                   "Delete or reassign those cases first.",
+        )
     db.delete(assembly)
     db.commit()
 

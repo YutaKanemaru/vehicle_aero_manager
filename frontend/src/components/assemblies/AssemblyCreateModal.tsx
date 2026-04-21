@@ -11,7 +11,6 @@ import { useForm } from "@mantine/form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { assembliesApi, assemblyFoldersApi, type AssemblyCreate } from "../../api/geometries";
-import { templatesApi } from "../../api/templates";
 
 interface Props {
   opened: boolean;
@@ -21,18 +20,13 @@ interface Props {
 export function AssemblyCreateModal({ opened, onClose }: Props) {
   const queryClient = useQueryClient();
 
-  const { data: templates = [] } = useQuery({
-    queryKey: ["templates"],
-    queryFn: templatesApi.list,
-  });
-
   const { data: folders = [] } = useQuery({
     queryKey: ["assemblyFolders"],
     queryFn: assemblyFoldersApi.list,
   });
 
   const form = useForm<AssemblyCreate>({
-    initialValues: { name: "", description: null, template_id: null, folder_id: null },
+    initialValues: { name: "", description: null, folder_id: null },
     validate: {
       name: (v) => (v.trim() ? null : "Name is required"),
     },
@@ -49,11 +43,6 @@ export function AssemblyCreateModal({ opened, onClose }: Props) {
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
 
-  const templateOptions = templates.map((t) => ({
-    value: t.id,
-    label: `${t.name} (${t.sim_type.toUpperCase()})`,
-  }));
-
   const folderOptions = folders.map((f) => ({
     value: f.id,
     label: f.name,
@@ -66,7 +55,6 @@ export function AssemblyCreateModal({ opened, onClose }: Props) {
           mutation.mutate({
             name: values.name.trim(),
             description: values.description || null,
-            template_id: values.template_id || null,
             folder_id: values.folder_id || null,
           })
         )}
@@ -82,13 +70,6 @@ export function AssemblyCreateModal({ opened, onClose }: Props) {
             label="Description"
             placeholder="Optional description"
             {...form.getInputProps("description")}
-          />
-          <Select
-            label="Link to template (optional)"
-            placeholder="Select template"
-            clearable
-            data={templateOptions}
-            {...form.getInputProps("template_id")}
           />
           <Select
             label="Folder (optional)"

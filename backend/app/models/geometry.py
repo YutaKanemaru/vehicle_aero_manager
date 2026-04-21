@@ -129,11 +129,6 @@ class GeometryAssembly(Base):
         String(36), ForeignKey("assembly_folders.id"), nullable=True
     )
 
-    # Template との紐づけ（nullable — Assembly 単体で管理可能）
-    template_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("templates.id"), nullable=True
-    )
-
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
