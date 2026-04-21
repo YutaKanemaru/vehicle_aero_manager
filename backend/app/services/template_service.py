@@ -3,11 +3,12 @@ from pydantic import ValidationError
 from sqlalchemy import select, update, func
 from sqlalchemy.orm import Session, selectinload
 
-from app.models.template import Template, TemplateVersion
+from app.models.template import Template, TemplateVersion, TemplateFolder
 from app.models.user import User
 from app.schemas.template import (
     TemplateCreate, TemplateUpdate, TemplateVersionCreate, TemplateVersionUpdate,
     TemplateForkRequest, SettingsValidateResponse, SettingsValidationError,
+    TemplateFolderCreate, TemplateFolderUpdate,
 )
 from app.schemas.template_settings import TemplateSettings
 
@@ -149,6 +150,10 @@ def update_template(
         template.name = data.name
     if data.description is not None:
         template.description = data.description
+    if data.is_hidden is not None:
+        template.is_hidden = data.is_hidden
+    if "folder_id" in data.model_fields_set:
+        template.folder_id = data.folder_id
 
     db.commit()
     db.refresh(template)
@@ -159,6 +164,58 @@ def delete_template(db: Session, template_id: str, current_user: User) -> None:
     template = _get_template_or_404(db, template_id)
     _check_owner_or_admin(template, current_user)
     db.delete(template)
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Template Folder CRUD
+# ---------------------------------------------------------------------------
+
+def _get_template_folder_or_404(db: Session, folder_id: str) -> TemplateFolder:
+    folder = db.get(TemplateFolder, folder_id)
+    if not folder:
+        raise HTTPException(status_code=404, detail="Template folder not found")
+    return folder
+
+
+def list_template_folders(db: Session) -> list[TemplateFolder]:
+    return list(db.scalars(select(TemplateFolder).order_by(TemplateFolder.name)).all())
+
+
+def create_template_folder(
+    db: Session, data: TemplateFolderCreate, current_user: User
+) -> TemplateFolder:
+    folder = TemplateFolder(
+        name=data.name,
+        description=data.description,
+        created_by=current_user.id,
+    )
+    db.add(folder)
+    db.commit()
+    db.refresh(folder)
+    return folder
+
+
+def update_template_folder(
+    db: Session, folder_id: str, data: TemplateFolderUpdate, current_user: User
+) -> TemplateFolder:
+    folder = _get_template_folder_or_404(db, folder_id)
+    if data.name is not None:
+        folder.name = data.name
+    if data.description is not None:
+        folder.description = data.description
+    db.commit()
+    db.refresh(folder)
+    return folder
+
+
+def delete_template_folder(db: Session, folder_id: str, current_user: User) -> None:
+    folder = _get_template_folder_or_404(db, folder_id)
+    # Unlink all templates from this folder
+    db.execute(
+        update(Template).where(Template.folder_id == folder_id).values(folder_id=None)
+    )
+    db.delete(folder)
     db.commit()
 
 

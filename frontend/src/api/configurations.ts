@@ -24,6 +24,14 @@ export type RunCreate = components["schemas"]["RunCreate"];
 
 export type DiffResult = components["schemas"]["DiffResult"];
 
+export type ConditionMapFolderResponse = components["schemas"]["ConditionMapFolderResponse"];
+export type ConditionMapFolderCreate = components["schemas"]["ConditionMapFolderCreate"];
+export type ConditionMapFolderUpdate = components["schemas"]["ConditionMapFolderUpdate"];
+
+export type CaseFolderResponse = components["schemas"]["CaseFolderResponse"];
+export type CaseFolderCreate = components["schemas"]["CaseFolderCreate"];
+export type CaseFolderUpdate = components["schemas"]["CaseFolderUpdate"];
+
 // ---- ConditionMap API ---------------------------------------------------
 
 export const mapsApi = {
@@ -41,6 +49,25 @@ export const mapsApi = {
 
   delete: (mapId: string): Promise<void> =>
     client.delete(`/maps/${mapId}`),
+
+  updateFolder: (mapId: string, folderId: string | null): Promise<ConditionMapResponse> =>
+    client.patch(`/maps/${mapId}`, { folder_id: folderId }),
+};
+
+// ---- ConditionMap Folder API --------------------------------------------
+
+export const mapFoldersApi = {
+  list: (): Promise<ConditionMapFolderResponse[]> =>
+    client.get("/maps/folders/"),
+
+  create: (data: ConditionMapFolderCreate): Promise<ConditionMapFolderResponse> =>
+    client.post("/maps/folders/", data),
+
+  update: (folderId: string, data: ConditionMapFolderUpdate): Promise<ConditionMapFolderResponse> =>
+    client.patch(`/maps/folders/${folderId}`, data),
+
+  delete: (folderId: string): Promise<void> =>
+    client.delete(`/maps/folders/${folderId}`),
 };
 
 // ---- Condition API ------------------------------------------------------
@@ -86,6 +113,25 @@ export const casesApi = {
 
   duplicate: (caseId: string, data: CaseDuplicateRequest): Promise<CaseResponse> =>
     client.post(`/cases/${caseId}/duplicate`, data),
+
+  updateFolder: (caseId: string, folderId: string | null): Promise<CaseResponse> =>
+    client.patch(`/cases/${caseId}`, { folder_id: folderId }),
+};
+
+// ---- Case Folder API ----------------------------------------------------
+
+export const caseFoldersApi = {
+  list: (): Promise<CaseFolderResponse[]> =>
+    client.get("/cases/folders/"),
+
+  create: (data: CaseFolderCreate): Promise<CaseFolderResponse> =>
+    client.post("/cases/folders/", data),
+
+  update: (folderId: string, data: CaseFolderUpdate): Promise<CaseFolderResponse> =>
+    client.patch(`/cases/folders/${folderId}`, data),
+
+  delete: (folderId: string): Promise<void> =>
+    client.delete(`/cases/folders/${folderId}`),
 };
 
 // ---- Run API ------------------------------------------------------------

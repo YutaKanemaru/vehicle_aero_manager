@@ -63,6 +63,26 @@ class TransformRequest(BaseModel):
 # ConditionMap
 # ---------------------------------------------------------------------------
 
+class ConditionMapFolderCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class ConditionMapFolderUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class ConditionMapFolderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    description: str | None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class ConditionMapCreate(BaseModel):
     name: str
     description: str | None = None
@@ -71,6 +91,7 @@ class ConditionMapCreate(BaseModel):
 class ConditionMapUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    folder_id: str | None = None
 
 
 class ConditionMapResponse(BaseModel):
@@ -78,6 +99,7 @@ class ConditionMapResponse(BaseModel):
     id: str
     name: str
     description: str | None
+    folder_id: str | None = None
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -156,6 +178,26 @@ class ConditionResponse(BaseModel):
 # Case
 # ---------------------------------------------------------------------------
 
+class CaseFolderCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class CaseFolderUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class CaseFolderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    description: str | None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class CaseCreate(BaseModel):
     name: str
     description: str | None = None
@@ -168,6 +210,7 @@ class CaseUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     map_id: str | None = None
+    folder_id: str | None = None
 
 
 class CaseDuplicateRequest(BaseModel):
@@ -184,6 +227,7 @@ class CaseResponse(BaseModel):
     template_id: str
     assembly_id: str
     map_id: str | None
+    folder_id: str | None = None
     created_by: str
     created_at: datetime
     updated_at: datetime

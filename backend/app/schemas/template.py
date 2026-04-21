@@ -7,6 +7,30 @@ from app.schemas.template_settings import TemplateSettings
 
 
 # ---------------------------------------------------------------------------
+# Folder schemas
+# ---------------------------------------------------------------------------
+
+class TemplateFolderCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class TemplateFolderUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
+class TemplateFolderResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    description: str | None
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------------------------------------------------------------------------
 # Request schemas
 # ---------------------------------------------------------------------------
 
@@ -22,6 +46,7 @@ class TemplateUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     is_hidden: bool | None = None
+    folder_id: str | None = None
 
 
 class TemplateVersionCreate(BaseModel):
@@ -96,5 +121,6 @@ class TemplateResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     is_hidden: bool = False
+    folder_id: str | None = None
     active_version: TemplateVersionResponse | None = None
     version_count: int = 0

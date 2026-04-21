@@ -7,9 +7,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
-class ConditionMap(Base):
-    """Independent entity grouping a set of run conditions (velocity, yaw, etc.)."""
-    __tablename__ = "condition_maps"
+class ConditionMapFolder(Base):
+    """Organisational folder for grouping ConditionMaps."""
+    __tablename__ = "condition_map_folders"
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
@@ -24,9 +24,53 @@ class ConditionMap(Base):
         DateTime, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow
     )
 
+    maps: Mapped[list["ConditionMap"]] = relationship("ConditionMap", back_populates="folder")
+
+
+class CaseFolder(Base):
+    """Organisational folder for grouping Cases."""
+    __tablename__ = "case_folders"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow
+    )
+
+    cases: Mapped[list["Case"]] = relationship("Case", back_populates="folder")
+
+
+class ConditionMap(Base):
+    """Independent entity grouping a set of run conditions (velocity, yaw, etc.)."""
+    __tablename__ = "condition_maps"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    folder_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("condition_map_folders.id"), nullable=True, index=True
+    )
+    created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, server_default=func.now(), onupdate=datetime.utcnow
+    )
+
     conditions: Mapped[list["Condition"]] = relationship(
         "Condition", back_populates="map", cascade="all, delete-orphan"
     )
+    folder: Mapped["ConditionMapFolder | None"] = relationship("ConditionMapFolder", back_populates="maps")
 
 
 class Condition(Base):
@@ -92,6 +136,9 @@ class Case(Base):
     map_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("condition_maps.id"), nullable=True
     )
+    folder_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("case_folders.id"), nullable=True, index=True
+    )
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=func.now()
@@ -103,6 +150,7 @@ class Case(Base):
     runs: Mapped[list["Run"]] = relationship(
         "Run", back_populates="case", cascade="all, delete-orphan"
     )
+    folder: Mapped["CaseFolder | None"] = relationship("CaseFolder", back_populates="cases")
 
 
 class Run(Base):

@@ -13,15 +13,17 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
-from app.models.configuration import Case, Condition, ConditionMap, Run
+from app.models.configuration import Case, Condition, ConditionMap, ConditionMapFolder, CaseFolder, Run
 from app.models.geometry import GeometryAssembly
 from app.models.template import Template, TemplateVersion
 from app.models.user import User
 from app.schemas.configuration import CaseResponse, RunResponse
 from app.schemas.configuration import (
     CaseCreate, CaseUpdate, CaseDuplicateRequest,
+    CaseFolderCreate, CaseFolderUpdate,
     ConditionCreate, ConditionUpdate,
     ConditionMapCreate, ConditionMapUpdate,
+    ConditionMapFolderCreate, ConditionMapFolderUpdate,
     DiffField, DiffResult,
     RunCreate,
 )
@@ -115,6 +117,8 @@ def update_map(db: Session, map_id: str, data: ConditionMapUpdate, current_user:
         m.name = data.name
     if data.description is not None:
         m.description = data.description
+    if "folder_id" in data.model_fields_set:
+        m.folder_id = data.folder_id
     db.commit()
     db.refresh(m)
     return m
@@ -124,6 +128,48 @@ def delete_map(db: Session, map_id: str, current_user: User) -> None:
     m = _get_map_or_404(db, map_id)
     _check_owner_or_admin(m, current_user)
     db.delete(m)
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# ConditionMap Folder CRUD
+# ---------------------------------------------------------------------------
+
+def _get_map_folder_or_404(db: Session, folder_id: str) -> ConditionMapFolder:
+    f = db.get(ConditionMapFolder, folder_id)
+    if not f:
+        raise HTTPException(status_code=404, detail="ConditionMap folder not found")
+    return f
+
+
+def list_map_folders(db: Session) -> list[ConditionMapFolder]:
+    return list(db.scalars(select(ConditionMapFolder).order_by(ConditionMapFolder.name)).all())
+
+
+def create_map_folder(db: Session, data: ConditionMapFolderCreate, current_user: User) -> ConditionMapFolder:
+    f = ConditionMapFolder(name=data.name, description=data.description, created_by=current_user.id)
+    db.add(f)
+    db.commit()
+    db.refresh(f)
+    return f
+
+
+def update_map_folder(db: Session, folder_id: str, data: ConditionMapFolderUpdate, current_user: User) -> ConditionMapFolder:
+    f = _get_map_folder_or_404(db, folder_id)
+    if data.name is not None:
+        f.name = data.name
+    if data.description is not None:
+        f.description = data.description
+    db.commit()
+    db.refresh(f)
+    return f
+
+
+def delete_map_folder(db: Session, folder_id: str, current_user: User) -> None:
+    from sqlalchemy import update as sa_update
+    f = _get_map_folder_or_404(db, folder_id)
+    db.execute(sa_update(ConditionMap).where(ConditionMap.folder_id == folder_id).values(folder_id=None))
+    db.delete(f)
     db.commit()
 
 
@@ -240,6 +286,8 @@ def update_case(db: Session, case_id: str, data: CaseUpdate, current_user: User)
         if data.map_id and not db.get(ConditionMap, data.map_id):
             raise HTTPException(status_code=404, detail="ConditionMap not found")
         case.map_id = data.map_id
+    if "folder_id" in data.model_fields_set:
+        case.folder_id = data.folder_id
     db.commit()
     db.refresh(case)
     return case
@@ -249,6 +297,48 @@ def delete_case(db: Session, case_id: str, current_user: User) -> None:
     case = _get_case_or_404(db, case_id)
     _check_owner_or_admin(case, current_user)
     db.delete(case)
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Case Folder CRUD
+# ---------------------------------------------------------------------------
+
+def _get_case_folder_or_404(db: Session, folder_id: str) -> CaseFolder:
+    f = db.get(CaseFolder, folder_id)
+    if not f:
+        raise HTTPException(status_code=404, detail="Case folder not found")
+    return f
+
+
+def list_case_folders(db: Session) -> list[CaseFolder]:
+    return list(db.scalars(select(CaseFolder).order_by(CaseFolder.name)).all())
+
+
+def create_case_folder(db: Session, data: CaseFolderCreate, current_user: User) -> CaseFolder:
+    f = CaseFolder(name=data.name, description=data.description, created_by=current_user.id)
+    db.add(f)
+    db.commit()
+    db.refresh(f)
+    return f
+
+
+def update_case_folder(db: Session, folder_id: str, data: CaseFolderUpdate, current_user: User) -> CaseFolder:
+    f = _get_case_folder_or_404(db, folder_id)
+    if data.name is not None:
+        f.name = data.name
+    if data.description is not None:
+        f.description = data.description
+    db.commit()
+    db.refresh(f)
+    return f
+
+
+def delete_case_folder(db: Session, folder_id: str, current_user: User) -> None:
+    from sqlalchemy import update as sa_update
+    f = _get_case_folder_or_404(db, folder_id)
+    db.execute(sa_update(Case).where(Case.folder_id == folder_id).values(folder_id=None))
+    db.delete(f)
     db.commit()
 
 

@@ -178,6 +178,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/templates/folders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Template Folders */
+        get: operations["list_template_folders_api_v1_templates_folders__get"];
+        put?: never;
+        /** Create Template Folder */
+        post: operations["create_template_folder_api_v1_templates_folders__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/templates/folders/{folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Template Folder */
+        delete: operations["delete_template_folder_api_v1_templates_folders__folder_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Template Folder */
+        patch: operations["update_template_folder_api_v1_templates_folders__folder_id__patch"];
+        trace?: never;
+    };
     "/api/v1/templates/{template_id}": {
         parameters: {
             query?: never;
@@ -559,6 +595,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/maps/folders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Map Folders */
+        get: operations["list_map_folders_api_v1_maps_folders__get"];
+        put?: never;
+        /** Create Map Folder */
+        post: operations["create_map_folder_api_v1_maps_folders__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/maps/folders/{folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Map Folder */
+        delete: operations["delete_map_folder_api_v1_maps_folders__folder_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Map Folder */
+        patch: operations["update_map_folder_api_v1_maps_folders__folder_id__patch"];
+        trace?: never;
+    };
     "/api/v1/maps/{map_id}": {
         parameters: {
             query?: never;
@@ -631,6 +703,42 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/folders/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Case Folders */
+        get: operations["list_case_folders_api_v1_cases_folders__get"];
+        put?: never;
+        /** Create Case Folder */
+        post: operations["create_case_folder_api_v1_cases_folders__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/folders/{folder_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Case Folder */
+        delete: operations["delete_case_folder_api_v1_cases_folders__folder_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Case Folder */
+        patch: operations["update_case_folder_api_v1_cases_folders__folder_id__patch"];
         trace?: never;
     };
     "/api/v1/cases/{case_id}": {
@@ -1172,6 +1280,41 @@ export interface components {
             /** Description */
             description?: string | null;
         };
+        /** CaseFolderCreate */
+        CaseFolderCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+        };
+        /** CaseFolderResponse */
+        CaseFolderResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** CaseFolderUpdate */
+        CaseFolderUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+        };
         /** CaseResponse */
         CaseResponse: {
             /** Id */
@@ -1191,6 +1334,8 @@ export interface components {
             assembly_id: string;
             /** Map Id */
             map_id: string | null;
+            /** Folder Id */
+            folder_id?: string | null;
             /** Created By */
             created_by: string;
             /**
@@ -1232,6 +1377,8 @@ export interface components {
             description?: string | null;
             /** Map Id */
             map_id?: string | null;
+            /** Folder Id */
+            folder_id?: string | null;
         };
         /**
          * ComputeOption
@@ -1270,6 +1417,41 @@ export interface components {
             /** Description */
             description?: string | null;
         };
+        /** ConditionMapFolderCreate */
+        ConditionMapFolderCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+        };
+        /** ConditionMapFolderResponse */
+        ConditionMapFolderResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ConditionMapFolderUpdate */
+        ConditionMapFolderUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+        };
         /** ConditionMapResponse */
         ConditionMapResponse: {
             /** Id */
@@ -1278,6 +1460,8 @@ export interface components {
             name: string;
             /** Description */
             description: string | null;
+            /** Folder Id */
+            folder_id?: string | null;
             /** Created By */
             created_by: string;
             /**
@@ -1302,6 +1486,8 @@ export interface components {
             name?: string | null;
             /** Description */
             description?: string | null;
+            /** Folder Id */
+            folder_id?: string | null;
         };
         /** ConditionResponse */
         ConditionResponse: {
@@ -2933,6 +3119,41 @@ export interface components {
             /** Comment */
             comment?: string | null;
         };
+        /** TemplateFolderCreate */
+        TemplateFolderCreate: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+        };
+        /** TemplateFolderResponse */
+        TemplateFolderResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** TemplateFolderUpdate */
+        TemplateFolderUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+        };
         /** TemplateForkRequest */
         TemplateForkRequest: {
             /** Name */
@@ -2969,6 +3190,8 @@ export interface components {
              * @default false
              */
             is_hidden: boolean;
+            /** Folder Id */
+            folder_id?: string | null;
             active_version?: components["schemas"]["TemplateVersionResponse"] | null;
             /**
              * Version Count
@@ -3004,6 +3227,8 @@ export interface components {
             description?: string | null;
             /** Is Hidden */
             is_hidden?: boolean | null;
+            /** Folder Id */
+            folder_id?: string | null;
         };
         /** TemplateVersionCreate */
         TemplateVersionCreate: {
@@ -3484,6 +3709,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TemplateSettings-Output"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_template_folders_api_v1_templates_folders__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateFolderResponse"][];
+                };
+            };
+        };
+    };
+    create_template_folder_api_v1_templates_folders__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateFolderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateFolderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_template_folder_api_v1_templates_folders__folder_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_template_folder_api_v1_templates_folders__folder_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateFolderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateFolderResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4576,6 +4918,123 @@ export interface operations {
             };
         };
     };
+    list_map_folders_api_v1_maps_folders__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConditionMapFolderResponse"][];
+                };
+            };
+        };
+    };
+    create_map_folder_api_v1_maps_folders__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConditionMapFolderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConditionMapFolderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_map_folder_api_v1_maps_folders__folder_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_map_folder_api_v1_maps_folders__folder_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConditionMapFolderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConditionMapFolderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_map_api_v1_maps__map_id__get: {
         parameters: {
             query?: never;
@@ -4878,6 +5337,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_case_folders_api_v1_cases_folders__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseFolderResponse"][];
+                };
+            };
+        };
+    };
+    create_case_folder_api_v1_cases_folders__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseFolderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseFolderResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_case_folder_api_v1_cases_folders__folder_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_case_folder_api_v1_cases_folders__folder_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folder_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseFolderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseFolderResponse"];
                 };
             };
             /** @description Validation Error */

@@ -12,6 +12,9 @@ from app.schemas.template import (
     TemplateVersionUpdate,
     TemplateVersionResponse,
     TemplateForkRequest,
+    TemplateFolderCreate,
+    TemplateFolderUpdate,
+    TemplateFolderResponse,
     SettingsValidateRequest,
     SettingsValidateResponse,
 )
@@ -22,7 +25,7 @@ router = APIRouter()
 
 
 def _build_response(template) -> TemplateResponse:
-    """Attach active_version, version_count, and is_hidden to the response."""
+    """Attach active_version, version_count, folder_id, and is_hidden to the response."""
     active = next((v for v in template.versions if v.is_active), None)
     return TemplateResponse(
         id=template.id,
@@ -30,6 +33,7 @@ def _build_response(template) -> TemplateResponse:
         description=template.description,
         sim_type=template.sim_type,
         is_hidden=template.is_hidden,
+        folder_id=template.folder_id,
         created_by=template.created_by,
         created_at=template.created_at,
         updated_at=template.updated_at,
@@ -93,6 +97,47 @@ def get_preset(
             detail=f"No preset for sim_type '{sim_type}'. Valid: {list(SIM_TYPE_PRESETS)}",
         )
     return preset
+
+
+
+# ---------------------------------------------------------------------------
+# Template Folders — must be declared BEFORE /{template_id}
+# ---------------------------------------------------------------------------
+
+@router.get("/folders/", response_model=list[TemplateFolderResponse])
+def list_template_folders(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return template_service.list_template_folders(db)
+
+
+@router.post("/folders/", response_model=TemplateFolderResponse, status_code=201)
+def create_template_folder(
+    data: TemplateFolderCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return template_service.create_template_folder(db, data, current_user)
+
+
+@router.patch("/folders/{folder_id}", response_model=TemplateFolderResponse)
+def update_template_folder(
+    folder_id: str,
+    data: TemplateFolderUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return template_service.update_template_folder(db, folder_id, data, current_user)
+
+
+@router.delete("/folders/{folder_id}", status_code=204)
+def delete_template_folder(
+    folder_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    template_service.delete_template_folder(db, folder_id, current_user)
 
 
 @router.get("/{template_id}", response_model=TemplateResponse)

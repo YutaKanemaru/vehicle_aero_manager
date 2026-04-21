@@ -1,5 +1,5 @@
 import { client } from "./client";
-import type { paths } from "./schema.d.ts";
+import type { paths, components } from "./schema.d.ts";
 
 // ---------------------------------------------------------------------------
 // Type aliases from generated schema
@@ -34,6 +34,10 @@ type SettingsValidateRequest =
 
 type SettingsValidateResponse =
   paths["/api/v1/templates/validate-settings"]["post"]["responses"]["200"]["content"]["application/json"];
+
+export type TemplateFolderResponse = components["schemas"]["TemplateFolderResponse"];
+export type TemplateFolderCreate = components["schemas"]["TemplateFolderCreate"];
+export type TemplateFolderUpdate = components["schemas"]["TemplateFolderUpdate"];
 
 // Re-export for consumers
 export type {
@@ -107,4 +111,25 @@ export const templatesApi = {
 
   validateSettings: (settings: Record<string, unknown>): Promise<SettingsValidateResponse> =>
     client.post("/templates/validate-settings", { settings }),
+
+  updateFolder: (templateId: string, folderId: string | null): Promise<TemplateResponse> =>
+    client.patch(`/templates/${templateId}`, { folder_id: folderId }),
+};
+
+// ---------------------------------------------------------------------------
+// Template Folder API
+// ---------------------------------------------------------------------------
+
+export const templateFoldersApi = {
+  list: (): Promise<TemplateFolderResponse[]> =>
+    client.get("/templates/folders/"),
+
+  create: (data: TemplateFolderCreate): Promise<TemplateFolderResponse> =>
+    client.post("/templates/folders/", data),
+
+  update: (folderId: string, data: TemplateFolderUpdate): Promise<TemplateFolderResponse> =>
+    client.patch(`/templates/folders/${folderId}`, data),
+
+  delete: (folderId: string): Promise<void> =>
+    client.delete(`/templates/folders/${folderId}`),
 };

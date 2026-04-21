@@ -32,6 +32,9 @@ import {
   IconFolderOpen,
   IconArrowRight,
   IconLink,
+  IconArrowUp,
+  IconArrowDown,
+  IconArrowsSort,
 } from "@tabler/icons-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
@@ -48,6 +51,7 @@ import { useAuthStore } from "../../stores/auth";
 import { useJobsStore } from "../../stores/jobs";
 import { GeometryUploadModal } from "./GeometryUploadModal";
 import { GeometryLinkModal } from "./GeometryLinkModal";
+import { useSortedItems, type SortKey } from "../../hooks/useSortedItems";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -273,6 +277,29 @@ function GeometryRow({ geometry, canDelete, folders }: GeometryRowProps) {
 
 // ─── GeometryTable ────────────────────────────────────────────────────────────
 
+// ─── SortTh ──────────────────────────────────────────────────────────────────
+
+interface SortThProps {
+  label: string;
+  sortKey: SortKey;
+  activeKey: SortKey;
+  dir: "asc" | "desc";
+  onToggle: (k: SortKey) => void;
+}
+function SortTh({ label, sortKey, activeKey, dir, onToggle }: SortThProps) {
+  const active = sortKey === activeKey;
+  return (
+    <Table.Th>
+      <Group gap={4} wrap="nowrap" style={{ cursor: "pointer" }} onClick={() => onToggle(sortKey)}>
+        {label}
+        {active
+          ? dir === "asc" ? <IconArrowUp size={12} /> : <IconArrowDown size={12} />
+          : <IconArrowsSort size={12} opacity={0.3} />}
+      </Group>
+    </Table.Th>
+  );
+}
+
 function GeometryTable({
   geometries,
   canDeleteFn,
@@ -282,6 +309,10 @@ function GeometryTable({
   canDeleteFn: (g: GeometryResponse) => boolean;
   folders: GeometryFolderResponse[];
 }) {
+  const { sorted, sort, toggle } = useSortedItems(
+    geometries as unknown as Record<string, unknown>[]
+  ) as { sorted: GeometryResponse[]; sort: { key: SortKey; dir: "asc" | "desc" }; toggle: (k: SortKey) => void };
+
   if (geometries.length === 0) {
     return (
       <Text size="xs" c="dimmed" py="xs" ta="center">
@@ -293,17 +324,17 @@ function GeometryTable({
     <Table highlightOnHover withColumnBorders fz="sm">
       <Table.Thead>
         <Table.Tr>
-          <Table.Th>Name</Table.Th>
+          <SortTh label="Name" sortKey="name" activeKey={sort.key} dir={sort.dir} onToggle={toggle} />
           <Table.Th>File</Table.Th>
           <Table.Th>Size</Table.Th>
           <Table.Th>Status</Table.Th>
           <Table.Th>Parts</Table.Th>
-          <Table.Th>Uploaded</Table.Th>
+          <SortTh label="Uploaded" sortKey="created_at" activeKey={sort.key} dir={sort.dir} onToggle={toggle} />
           <Table.Th />
         </Table.Tr>
       </Table.Thead>
       <Table.Tbody>
-        {geometries.map((g) => (
+        {sorted.map((g) => (
           <GeometryRow
             key={g.id}
             geometry={g}

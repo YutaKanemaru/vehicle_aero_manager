@@ -27,6 +27,9 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconArrowRight,
+  IconArrowUp,
+  IconArrowDown,
+  IconArrowsSort,
 } from "@tabler/icons-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
@@ -42,6 +45,30 @@ import {
 import { useAuthStore } from "../../stores/auth";
 import { AssemblyCreateModal } from "./AssemblyCreateModal";
 import { AssemblyGeometriesDrawer } from "./AssemblyGeometriesDrawer";
+import { useSortedItems, type SortKey } from "../../hooks/useSortedItems";
+
+// ─── SortTh ──────────────────────────────────────────────────────────────────
+
+interface SortThProps {
+  label: string;
+  sortKey: SortKey;
+  activeKey: SortKey;
+  dir: "asc" | "desc";
+  onToggle: (k: SortKey) => void;
+}
+function SortTh({ label, sortKey, activeKey, dir, onToggle }: SortThProps) {
+  const active = sortKey === activeKey;
+  return (
+    <Table.Th>
+      <Group gap={4} wrap="nowrap" style={{ cursor: "pointer" }} onClick={() => onToggle(sortKey)}>
+        {label}
+        {active
+          ? dir === "asc" ? <IconArrowUp size={12} /> : <IconArrowDown size={12} />
+          : <IconArrowsSort size={12} opacity={0.3} />}
+      </Group>
+    </Table.Th>
+  );
+}
 
 // ─── Folder section ───────────────────────────────────────────────────────────
 
@@ -71,6 +98,9 @@ function FolderSection({
   const [open, setOpen] = useState(true);
   const label = folder ? folder.name : "Uncategorized";
   const icon = open ? <IconFolderOpen size={16} /> : <IconFolder size={16} />;
+  const { sorted, sort, toggle } = useSortedItems(
+    assemblies as unknown as Record<string, unknown>[]
+  ) as { sorted: AssemblyResponse[]; sort: { key: SortKey; dir: "asc" | "desc" }; toggle: (k: SortKey) => void };
 
   const otherFolders = folders.filter((f) => f.id !== folder?.id);
   const folderOptions = [
@@ -111,15 +141,15 @@ function FolderSection({
           <Table highlightOnHover>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Name</Table.Th>
+                <SortTh label="Name" sortKey="name" activeKey={sort.key} dir={sort.dir} onToggle={toggle} />
                 <Table.Th>Template</Table.Th>
                 <Table.Th>Geometries</Table.Th>
-                <Table.Th>Created</Table.Th>
+                <SortTh label="Created" sortKey="created_at" activeKey={sort.key} dir={sort.dir} onToggle={toggle} />
                 <Table.Th />
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {assemblies.map((a) => (
+              {sorted.map((a) => (
                 <Table.Tr key={a.id}>
                   <Table.Td>
                     <Text size="sm" fw={500}>{a.name}</Text>

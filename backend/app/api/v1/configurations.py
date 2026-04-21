@@ -12,8 +12,10 @@ from app.models.configuration import Case, ConditionMap, Run
 from app.models.user import User
 from app.schemas.configuration import (
     CaseCreate, CaseResponse, CaseUpdate, CaseDuplicateRequest,
+    CaseFolderCreate, CaseFolderUpdate, CaseFolderResponse,
     ConditionCreate, ConditionResponse, ConditionUpdate,
     ConditionMapCreate, ConditionMapResponse, ConditionMapUpdate,
+    ConditionMapFolderCreate, ConditionMapFolderUpdate, ConditionMapFolderResponse,
     DiffResult,
     RunCreate, RunResponse,
 )
@@ -50,6 +52,47 @@ def create_map(
     out = ConditionMapResponse.model_validate(m)
     out.condition_count = len(m.conditions)
     return out
+
+
+
+# ---------------------------------------------------------------------------
+# Map Folders — must be declared BEFORE /maps/{map_id}
+# ---------------------------------------------------------------------------
+
+@router.get("/maps/folders/", response_model=list[ConditionMapFolderResponse])
+def list_map_folders(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return configuration_service.list_map_folders(db)
+
+
+@router.post("/maps/folders/", response_model=ConditionMapFolderResponse, status_code=201)
+def create_map_folder(
+    data: ConditionMapFolderCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return configuration_service.create_map_folder(db, data, current_user)
+
+
+@router.patch("/maps/folders/{folder_id}", response_model=ConditionMapFolderResponse)
+def update_map_folder(
+    folder_id: str,
+    data: ConditionMapFolderUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return configuration_service.update_map_folder(db, folder_id, data, current_user)
+
+
+@router.delete("/maps/folders/{folder_id}", status_code=204)
+def delete_map_folder(
+    folder_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    configuration_service.delete_map_folder(db, folder_id, current_user)
 
 
 @router.get("/maps/{map_id}", response_model=ConditionMapResponse)
@@ -165,6 +208,47 @@ def create_case(
     else:
         case = configuration_service.create_case(db, data, current_user)
     return configuration_service.enrich_case_response(db, case)
+
+
+
+# ---------------------------------------------------------------------------
+# Case Folders -- must be declared BEFORE /cases/{case_id}
+# ---------------------------------------------------------------------------
+
+@router.get("/cases/folders/", response_model=list[CaseFolderResponse])
+def list_case_folders(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return configuration_service.list_case_folders(db)
+
+
+@router.post("/cases/folders/", response_model=CaseFolderResponse, status_code=201)
+def create_case_folder(
+    data: CaseFolderCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return configuration_service.create_case_folder(db, data, current_user)
+
+
+@router.patch("/cases/folders/{folder_id}", response_model=CaseFolderResponse)
+def update_case_folder(
+    folder_id: str,
+    data: CaseFolderUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return configuration_service.update_case_folder(db, folder_id, data, current_user)
+
+
+@router.delete("/cases/folders/{folder_id}", status_code=204)
+def delete_case_folder(
+    folder_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    configuration_service.delete_case_folder(db, folder_id, current_user)
 
 
 @router.get("/cases/{case_id}", response_model=CaseResponse)

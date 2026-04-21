@@ -83,6 +83,7 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | 2A-6 | 3D viewer enhancements: 3-panel layout, Ortho/Persp, FlatShading, Edges, ContextMenu, Probe/PV/SC overlays | ✅ Complete |
 | 2A-7 | Case/Run UX: `case_number`/`run_number`, Duplicate, `CaseCreateModal` Copy tab, `CaseCompareModal`, `Run.stl_path` | ✅ Complete |
 | 2A-8 | Launch Assembly Builder button in TemplateBuilderPage — `IconPackage` ActionIcon beside Assembly Select opens `AssemblyGeometriesDrawer`; `handleBuilderClose` double-invalidates queries for live 3D refresh | ✅ Complete |
+| 2A-9 | Folder structure + sort for all 5 list views — `TemplateFolder`, `ConditionMapFolder`, `CaseFolder` DB tables + migration; folder CRUD endpoints (`/folders/` routes before `/{id}`); `useSortedItems` hook (name/created_at, asc/desc); `FolderSection` (Paper+Collapse) + `SortTh` headers in TemplateList, MapList, CaseList (new folders) + sort-only in existing GeometryList and AssemblyList | ✅ Complete |
 | 2B | Post-processing EnSight viewer (PyVista backend) | 🔲 Planned |
 
 ---
