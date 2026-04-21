@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.template import Template, TemplateVersion, TemplateFolder
 from app.models.user import User
+from app.models.configuration import Case
 from app.schemas.template import (
     TemplateCreate, TemplateUpdate, TemplateVersionCreate, TemplateVersionUpdate,
     TemplateForkRequest, SettingsValidateResponse, SettingsValidationError,
@@ -163,6 +164,13 @@ def update_template(
 def delete_template(db: Session, template_id: str, current_user: User) -> None:
     template = _get_template_or_404(db, template_id)
     _check_owner_or_admin(template, current_user)
+    linked_cases = db.query(Case).filter(Case.template_id == template_id).count()
+    if linked_cases > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete template: {linked_cases} case(s) are linked to it. "
+                   "Delete those cases first.",
+        )
     db.delete(template)
     db.commit()
 

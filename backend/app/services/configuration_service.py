@@ -127,6 +127,13 @@ def update_map(db: Session, map_id: str, data: ConditionMapUpdate, current_user:
 def delete_map(db: Session, map_id: str, current_user: User) -> None:
     m = _get_map_or_404(db, map_id)
     _check_owner_or_admin(m, current_user)
+    linked_cases = db.query(Case).filter(Case.map_id == map_id).count()
+    if linked_cases > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete condition map: {linked_cases} case(s) are linked to it. "
+                   "Unlink or delete those cases first.",
+        )
     db.delete(m)
     db.commit()
 
@@ -234,6 +241,13 @@ def update_condition(
 def delete_condition(db: Session, map_id: str, condition_id: str, current_user: User) -> None:
     c = _get_condition_or_404(db, map_id, condition_id)
     _check_owner_or_admin(c, current_user)
+    linked_runs = db.query(Run).filter(Run.condition_id == condition_id).count()
+    if linked_runs > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete condition: {linked_runs} run(s) are linked to it. "
+                   "Delete those runs first.",
+        )
     db.delete(c)
     db.commit()
 
