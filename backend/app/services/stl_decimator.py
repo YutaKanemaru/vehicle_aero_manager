@@ -419,7 +419,17 @@ class GLBExporter:
     """
 
     @staticmethod
-    def export(solids: list[Solid], out_path: pathlib.Path, verbose: bool = False) -> None:
+    def export(
+        solids: list[Solid],
+        out_path: pathlib.Path,
+        verbose: bool = False,
+        colors: "list[tuple[float, float, float, float]] | None" = None,
+    ) -> None:
+        """Export solids to GLB.
+
+        colors: optional per-solid RGBA float tuples (0–1). Falls back to PALETTE when None
+                or when the index is out of range.
+        """
         if verbose:
             print(f'[GLB] Exporting {len(solids)} part(s) → {out_path.name}')
 
@@ -495,7 +505,10 @@ class GLBExporter:
             })
 
             # ── Material ──────────────────────────────────────
-            color = PALETTE[i % len(PALETTE)] + [1.0]  # RGBA
+            if colors and i < len(colors):
+                color = list(colors[i])          # caller-supplied RGBA
+            else:
+                color = PALETTE[i % len(PALETTE)] + [1.0]  # RGBA
             mat_idx = len(materials)
             materials.append({
                 'name': f'Material_{i}',

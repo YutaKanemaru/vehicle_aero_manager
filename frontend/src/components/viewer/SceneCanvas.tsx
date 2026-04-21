@@ -77,6 +77,14 @@ function CameraFitter({ blobUrl }: { blobUrl: string }) {
   return null;
 }
 
+// ─── Axes GLB overlay (wheel/porous axes from a Run) ────────────────────────
+
+function AxesGLBModel({ blobUrl }: { blobUrl: string }) {
+  const { scene } = useGLTF(blobUrl);
+  // Axes are rendered as-is — no part-visibility management
+  return <primitive object={scene} />;
+}
+
 // ─── Public SceneCanvas component ────────────────────────────────────────────
 
 interface SceneCanvasProps {
@@ -167,6 +175,7 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
   }
 
   const allParts = blobEntries.flatMap((e) => e.parts);
+  const { axesGlbUrl, overlays } = useViewerStore();
 
   return (
     <Canvas
@@ -182,6 +191,9 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
         {blobEntries.map((entry) => (
           <GLBModel key={entry.geometryId} blobUrl={entry.url} parts={entry.parts} />
         ))}
+        {axesGlbUrl && overlays.wheelAxes && (
+          <AxesGLBModel blobUrl={axesGlbUrl} />
+        )}
         <CameraFitter blobUrl={blobEntries[0].url} />
       </Suspense>
 

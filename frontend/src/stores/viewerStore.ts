@@ -24,6 +24,14 @@ interface ViewerStore {
   selectedTemplateId: string | null;
   setSelectedTemplateId: (id: string | null) => void;
 
+  // Run selection for axes-GLB overlay
+  selectedCaseId: string | null;
+  setSelectedCaseId: (id: string | null) => void;
+  selectedRunId: string | null;
+  setSelectedRunId: (id: string | null) => void;
+  axesGlbUrl: string | null;
+  setAxesGlbUrl: (url: string | null) => void;
+
   // Decimation ratio (fraction to keep, 0.01–1.0)
   ratio: number;
   setRatio: (ratio: number) => void;
@@ -51,6 +59,13 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
 
   selectedTemplateId: null,
   setSelectedTemplateId: (id) => set({ selectedTemplateId: id }),
+
+  selectedCaseId: null,
+  setSelectedCaseId: (id) => set({ selectedCaseId: id }),
+  selectedRunId: null,
+  setSelectedRunId: (id) => set({ selectedRunId: id }),
+  axesGlbUrl: null,
+  setAxesGlbUrl: (url) => set({ axesGlbUrl: url }),
 
   ratio: 0.05,
   setRatio: (ratio) => set({ ratio }),

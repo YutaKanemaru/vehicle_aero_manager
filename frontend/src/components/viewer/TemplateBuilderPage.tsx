@@ -7,10 +7,12 @@ import {
   Title,
   Paper,
   ScrollArea,
+  Text,
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { assembliesApi, type AssemblyResponse, type GeometryResponse } from "../../api/geometries";
 import { templatesApi, type TemplateResponse } from "../../api/templates";
+import { casesApi, runsApi, type CaseResponse, type RunResponse } from "../../api/configurations";
 import { useViewerStore } from "../../stores/viewerStore";
 import { SceneCanvas } from "./SceneCanvas";
 import { PartListPanel } from "./PartListPanel";
@@ -21,6 +23,9 @@ function ControlPanel() {
   const {
     selectedAssemblyId, setSelectedAssemblyId,
     selectedTemplateId, setSelectedTemplateId,
+    selectedCaseId, setSelectedCaseId,
+    selectedRunId, setSelectedRunId,
+    axesGlbUrl, setAxesGlbUrl,
     overlays, setOverlay,
   } = useViewerStore();
 
@@ -34,11 +39,63 @@ function ControlPanel() {
     queryFn: () => templatesApi.list(),
   });
 
+  const { data: allCases = [] } = useQuery<CaseResponse[]>({
+    queryKey: ["cases"],
+    queryFn: () => casesApi.list(),
+  });
+
+  const { data: runs = [] } = useQuery<RunResponse[]>({
+    queryKey: ["runs", selectedCaseId],
+    queryFn: () => runsApi.list(selectedCaseId!),
+    enabled: !!selectedCaseId,
+  });
+
+  // Filter cases to those that match the selected assembly
+  const filteredCases = useMemo(
+    () => allCases.filter((c) => c.assembly_id === selectedAssemblyId),
+    [allCases, selectedAssemblyId]
+  );
+  // Only show runs that are ready (XML generated)
+  const readyRuns = useMemo(
+    () => runs.filter((r) => r.status === "ready"),
+    [runs]
+  );
+
   const assemblyOptions = assemblies.map((a) => ({ value: a.id, label: a.name }));
   const templateOptions = [
     { value: "", label: "— No template overlay —" },
     ...templates.map((t) => ({ value: t.id, label: t.name })),
   ];
+  const caseOptions = filteredCases.map((c) => ({ value: c.id, label: c.name }));
+  const runOptions  = readyRuns.map((r) => ({ value: r.id, label: r.name }));
+
+  // Clear case / run selection when assembly changes
+  useEffect(() => {
+    setSelectedCaseId(null);
+    setSelectedRunId(null);
+  }, [selectedAssemblyId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch (or revoke) axes GLB when run or wheelAxes toggle changes
+  useEffect(() => {
+    // Revoke previous blob URL
+    if (axesGlbUrl) {
+      URL.revokeObjectURL(axesGlbUrl);
+      setAxesGlbUrl(null);
+    }
+
+    if (!selectedCaseId || !selectedRunId || !overlays.wheelAxes) return;
+
+    let cancelled = false;
+    runsApi.getAxesGlbUrl(selectedCaseId, selectedRunId)
+      .then((url) => {
+        if (!cancelled) setAxesGlbUrl(url);
+      })
+      .catch((err) => {
+        console.warn("Axes GLB fetch failed:", err);
+      });
+
+    return () => { cancelled = true; };
+  }, [selectedCaseId, selectedRunId, overlays.wheelAxes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 選択中アセンブリのジオメトリ一覧から全パーツ名を収集
   const selectedAssembly = assemblies.find((a) => a.id === selectedAssemblyId);
@@ -72,6 +129,33 @@ function ControlPanel() {
         size="sm"
       />
 
+      <Divider label="Axis Visualisation (Run)" labelPosition="left" />
+
+      <Select
+        label="Case"
+        placeholder={selectedAssemblyId ? "Select case..." : "Select assembly first"}
+        data={caseOptions}
+        value={selectedCaseId}
+        onChange={(v) => { setSelectedCaseId(v); setSelectedRunId(null); }}
+        disabled={!selectedAssemblyId || caseOptions.length === 0}
+        clearable
+        size="sm"
+      />
+      {selectedAssemblyId && selectedCaseId && readyRuns.length === 0 && (
+        <Text size="xs" c="dimmed">No ready runs in this case</Text>
+      )}
+
+      <Select
+        label="Run"
+        placeholder="Select run..."
+        data={runOptions}
+        value={selectedRunId}
+        onChange={(v) => setSelectedRunId(v)}
+        disabled={!selectedCaseId || runOptions.length === 0}
+        clearable
+        size="sm"
+      />
+
       <Divider label="Overlays" labelPosition="left" />
 
       <Stack gap={6}>
@@ -89,9 +173,10 @@ function ControlPanel() {
         />
         <Switch
           size="xs"
-          label="Wheel axes"
+          label="Wheel / porous axes"
           checked={overlays.wheelAxes}
           onChange={(e) => setOverlay("wheelAxes", e.currentTarget.checked)}
+          disabled={!selectedRunId}
         />
         <Switch
           size="xs"

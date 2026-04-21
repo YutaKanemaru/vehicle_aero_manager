@@ -110,4 +110,17 @@ export const runsApi = {
 
   diff: (runIdA: string, runIdB: string): Promise<DiffResult> =>
     client.get(`/runs/diff?a=${runIdA}&b=${runIdB}`),
+
+  /** Fetch the axes-GLB for a ready Run. Returns a blob URL (caller must revokeObjectURL). */
+  getAxesGlbUrl: async (caseId: string, runId: string): Promise<string> => {
+    const token = localStorage.getItem("vam_token");
+    const res = await fetch(`/api/v1/cases/${caseId}/runs/${runId}/axes-glb`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    return URL.createObjectURL(await res.blob());
+  },
 };

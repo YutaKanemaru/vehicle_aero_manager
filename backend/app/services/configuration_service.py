@@ -458,6 +458,53 @@ def get_xml_path(db: Session, case_id: str, run_id: str) -> Path:
     return path
 
 
+def get_axes_glb(db: Session, case_id: str, run_id: str) -> bytes:
+    """Build and return a GLB visualising wheel-rotation axes and porous-flow axes
+    for the assembly + template associated with the given Run."""
+    run = _get_run_or_404(db, case_id, run_id)
+    if run.status != "ready":
+        raise HTTPException(status_code=400, detail="Run is not ready")
+
+    case      = db.get(Case, run.case_id)
+    condition = db.get(Condition, run.condition_id)
+
+    active_version = db.scalar(
+        select(TemplateVersion).where(
+            TemplateVersion.template_id == case.template_id,
+            TemplateVersion.is_active == True,  # noqa: E712
+        )
+    )
+    if not active_version:
+        raise HTTPException(status_code=404, detail="No active template version found")
+
+    assembly = db.scalar(
+        select(GeometryAssembly)
+        .options(selectinload(GeometryAssembly.geometries))
+        .where(GeometryAssembly.id == case.assembly_id)
+    )
+    merged_analysis  = _merge_analysis_results(assembly)
+    template_settings = TemplateSettings.model_validate(json.loads(active_version.settings))
+
+    stl_paths: list[Path] = []
+    if assembly and assembly.geometries:
+        for geom in assembly.geometries:
+            if geom.is_linked:
+                stl_paths.append(Path(geom.file_path))
+            else:
+                stl_paths.append(settings.upload_dir / geom.file_path)
+
+    from app.services.viewer_service import build_axes_glb
+    try:
+        return build_axes_glb(
+            template_settings=template_settings,
+            analysis_result=merged_analysis,
+            stl_paths=stl_paths,
+            inflow_velocity=condition.inflow_velocity,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 # ---------------------------------------------------------------------------
 # Diff
 # ---------------------------------------------------------------------------

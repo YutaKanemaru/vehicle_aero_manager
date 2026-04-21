@@ -2,7 +2,7 @@
 API router: ConditionMap / Condition / Case / Run management
 """
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -251,6 +251,18 @@ def download_xml(
         media_type="application/xml",
         filename=path.name,
     )
+
+
+@router.get("/cases/{case_id}/runs/{run_id}/axes-glb")
+def get_axes_glb(
+    case_id: str,
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return a GLB file containing wheel-rotation-axis arrows and porous-flow-axis arrows."""
+    glb_bytes = configuration_service.get_axes_glb(db, case_id, run_id)
+    return Response(content=glb_bytes, media_type="model/gltf-binary")
 
 
 # ---------------------------------------------------------------------------
