@@ -262,6 +262,25 @@ def download_xml(
     )
 
 
+@router.get("/cases/{case_id}/runs/{run_id}/download-stl")
+def download_stl(
+    case_id: str,
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download the input STL that was used for XML generation."""
+    from pathlib import Path as _Path
+    from fastapi import HTTPException
+    run = db.query(Run).filter_by(id=run_id, case_id=case_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if not run.stl_path or not _Path(run.stl_path).exists():
+        raise HTTPException(status_code=404, detail="STL file not available for this run")
+    p = _Path(run.stl_path)
+    return FileResponse(str(p), media_type="application/octet-stream", filename=p.name)
+
+
 @router.get("/cases/{case_id}/runs/{run_id}/axes-glb")
 def get_axes_glb(
     case_id: str,

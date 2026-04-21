@@ -118,6 +118,7 @@ class Run(Base):
         String(36), ForeignKey("conditions.id")
     )
     xml_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stl_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), default="pending"
     )  # pending / generating / ready / error

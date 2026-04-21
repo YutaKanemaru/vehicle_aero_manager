@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +94,13 @@ class ConditionCreate(BaseModel):
     yaw_angle: float = 0.0
     ride_height: RideHeightConditionConfig = Field(default_factory=RideHeightConditionConfig)
     yaw_config: YawConditionConfig = Field(default_factory=YawConditionConfig)
+
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Condition name must not be empty")
+        return v.strip()
 
 
 class ConditionUpdate(BaseModel):
@@ -204,6 +211,7 @@ class RunResponse(BaseModel):
     case_id: str
     condition_id: str
     xml_path: str | None
+    stl_path: str | None = None
     status: Literal["pending", "generating", "ready", "error"]
     error_message: str | None
     scheduler_job_id: str | None

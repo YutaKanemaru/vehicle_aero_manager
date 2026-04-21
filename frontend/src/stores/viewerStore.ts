@@ -66,6 +66,12 @@ interface ViewerStore {
   viewerTheme: "dark" | "light";
   setViewerTheme: (t: "dark" | "light") => void;
 
+  // Shading options
+  flatShading: boolean;
+  setFlatShading: (v: boolean) => void;
+  showEdges: boolean;
+  setShowEdges: (v: boolean) => void;
+
   // Ride height transform — condition selection
   selectedConditionMapId: string | null;
   setSelectedConditionMapId: (id: string | null) => void;
@@ -137,6 +143,11 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
 
   viewerTheme: "dark",
   setViewerTheme: (t) => set({ viewerTheme: t }),
+
+  flatShading: false,
+  setFlatShading: (v) => set({ flatShading: v }),
+  showEdges: false,
+  setShowEdges: (v) => set({ showEdges: v }),
 
   selectedConditionMapId: null,
   setSelectedConditionMapId: (id) => set({ selectedConditionMapId: id }),

@@ -15,6 +15,7 @@ import {
   IconRefresh,
   IconSettings,
   IconCopy,
+  IconArrowsLeftRight,
 } from "@tabler/icons-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
@@ -25,6 +26,7 @@ import type { CaseResponse } from "../../api/configurations";
 import { useAuthStore } from "../../stores/auth";
 import { CaseCreateModal } from "./CaseCreateModal";
 import { CaseDuplicateModal } from "./CaseDuplicateModal";
+import { CaseCompareModal } from "./CaseCompareModal";
 import { RunList } from "../runs/RunList";
 
 export function CaseList() {
@@ -34,6 +36,9 @@ export function CaseList() {
   const [selectedCase, setSelectedCase] = useState<CaseResponse | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [duplicateCase, setDuplicateCase] = useState<CaseResponse | null>(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   const { data: cases = [], isLoading, refetch } = useQuery({
     queryKey: ["cases"],
@@ -55,6 +60,16 @@ export function CaseList() {
     setDrawerOpen(true);
   }
 
+  function toggleCompareSelect(id: string) {
+    setSelectedForCompare((prev) =>
+      prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : prev.length < 2
+        ? [...prev, id]
+        : prev
+    );
+  }
+
   const canDelete = (c: CaseResponse) =>
     c.created_by === user?.id || user?.is_admin;
 
@@ -68,6 +83,20 @@ export function CaseList() {
               <IconRefresh size={16} />
             </ActionIcon>
           </Tooltip>
+          <Tooltip label={compareMode ? "Exit compare mode" : "Compare two cases"}>
+            <ActionIcon
+              variant={compareMode ? "filled" : "subtle"}
+              color="orange"
+              onClick={() => { setCompareMode((m) => !m); setSelectedForCompare([]); }}
+            >
+              <IconArrowsLeftRight size={16} />
+            </ActionIcon>
+          </Tooltip>
+          {compareMode && selectedForCompare.length === 2 && (
+            <Button size="xs" color="orange" onClick={() => setCompareOpen(true)}>
+              Compare
+            </Button>
+          )}
           <Button leftSection={<IconPlus size={14} />} onClick={openCreate}>
             New Case
           </Button>
@@ -94,7 +123,18 @@ export function CaseList() {
           </Table.Thead>
           <Table.Tbody>
             {cases.map((c) => (
-              <Table.Tr key={c.id} style={{ cursor: "pointer" }} onClick={() => openDrawer(c)}>
+              <Table.Tr
+                key={c.id}
+                style={{
+                  cursor: "pointer",
+                  background: compareMode && selectedForCompare.includes(c.id)
+                    ? "rgba(255,140,0,0.12)"
+                    : undefined,
+                }}
+                onClick={() =>
+                  compareMode ? toggleCompareSelect(c.id) : openDrawer(c)
+                }
+              >
                 <Table.Td>
                   <Badge variant="outline" color="gray" size="sm">
                     {c.case_number || "—"}
@@ -188,6 +228,14 @@ export function CaseList() {
       )}
 
       <CaseCreateModal opened={createOpened} onClose={closeCreate} />
+
+      {compareOpen && selectedForCompare.length === 2 && (
+        <CaseCompareModal
+          caseIds={selectedForCompare as [string, string]}
+          opened={compareOpen}
+          onClose={() => setCompareOpen(false)}
+        />
+      )}
 
       {duplicateCase && (
         <CaseDuplicateModal

@@ -5,6 +5,7 @@ XML generation background task + Diff logic
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 from fastapi import BackgroundTasks, HTTPException
@@ -460,6 +461,11 @@ def _generate_xml_task(run_id: str) -> None:
         )
 
         run.xml_path = str(xml_path)
+        # Copy first STL into the run directory for later download
+        if stl_paths:
+            stl_dst = out_dir / "input.stl"
+            shutil.copy2(str(stl_paths[0]), str(stl_dst))
+            run.stl_path = str(stl_dst)
         run.status = "ready"
         run.error_message = None
 

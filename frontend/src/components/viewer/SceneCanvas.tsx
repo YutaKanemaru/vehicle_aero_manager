@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useRef, useState } from "react";
+import type React from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid, GizmoHelper, GizmoViewport } from "@react-three/drei";
 import { useGLTF } from "@react-three/drei";
@@ -19,17 +20,18 @@ function GLBModel({
   parts: string[];
 }) {
   const { scene } = useGLTF(blobUrl);
-  const { partStates, initParts } = useViewerStore();
+  const { partStates, initParts, flatShading, showEdges } = useViewerStore();
 
   // パーツ名でstoreを初期化（1回のみ）
   useEffect(() => {
     if (parts.length > 0) initParts(parts);
   }, [parts.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // partStates の変化を3Dシーンへ反映
+  // partStates + flatShading の変化を3Dシーンへ反映
   useEffect(() => {
     scene.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return;
+      if (obj.userData?.isEdgeLine) return;
       const state = partStates[obj.name] ?? partStates[obj.parent?.name ?? ""];
       if (!state) return;
 
@@ -42,9 +44,29 @@ function GLBModel({
       mat.color.set(state.color);
       mat.opacity = state.opacity;
       mat.transparent = state.opacity < 1.0;
+      mat.flatShading = flatShading;
       mat.needsUpdate = true;
     });
-  }, [scene, partStates]);
+  }, [scene, partStates, flatShading]);
+
+  // Edge lines visibility
+  useEffect(() => {
+    scene.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh) || obj.userData?.isEdgeLine) return;
+      // Remove existing edge lines
+      const existing = obj.children.filter((c) => c.userData?.isEdgeLine);
+      existing.forEach((c) => obj.remove(c));
+      if (showEdges) {
+        const edges = new THREE.EdgesGeometry(obj.geometry, 15);
+        const line = new THREE.LineSegments(
+          edges,
+          new THREE.LineBasicMaterial({ color: "#000000", opacity: 0.6, transparent: true })
+        );
+        line.userData.isEdgeLine = true;
+        obj.add(line);
+      }
+    });
+  }, [scene, showEdges]);
 
   return <primitive object={scene} />;
 }
@@ -92,7 +114,170 @@ function LandmarksGLBModel({ blobUrl }: { blobUrl: string }) {
   return <primitive object={scene} />;
 }
 
-// ─── Camera preset controller — watches store and repositions camera ──────────
+// ─── Orthographic/Perspective camera switch ──────────────────────────────────
+
+function CameraTypeController() {
+  const { cameraProjection } = useViewerStore();
+  const { camera, set, size } = useThree();
+  const perspRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const orthoRef = useRef<THREE.OrthographicCamera | null>(null);
+  const prevProjection = useRef<string>("perspective");
+
+  useEffect(() => {
+    if (cameraProjection === prevProjection.current) return;
+    const aspect = size.width / size.height;
+
+    if (cameraProjection === "orthographic") {
+      if (!perspRef.current) perspRef.current = camera as THREE.PerspectiveCamera;
+
+      const dist = camera.position.length();
+      const fovRad = ((perspRef.current.fov ?? 45) * Math.PI) / 180;
+      const halfH = Math.tan(fovRad / 2) * dist;
+      const halfW = halfH * aspect;
+
+      if (!orthoRef.current) {
+        orthoRef.current = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.001, 10000);
+      } else {
+        orthoRef.current.left = -halfW;
+        orthoRef.current.right = halfW;
+        orthoRef.current.top = halfH;
+        orthoRef.current.bottom = -halfH;
+      }
+      orthoRef.current.position.copy(camera.position);
+      orthoRef.current.quaternion.copy(camera.quaternion);
+      orthoRef.current.updateProjectionMatrix();
+      set({ camera: orthoRef.current });
+    } else {
+      if (perspRef.current) {
+        perspRef.current.position.copy(camera.position);
+        perspRef.current.quaternion.copy(camera.quaternion);
+        perspRef.current.updateProjectionMatrix();
+        set({ camera: perspRef.current });
+      }
+    }
+    prevProjection.current = cameraProjection;
+  }, [cameraProjection]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null;
+}
+
+// ─── Double-click pivot + right-click context menu ────────────────────────────
+
+function PointerEventHandler({
+  onContextMenu,
+}: {
+  onContextMenu: (x: number, y: number, partName: string | null) => void;
+}) {
+  const { camera, scene, controls, gl, raycaster } = useThree();
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+
+    const isMesh = (obj: THREE.Object3D): obj is THREE.Mesh =>
+      obj instanceof THREE.Mesh && !obj.userData?.isEdgeLine;
+
+    const getNDC = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      return new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+    };
+
+    const handleDblClick = (e: MouseEvent) => {
+      if (!controls) return;
+      raycaster.setFromCamera(getNDC(e), camera);
+      const hits = raycaster.intersectObjects(scene.children, true).filter((h) => isMesh(h.object));
+      if (hits.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (controls as any).target?.copy(hits[0].point);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (controls as any).update?.();
+      }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      raycaster.setFromCamera(getNDC(e), camera);
+      const hits = raycaster.intersectObjects(scene.children, true).filter((h) => isMesh(h.object));
+      let partName: string | null = null;
+      if (hits.length > 0) {
+        const obj = hits[0].object;
+        partName = obj.name || (obj.parent?.name ?? null);
+        if (partName === "Scene" || partName === "") partName = null;
+      }
+      onContextMenu(e.clientX, e.clientY, partName);
+    };
+
+    canvas.addEventListener("dblclick", handleDblClick);
+    canvas.addEventListener("contextmenu", handleContextMenu);
+    return () => {
+      canvas.removeEventListener("dblclick", handleDblClick);
+      canvas.removeEventListener("contextmenu", handleContextMenu);
+    };
+  }, [camera, scene, controls, gl, raycaster, onContextMenu]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null;
+}
+
+// ─── Right-click context menu (React DOM, outside Canvas) ────────────────────
+
+const CTX_ITEM: React.CSSProperties = {
+  display: "block",
+  width: "100%",
+  padding: "5px 14px",
+  background: "none",
+  border: "none",
+  color: "#c1c2c5",
+  fontSize: 12,
+  cursor: "pointer",
+  textAlign: "left",
+};
+
+function ContextMenuPanel({
+  x, y, partName, onClose,
+}: {
+  x: number; y: number; partName: string | null; onClose: () => void;
+}) {
+  const { setPartState, resetParts } = useViewerStore();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: "fixed", left: x, top: y, zIndex: 9999,
+        background: "#25262b", border: "1px solid #444",
+        borderRadius: 4, padding: "4px 0", minWidth: 140,
+        boxShadow: "0 4px 12px rgba(0,0,0,0.6)",
+      }}
+    >
+      {partName && (
+        <div style={{ padding: "4px 14px", fontSize: 11, color: "#666", borderBottom: "1px solid #333", marginBottom: 2 }}>
+          {partName}
+        </div>
+      )}
+      {partName && (
+        <button style={CTX_ITEM} onClick={() => { setPartState(partName, { visible: false }); onClose(); }}>
+          Hide
+        </button>
+      )}
+      <button style={CTX_ITEM} onClick={() => { resetParts(); onClose(); }}>
+        Reset all
+      </button>
+    </div>
+  );
+}
+
+// ─── Camera preset controller — watches store and repositions camera ───────────
 
 function CameraPresetController() {
   const { cameraPreset, setCameraPreset } = useViewerStore();
@@ -144,8 +329,13 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
   const [blobEntries, setBlobEntries] = useState<BlobEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; partName: string | null } | null>(null);
   // Must be called unconditionally before any early returns
   const { axesGlbUrl, landmarksGlbUrl, overlays, viewerTheme } = useViewerStore();
+
+  const handleContextMenu = (x: number, y: number, partName: string | null) => {
+    setContextMenu({ x, y, partName });
+  };
 
   const readyGeometries = geometries.filter((g) => g.status === "ready");
 
@@ -222,58 +412,70 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
   const bgColor = viewerTheme === "dark" ? "#1a1b1e" : "#e8e8e8";
 
   return (
-    <Canvas
-      style={{ width: "100%", height: "100%" }}
-      camera={{ position: [10, 5, 10], fov: 45 }}
-      gl={{ antialias: true }}
-    >
-      <color attach="background" args={[bgColor]} />
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[10, 20, 10]} intensity={1.0} />
-      <directionalLight position={[-10, -5, -10]} intensity={0.3} />
-
-      <Suspense fallback={null}>
-        {blobEntries.map((entry) => (
-          <GLBModel key={entry.geometryId} blobUrl={entry.url} parts={entry.parts} />
-        ))}
-        {axesGlbUrl && overlays.wheelAxes && (
-          <AxesGLBModel blobUrl={axesGlbUrl} />
-        )}
-        {landmarksGlbUrl && overlays.landmarks && (
-          <LandmarksGLBModel blobUrl={landmarksGlbUrl} />
-        )}
-        <CameraFitter blobUrl={blobEntries[0].url} />
-      </Suspense>
-
-      <CameraPresetController />
-
-      <OverlayObjects
-        templateSettings={templateSettings}
-        vehicleBbox={vehicleBbox}
-      />
-
-      <Grid
-        args={[200, 200]}
-        cellSize={0.1}
-        cellThickness={0.4}
-        cellColor={viewerTheme === "dark" ? "#333" : "#aaa"}
-        sectionSize={1}
-        sectionThickness={0.8}
-        sectionColor={viewerTheme === "dark" ? "#555" : "#888"}
-        fadeDistance={120}
-        fadeStrength={1}
-        followCamera={false}
-        infiniteGrid
-      />
-
-      <OrbitControls makeDefault />
-
-      <GizmoHelper alignment="bottom-left" margin={[60, 60]}>
-        <GizmoViewport
-          axisColors={["#ff4444", "#44bb44", "#4499ff"]}
-          labelColor="white"
+    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+      {contextMenu && (
+        <ContextMenuPanel
+          x={contextMenu.x}
+          y={contextMenu.y}
+          partName={contextMenu.partName}
+          onClose={() => setContextMenu(null)}
         />
-      </GizmoHelper>
-    </Canvas>
+      )}
+      <Canvas
+        style={{ width: "100%", height: "100%" }}
+        camera={{ position: [10, 5, 10], fov: 45 }}
+        gl={{ antialias: true }}
+      >
+        <color attach="background" args={[bgColor]} />
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[10, 20, 10]} intensity={1.0} />
+        <directionalLight position={[-10, -5, -10]} intensity={0.3} />
+
+        <Suspense fallback={null}>
+          {blobEntries.map((entry) => (
+            <GLBModel key={entry.geometryId} blobUrl={entry.url} parts={entry.parts} />
+          ))}
+          {axesGlbUrl && overlays.wheelAxes && (
+            <AxesGLBModel blobUrl={axesGlbUrl} />
+          )}
+          {landmarksGlbUrl && overlays.landmarks && (
+            <LandmarksGLBModel blobUrl={landmarksGlbUrl} />
+          )}
+          <CameraFitter blobUrl={blobEntries[0].url} />
+        </Suspense>
+
+        <CameraPresetController />
+        <CameraTypeController />
+        <PointerEventHandler onContextMenu={handleContextMenu} />
+
+        <OverlayObjects
+          templateSettings={templateSettings}
+          vehicleBbox={vehicleBbox}
+        />
+
+        <Grid
+          args={[200, 200]}
+          cellSize={0.1}
+          cellThickness={0.4}
+          cellColor={viewerTheme === "dark" ? "#333" : "#aaa"}
+          sectionSize={1}
+          sectionThickness={0.8}
+          sectionColor={viewerTheme === "dark" ? "#555" : "#888"}
+          fadeDistance={120}
+          fadeStrength={1}
+          followCamera={false}
+          infiniteGrid
+        />
+
+        <OrbitControls makeDefault />
+
+        <GizmoHelper alignment="bottom-left" margin={[60, 60]}>
+          <GizmoViewport
+            axisColors={["#ff4444", "#44bb44", "#4499ff"]}
+            labelColor="white"
+          />
+        </GizmoHelper>
+      </Canvas>
+    </div>
   );
 }

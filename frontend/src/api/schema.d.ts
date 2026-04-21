@@ -721,6 +721,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cases/{case_id}/runs/{run_id}/download-stl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Stl
+         * @description Download the input STL that was used for XML generation.
+         */
+        get: operations["download_stl_api_v1_cases__case_id__runs__run_id__download_stl_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cases/{case_id}/runs/{run_id}/axes-glb": {
         parameters: {
             query?: never;
@@ -2443,6 +2463,8 @@ export interface components {
             condition_id: string;
             /** Xml Path */
             xml_path: string | null;
+            /** Stl Path */
+            stl_path?: string | null;
             /**
              * Status
              * @enum {string}
@@ -5098,6 +5120,38 @@ export interface operations {
         };
     };
     download_xml_api_v1_cases__case_id__runs__run_id__download_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_stl_api_v1_cases__case_id__runs__run_id__download_stl_get: {
         parameters: {
             query?: never;
             header?: never;

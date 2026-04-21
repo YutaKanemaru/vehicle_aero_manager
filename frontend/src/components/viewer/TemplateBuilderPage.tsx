@@ -14,6 +14,7 @@ import {
   Group,
   ActionIcon,
   Tooltip,
+  SegmentedControl,
 } from "@mantine/core";
 import { IconArrowDown, IconSun, IconMoon, IconCamera } from "@tabler/icons-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -168,13 +169,6 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
 
     return () => { cancelled = true; };
   }, [selectedCaseId, selectedRunId, overlays.wheelAxes]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 選択中アセンブリのジオメトリ一覧から全パーツ名を収集
-  const allParts = useMemo(() => {
-    return geometries.flatMap(
-      (g) => (g.analysis_result as { parts?: string[] } | null)?.parts ?? []
-    );
-  }, [geometries]);
 
   return (
     <Stack gap="sm" style={{ height: "100%" }}>
@@ -379,12 +373,52 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
         </ActionIcon>
       </Group>
 
-      <Divider label="Parts" labelPosition="left" />
-
-      <div style={{ flex: 1, overflow: "hidden" }}>
-        <PartListPanel parts={allParts} />
-      </div>
     </Stack>
+  );
+}
+
+// ─── Floating viewer toolbar (Persp/Ortho + FlatShading + Edges) ─────────────
+
+function ViewerToolbar() {
+  const { cameraProjection, setCameraProjection, flatShading, setFlatShading, showEdges, setShowEdges } = useViewerStore();
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 8,
+        right: 8,
+        zIndex: 10,
+        display: "flex",
+        gap: 8,
+        alignItems: "center",
+        background: "rgba(0,0,0,0.6)",
+        borderRadius: 6,
+        padding: "4px 10px",
+        pointerEvents: "all",
+      }}
+    >
+      <SegmentedControl
+        size="xs"
+        value={cameraProjection}
+        onChange={(v) => setCameraProjection(v as "perspective" | "orthographic")}
+        data={[
+          { label: "Persp", value: "perspective" },
+          { label: "Ortho", value: "orthographic" },
+        ]}
+      />
+      <Switch
+        size="xs"
+        label="Flat"
+        checked={flatShading}
+        onChange={(e) => setFlatShading(e.currentTarget.checked)}
+      />
+      <Switch
+        size="xs"
+        label="Edges"
+        checked={showEdges}
+        onChange={(e) => setShowEdges(e.currentTarget.checked)}
+      />
+    </div>
   );
 }
 
@@ -438,17 +472,34 @@ export function TemplateBuilderPage() {
 
   const templateSettings = activeVersion?.settings ?? null;
 
+  // All parts across all geometries in the assembly
+  const allParts = useMemo(() => {
+    return geometries.flatMap(
+      (g) => (g.analysis_result as { parts?: string[] } | null)?.parts ?? []
+    );
+  }, [geometries]);
+
   return (
     <div style={{ display: "flex", height: "calc(100vh - 80px)", gap: 8 }}>
-      {/* Left panel: 300px fixed */}
+      {/* Left panel: 275px — Controls */}
       <Paper
         withBorder
         p="sm"
-        style={{ width: 300, flexShrink: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
+        style={{ width: 275, flexShrink: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
       >
         <ScrollArea style={{ flex: 1 }} type="auto">
           <ControlPanel geometries={geometries} />
         </ScrollArea>
+      </Paper>
+
+      {/* Middle panel: 255px — Part list */}
+      <Paper
+        withBorder
+        p="xs"
+        style={{ width: 255, flexShrink: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
+      >
+        <Text size="xs" fw={600} mb={4}>Parts</Text>
+        <PartListPanel parts={allParts} />
       </Paper>
 
       {/* Right panel: 3D canvas */}
@@ -456,6 +507,7 @@ export function TemplateBuilderPage() {
         withBorder
         style={{ flex: 1, overflow: "hidden", position: "relative" }}
       >
+        <ViewerToolbar />
         <SceneCanvas
           geometries={geometries}
           ratio={ratio}

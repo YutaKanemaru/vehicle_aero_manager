@@ -17,6 +17,8 @@ import {
   IconEyeOff,
   IconSearch,
   IconRefresh,
+  IconEyeCheck,
+  IconArrowsExchange,
 } from "@tabler/icons-react";
 import { useViewerStore } from "../../stores/viewerStore";
 
@@ -48,6 +50,20 @@ export function PartListPanel({ parts }: PartListPanelProps) {
   function toggleAll() {
     const next = !allVisible;
     filtered.forEach((n) => setPartState(n, { visible: next }));
+  }
+
+  // Show only filtered parts — hide everything else
+  function showOnly() {
+    const filteredSet = new Set(filtered);
+    parts.forEach((n) => setPartState(n, { visible: filteredSet.has(n) }));
+  }
+
+  // Invert visibility of all parts
+  function invertAll() {
+    parts.forEach((n) => {
+      const visible = partStates[n]?.visible !== false;
+      setPartState(n, { visible: !visible });
+    });
   }
 
   if (parts.length === 0) {
@@ -90,6 +106,16 @@ export function PartListPanel({ parts }: PartListPanelProps) {
           <Tooltip label="Toggle visible (filtered)">
             <ActionIcon size="sm" variant="subtle" onClick={toggleAll}>
               {allVisible ? <IconEyeOff size={14} /> : <IconEye size={14} />}
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Show only filtered (hide others)">
+            <ActionIcon size="sm" variant="subtle" onClick={showOnly}>
+              <IconEyeCheck size={14} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label="Invert all visibility">
+            <ActionIcon size="sm" variant="subtle" onClick={invertAll}>
+              <IconArrowsExchange size={14} />
             </ActionIcon>
           </Tooltip>
           <Tooltip label="Reset all">
