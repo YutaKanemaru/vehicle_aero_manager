@@ -491,7 +491,8 @@ def compute_wheel_kinematics(
 
     radius_z = (bbox["z_max"] - bbox["z_min"]) / 2
     radius_y = (bbox["y_max"] - bbox["y_min"]) / 2
-    radius = min(radius_z, radius_y) if radius_z > 0 and radius_y > 0 else max(radius_z, radius_y)
+    # 転がり半径 = z方向（地面からの高さ）の半径、タイヤ幅/2 より常に大きい
+    radius = max(radius_z, radius_y)
 
     if rim_vertices is not None and len(rim_vertices) >= 3:
         centered = rim_vertices - rim_vertices.mean(axis=0)
