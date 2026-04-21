@@ -3,10 +3,10 @@ import {
   TextInput,
   Textarea,
   Select,
+  Switch,
   Button,
   Stack,
   Group,
-  Text,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,13 +38,14 @@ export function CaseCreateModal({ opened, onClose }: Props) {
     queryFn: mapsApi.list,
   });
 
-  const form = useForm<CaseCreate>({
+  const form = useForm<CaseCreate & { withRuns: boolean }>({
     initialValues: {
       name: "",
       description: "",
       template_id: "",
       assembly_id: "",
       map_id: null,
+      withRuns: false,
     },
     validate: {
       name: (v) => (v.trim() ? null : "Name is required"),
@@ -54,7 +55,10 @@ export function CaseCreateModal({ opened, onClose }: Props) {
   });
 
   const mutation = useMutation({
-    mutationFn: (data: CaseCreate) => casesApi.create(data),
+    mutationFn: (data: CaseCreate & { withRuns: boolean }) => {
+      const { withRuns, ...caseData } = data;
+      return casesApi.create(caseData, withRuns);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       notifications.show({ message: "Case created", color: "green" });
@@ -111,6 +115,13 @@ export function CaseCreateModal({ opened, onClose }: Props) {
             }))}
             {...form.getInputProps("map_id")}
           />
+          {form.values.map_id && (
+            <Switch
+              label="Auto-create Runs for all Conditions"
+              description="Creates one pending Run per Condition in the selected map"
+              {...form.getInputProps("withRuns", { type: "checkbox" })}
+            />
+          )}
           <Group justify="flex-end" mt="sm">
             <Button variant="subtle" onClick={onClose}>
               Cancel

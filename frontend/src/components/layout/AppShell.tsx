@@ -21,9 +21,9 @@ const navItems = [
   { label: "Templates", path: "/templates", icon: IconTemplate },
   { label: "Geometries", path: "/geometries", icon: IconBox },
   { label: "Assemblies", path: "/assemblies", icon: IconStack2 },
+  { label: "Template Builder", path: "/template-builder", icon: IconCube },
   { label: "Maps", path: "/maps", icon: IconMap },
   { label: "Cases", path: "/cases", icon: IconCar },
-  { label: "Template Builder", path: "/template-builder", icon: IconCube },
 ];
 
 export function AppLayout() {

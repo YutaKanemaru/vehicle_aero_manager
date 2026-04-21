@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { useViewerStore } from "../../stores/viewerStore";
 
-interface VehicleBbox {
+export interface VehicleBbox {
   x_min: number; x_max: number;
   y_min: number; y_max: number;
   z_min: number; z_max: number;

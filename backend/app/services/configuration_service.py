@@ -16,8 +16,9 @@ from app.models.configuration import Case, Condition, ConditionMap, Run
 from app.models.geometry import GeometryAssembly
 from app.models.template import Template, TemplateVersion
 from app.models.user import User
+from app.schemas.configuration import CaseResponse, RunResponse
 from app.schemas.configuration import (
-    CaseCreate, CaseUpdate,
+    CaseCreate, CaseUpdate, CaseDuplicateRequest,
     ConditionCreate, ConditionUpdate,
     ConditionMapCreate, ConditionMapUpdate,
     DiffField, DiffResult,
@@ -209,7 +210,11 @@ def create_case(db: Session, data: CaseCreate, current_user: User) -> Case:
         raise HTTPException(status_code=404, detail="Assembly not found")
     if data.map_id and not db.get(ConditionMap, data.map_id):
         raise HTTPException(status_code=404, detail="ConditionMap not found")
+    # Auto-generate case_number: count existing cases + 1
+    n = db.scalar(select(func.count()).select_from(Case)) or 0
+    case_number = f"C{n + 1:03d}"
     case = Case(
+        case_number=case_number,
         name=data.name,
         description=data.description,
         template_id=data.template_id,
@@ -246,6 +251,53 @@ def delete_case(db: Session, case_id: str, current_user: User) -> None:
     db.commit()
 
 
+def duplicate_case(db: Session, case_id: str, data: CaseDuplicateRequest, current_user: User) -> Case:
+    """Create a new Case with the same template/assembly/map as an existing Case.
+    Runs are NOT copied — the duplicate starts empty."""
+    src = _get_case_or_404(db, case_id)
+    n = db.scalar(select(func.count()).select_from(Case)) or 0
+    case_number = f"C{n + 1:03d}"
+    new_case = Case(
+        case_number=case_number,
+        name=data.name,
+        description=data.description,
+        template_id=src.template_id,
+        assembly_id=src.assembly_id,
+        map_id=src.map_id,
+        created_by=current_user.id,
+    )
+    db.add(new_case)
+    db.commit()
+    db.refresh(new_case)
+    return new_case
+
+
+def create_case_with_runs(db: Session, data: CaseCreate, current_user: User) -> Case:
+    """Create Case and, if a ConditionMap is set, auto-generate one Run per Condition."""
+    case = create_case(db, data, current_user)
+    if case.map_id:
+        conditions = list(
+            db.scalars(
+                select(Condition)
+                .where(Condition.map_id == case.map_id)
+                .order_by(Condition.created_at.asc())
+            ).all()
+        )
+        for idx, cond in enumerate(conditions, start=1):
+            run_number = f"{case.case_number}_R{idx:02d}"
+            run = Run(
+                run_number=run_number,
+                name=cond.name,
+                case_id=case.id,
+                condition_id=cond.id,
+                status="pending",
+                created_by=current_user.id,
+            )
+            db.add(run)
+        db.commit()
+    return case
+
+
 # ---------------------------------------------------------------------------
 # Run CRUD
 # ---------------------------------------------------------------------------
@@ -272,7 +324,11 @@ def create_run(db: Session, case_id: str, data: RunCreate, current_user: User) -
             status_code=422,
             detail="Condition does not belong to the Case's ConditionMap",
         )
+    # Auto-generate run_number within this case
+    run_count = db.scalar(select(func.count()).select_from(Run).where(Run.case_id == case_id)) or 0
+    run_number = f"{case.case_number}_R{run_count + 1:02d}"
     run = Run(
+        run_number=run_number,
         name=data.name,
         case_id=case_id,
         condition_id=data.condition_id,
@@ -557,3 +613,35 @@ def _diff_dicts(prefix: str, a: dict, b: dict) -> list[DiffField]:
                 run_b_value=str(vb) if vb is not None else None,
             ))
     return result
+
+
+# ---------------------------------------------------------------------------
+# Response enrichment helpers
+# ---------------------------------------------------------------------------
+
+def enrich_case_response(db: Session, case: Case, run_count: int | None = None) -> CaseResponse:
+    """Build CaseResponse with display name fields populated from related rows."""
+    out = CaseResponse.model_validate(case)
+    template = db.get(Template, case.template_id)
+    assembly = db.get(GeometryAssembly, case.assembly_id)
+    cmap = db.get(ConditionMap, case.map_id) if case.map_id else None
+    out.template_name = template.name if template else ""
+    out.assembly_name = assembly.name if assembly else ""
+    out.map_name = cmap.name if cmap else ""
+    if run_count is None:
+        rc = db.scalar(select(func.count()).select_from(Run).where(Run.case_id == case.id)) or 0
+        out.run_count = rc
+    else:
+        out.run_count = run_count
+    return out
+
+
+def enrich_run_response(db: Session, run: Run) -> RunResponse:
+    """Build RunResponse with condition display fields."""
+    out = RunResponse.model_validate(run)
+    condition = db.get(Condition, run.condition_id)
+    if condition:
+        out.condition_name = condition.name
+        out.condition_velocity = condition.inflow_velocity
+        out.condition_yaw = condition.yaw_angle
+    return out

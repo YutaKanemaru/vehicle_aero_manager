@@ -1,5 +1,5 @@
 import { client } from "./client";
-import type { paths, components } from "./schema";
+import type { components } from "./schema";
 
 // ---- Type exports --------------------------------------------------------
 
@@ -17,6 +17,7 @@ export type ConditionUpdate = components["schemas"]["ConditionUpdate"];
 export type CaseResponse = components["schemas"]["CaseResponse"];
 export type CaseCreate = components["schemas"]["CaseCreate"];
 export type CaseUpdate = components["schemas"]["CaseUpdate"];
+export type CaseDuplicateRequest = components["schemas"]["CaseDuplicateRequest"];
 
 export type RunResponse = components["schemas"]["RunResponse"];
 export type RunCreate = components["schemas"]["RunCreate"];
@@ -74,14 +75,17 @@ export const casesApi = {
   get: (caseId: string): Promise<CaseResponse> =>
     client.get(`/cases/${caseId}`),
 
-  create: (data: CaseCreate): Promise<CaseResponse> =>
-    client.post("/cases/", data),
+  create: (data: CaseCreate, withRuns = false): Promise<CaseResponse> =>
+    client.post(`/cases/?with_runs=${withRuns}`, data),
 
   update: (caseId: string, data: CaseUpdate): Promise<CaseResponse> =>
     client.patch(`/cases/${caseId}`, data),
 
   delete: (caseId: string): Promise<void> =>
     client.delete(`/cases/${caseId}`),
+
+  duplicate: (caseId: string, data: CaseDuplicateRequest): Promise<CaseResponse> =>
+    client.post(`/cases/${caseId}/duplicate`, data),
 };
 
 // ---- Run API ------------------------------------------------------------

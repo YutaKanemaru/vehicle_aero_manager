@@ -11,7 +11,7 @@ from app.database import get_db
 from app.models.configuration import Case, ConditionMap, Run
 from app.models.user import User
 from app.schemas.configuration import (
-    CaseCreate, CaseResponse, CaseUpdate,
+    CaseCreate, CaseResponse, CaseUpdate, CaseDuplicateRequest,
     ConditionCreate, ConditionResponse, ConditionUpdate,
     ConditionMapCreate, ConditionMapResponse, ConditionMapUpdate,
     DiffResult,
@@ -150,23 +150,21 @@ def list_cases(
     current_user: User = Depends(get_current_user),
 ):
     cases = configuration_service.list_cases(db)
-    result = []
-    for c in cases:
-        data = CaseResponse.model_validate(c)
-        data.run_count = db.scalar(
-            select(func.count()).where(Run.case_id == c.id)
-        ) or 0
-        result.append(data)
-    return result
+    return [configuration_service.enrich_case_response(db, c) for c in cases]
 
 
 @router.post("/cases/", response_model=CaseResponse, status_code=201)
 def create_case(
     data: CaseCreate,
+    with_runs: bool = Query(False, description="Auto-create Runs for all Conditions in the map"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return configuration_service.create_case(db, data, current_user)
+    if with_runs:
+        case = configuration_service.create_case_with_runs(db, data, current_user)
+    else:
+        case = configuration_service.create_case(db, data, current_user)
+    return configuration_service.enrich_case_response(db, case)
 
 
 @router.get("/cases/{case_id}", response_model=CaseResponse)
@@ -176,11 +174,7 @@ def get_case(
     current_user: User = Depends(get_current_user),
 ):
     c = configuration_service.get_case(db, case_id)
-    data = CaseResponse.model_validate(c)
-    data.run_count = db.scalar(
-        select(func.count()).where(Run.case_id == case_id)
-    ) or 0
-    return data
+    return configuration_service.enrich_case_response(db, c)
 
 
 @router.patch("/cases/{case_id}", response_model=CaseResponse)
@@ -190,7 +184,8 @@ def update_case(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return configuration_service.update_case(db, case_id, data, current_user)
+    c = configuration_service.update_case(db, case_id, data, current_user)
+    return configuration_service.enrich_case_response(db, c)
 
 
 @router.delete("/cases/{case_id}", status_code=204)
@@ -200,6 +195,17 @@ def delete_case(
     current_user: User = Depends(get_current_user),
 ):
     configuration_service.delete_case(db, case_id, current_user)
+
+
+@router.post("/cases/{case_id}/duplicate", response_model=CaseResponse, status_code=201)
+def duplicate_case(
+    case_id: str,
+    data: CaseDuplicateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    c = configuration_service.duplicate_case(db, case_id, data, current_user)
+    return configuration_service.enrich_case_response(db, c)
 
 
 # ---------------------------------------------------------------------------
@@ -212,7 +218,8 @@ def list_runs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return configuration_service.list_runs(db, case_id)
+    runs = configuration_service.list_runs(db, case_id)
+    return [configuration_service.enrich_run_response(db, r) for r in runs]
 
 
 @router.post("/cases/{case_id}/runs/", response_model=RunResponse, status_code=201)
@@ -222,7 +229,8 @@ def create_run(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return configuration_service.create_run(db, case_id, data, current_user)
+    run = configuration_service.create_run(db, case_id, data, current_user)
+    return configuration_service.enrich_run_response(db, run)
 
 
 @router.post("/cases/{case_id}/runs/{run_id}/generate", response_model=RunResponse)
@@ -233,9 +241,10 @@ def generate_xml(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return configuration_service.trigger_xml_generation(
+    run = configuration_service.trigger_xml_generation(
         db, case_id, run_id, current_user, background_tasks
     )
+    return configuration_service.enrich_run_response(db, run)
 
 
 @router.get("/cases/{case_id}/runs/{run_id}/download")

@@ -13,6 +13,10 @@ export interface ViewerOverlays {
   refinementBoxes: boolean;
   wheelAxes: boolean;
   groundPlane: boolean;
+  landmarks: boolean;
+  probeSpheres: boolean;
+  partialVolumes: boolean;
+  sectionCuts: boolean;
 }
 
 interface ViewerStore {
@@ -51,6 +55,16 @@ interface ViewerStore {
   // Overlays
   overlays: ViewerOverlays;
   setOverlay: (key: keyof ViewerOverlays, value: boolean) => void;
+
+  // Camera
+  cameraProjection: "perspective" | "orthographic";
+  setCameraProjection: (p: "perspective" | "orthographic") => void;
+  cameraPreset: string | null;  // trigger: "top" | "front" | "side" | "iso" | null
+  setCameraPreset: (p: string | null) => void;
+
+  // Viewer theme
+  viewerTheme: "dark" | "light";
+  setViewerTheme: (t: "dark" | "light") => void;
 
   // Ride height transform — condition selection
   selectedConditionMapId: string | null;
@@ -108,9 +122,21 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
     refinementBoxes: false,
     wheelAxes: false,
     groundPlane: true,
+    landmarks: true,
+    probeSpheres: false,
+    partialVolumes: false,
+    sectionCuts: false,
   },
   setOverlay: (key, value) =>
     set((s) => ({ overlays: { ...s.overlays, [key]: value } })),
+
+  cameraProjection: "perspective",
+  setCameraProjection: (p) => set({ cameraProjection: p }),
+  cameraPreset: null,
+  setCameraPreset: (p) => set({ cameraPreset: p }),
+
+  viewerTheme: "dark",
+  setViewerTheme: (t) => set({ viewerTheme: t }),
 
   selectedConditionMapId: null,
   setSelectedConditionMapId: (id) => set({ selectedConditionMapId: id }),
@@ -119,4 +145,4 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
 
   landmarksGlbUrl: null,
   setLandmarksGlbUrl: (url) => set({ landmarksGlbUrl: url }),
-});
+}));

@@ -163,9 +163,15 @@ class CaseUpdate(BaseModel):
     map_id: str | None = None
 
 
+class CaseDuplicateRequest(BaseModel):
+    name: str
+    description: str | None = None
+
+
 class CaseResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
+    case_number: str = ""
     name: str
     description: str | None
     template_id: str
@@ -175,6 +181,10 @@ class CaseResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     run_count: int = 0
+    # Populated in router/service (not ORM columns)
+    template_name: str = ""
+    assembly_name: str = ""
+    map_name: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -189,6 +199,7 @@ class RunCreate(BaseModel):
 class RunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
+    run_number: str = ""
     name: str
     case_id: str
     condition_id: str
@@ -199,6 +210,10 @@ class RunResponse(BaseModel):
     created_by: str
     created_at: datetime
     updated_at: datetime
+    # Populated in router/service
+    condition_name: str = ""
+    condition_velocity: float = 0.0
+    condition_yaw: float = 0.0
 
 
 # ---------------------------------------------------------------------------

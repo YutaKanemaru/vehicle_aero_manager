@@ -1,13 +1,13 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, Grid, Environment } from "@react-three/drei";
+import { OrbitControls, Grid, GizmoHelper, GizmoViewport } from "@react-three/drei";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { Center, Text } from "@mantine/core";
 import { Loader } from "@mantine/core";
 import { geometriesApi, type GeometryResponse } from "../../api/geometries";
 import { useViewerStore } from "../../stores/viewerStore";
-import { OverlayObjects } from "./OverlayObjects";
+import { OverlayObjects, type VehicleBbox } from "./OverlayObjects";
 
 // ─── GLB model inner component (rendered inside Suspense) ────────────────────
 
@@ -85,13 +85,53 @@ function AxesGLBModel({ blobUrl }: { blobUrl: string }) {
   return <primitive object={scene} />;
 }
 
+// ─── Landmarks GLB overlay (ride-height transform before/after) ──────────────
+
+function LandmarksGLBModel({ blobUrl }: { blobUrl: string }) {
+  const { scene } = useGLTF(blobUrl);
+  return <primitive object={scene} />;
+}
+
+// ─── Camera preset controller — watches store and repositions camera ──────────
+
+function CameraPresetController() {
+  const { cameraPreset, setCameraPreset } = useViewerStore();
+  const { camera, scene: threeScene } = useThree();
+
+  useEffect(() => {
+    if (!cameraPreset) return;
+    const box = new THREE.Box3().setFromObject(threeScene);
+    if (box.isEmpty()) { setCameraPreset(null); return; }
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const dist = Math.max(size.x, size.y, size.z) * 2.0;
+
+    const presets: Record<string, THREE.Vector3> = {
+      iso:   new THREE.Vector3(center.x + dist, center.y + dist * 0.6, center.z + dist),
+      front: new THREE.Vector3(center.x + dist * 1.5, center.y, center.z),
+      side:  new THREE.Vector3(center.x, center.y - dist * 1.5, center.z),
+      top:   new THREE.Vector3(center.x, center.y, center.z + dist * 1.5),
+      rear:  new THREE.Vector3(center.x - dist * 1.5, center.y, center.z),
+    };
+    const pos = presets[cameraPreset];
+    if (pos) {
+      camera.position.copy(pos);
+      camera.lookAt(center);
+      (camera as THREE.PerspectiveCamera).updateProjectionMatrix?.();
+    }
+    setCameraPreset(null);
+  }, [cameraPreset]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null;
+}
+
 // ─── Public SceneCanvas component ────────────────────────────────────────────
 
 interface SceneCanvasProps {
   geometries: GeometryResponse[];
   ratio: number;
   templateSettings?: Record<string, unknown> | null;
-  vehicleBbox?: Record<string, number> | null;
+  vehicleBbox?: VehicleBbox | null;
 }
 
 interface BlobEntry {
@@ -105,7 +145,7 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Must be called unconditionally before any early returns
-  const { axesGlbUrl, overlays } = useViewerStore();
+  const { axesGlbUrl, landmarksGlbUrl, overlays, viewerTheme } = useViewerStore();
 
   const readyGeometries = geometries.filter((g) => g.status === "ready");
 
@@ -177,6 +217,9 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
   }
 
   const allParts = blobEntries.flatMap((e) => e.parts);
+  void allParts; // used in PartListPanel via assembly parts list
+
+  const bgColor = viewerTheme === "dark" ? "#1a1b1e" : "#e8e8e8";
 
   return (
     <Canvas
@@ -184,6 +227,7 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
       camera={{ position: [10, 5, 10], fov: 45 }}
       gl={{ antialias: true }}
     >
+      <color attach="background" args={[bgColor]} />
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, 20, 10]} intensity={1.0} />
       <directionalLight position={[-10, -5, -10]} intensity={0.3} />
@@ -195,8 +239,13 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
         {axesGlbUrl && overlays.wheelAxes && (
           <AxesGLBModel blobUrl={axesGlbUrl} />
         )}
+        {landmarksGlbUrl && overlays.landmarks && (
+          <LandmarksGLBModel blobUrl={landmarksGlbUrl} />
+        )}
         <CameraFitter blobUrl={blobEntries[0].url} />
       </Suspense>
+
+      <CameraPresetController />
 
       <OverlayObjects
         templateSettings={templateSettings}
@@ -204,20 +253,27 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
       />
 
       <Grid
-        args={[100, 100]}
-        cellSize={1}
-        cellThickness={0.5}
-        cellColor="#444"
-        sectionSize={5}
-        sectionThickness={1}
-        sectionColor="#666"
-        fadeDistance={80}
+        args={[200, 200]}
+        cellSize={0.1}
+        cellThickness={0.4}
+        cellColor={viewerTheme === "dark" ? "#333" : "#aaa"}
+        sectionSize={1}
+        sectionThickness={0.8}
+        sectionColor={viewerTheme === "dark" ? "#555" : "#888"}
+        fadeDistance={120}
         fadeStrength={1}
         followCamera={false}
         infiniteGrid
       />
 
       <OrbitControls makeDefault />
+
+      <GizmoHelper alignment="bottom-left" margin={[60, 60]}>
+        <GizmoViewport
+          axisColors={["#ff4444", "#44bb44", "#4499ff"]}
+          labelColor="white"
+        />
+      </GizmoHelper>
     </Canvas>
   );
 }

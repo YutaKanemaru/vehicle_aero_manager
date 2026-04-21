@@ -652,6 +652,23 @@ export interface paths {
         patch: operations["update_case_api_v1_cases__case_id__patch"];
         trace?: never;
     };
+    "/api/v1/cases/{case_id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Duplicate Case */
+        post: operations["duplicate_case_api_v1_cases__case_id__duplicate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cases/{case_id}/runs/": {
         parameters: {
             query?: never;
@@ -1128,10 +1145,22 @@ export interface components {
             /** Map Id */
             map_id?: string | null;
         };
+        /** CaseDuplicateRequest */
+        CaseDuplicateRequest: {
+            /** Name */
+            name: string;
+            /** Description */
+            description?: string | null;
+        };
         /** CaseResponse */
         CaseResponse: {
             /** Id */
             id: string;
+            /**
+             * Case Number
+             * @default
+             */
+            case_number: string;
             /** Name */
             name: string;
             /** Description */
@@ -1159,6 +1188,21 @@ export interface components {
              * @default 0
              */
             run_count: number;
+            /**
+             * Template Name
+             * @default
+             */
+            template_name: string;
+            /**
+             * Assembly Name
+             * @default
+             */
+            assembly_name: string;
+            /**
+             * Map Name
+             * @default
+             */
+            map_name: string;
         };
         /** CaseUpdate */
         CaseUpdate: {
@@ -2386,6 +2430,11 @@ export interface components {
         RunResponse: {
             /** Id */
             id: string;
+            /**
+             * Run Number
+             * @default
+             */
+            run_number: string;
             /** Name */
             name: string;
             /** Case Id */
@@ -2415,6 +2464,21 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Condition Name
+             * @default
+             */
+            condition_name: string;
+            /**
+             * Condition Velocity
+             * @default 0
+             */
+            condition_velocity: number;
+            /**
+             * Condition Yaw
+             * @default 0
+             */
+            condition_yaw: number;
         };
         /**
          * SectionCutConfig
@@ -4771,7 +4835,10 @@ export interface operations {
     };
     create_case_api_v1_cases__post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Auto-create Runs for all Conditions in the map */
+                with_runs?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4879,6 +4946,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    duplicate_case_api_v1_cases__case_id__duplicate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseDuplicateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

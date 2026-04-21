@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { runsApi, conditionsApi } from "../../api/configurations";
-import type { RunResponse } from "../../api/configurations";
+import type { RunResponse, CaseResponse } from "../../api/configurations";
 import { casesApi } from "../../api/configurations";
 import { DiffView } from "./DiffView";
 
@@ -29,9 +29,10 @@ const STATUS_COLOR: Record<string, string> = {
 
 interface Props {
   caseId: string;
+  case?: CaseResponse;  // Pre-fetched case data from parent (avoids extra query)
 }
 
-export function RunList({ caseId }: Props) {
+export function RunList({ caseId, case: caseFromParent }: Props) {
   const queryClient = useQueryClient();
   const [diffA, setDiffA] = useState<string | null>(null);
   const [diffB, setDiffB] = useState<string | null>(null);
@@ -42,9 +43,12 @@ export function RunList({ caseId }: Props) {
   const { data: caseData } = useQuery({
     queryKey: ["case", caseId],
     queryFn: () => casesApi.get(caseId),
+    // Skip fetching if parent provided the case already
+    enabled: !caseFromParent,
+    initialData: caseFromParent,
   });
 
-  const mapId = caseData?.map_id ?? null;
+  const mapId = caseFromParent?.map_id ?? caseData?.map_id ?? null;
 
   const { data: conditions = [] } = useQuery({
     queryKey: ["conditions", mapId],
@@ -177,6 +181,7 @@ export function RunList({ caseId }: Props) {
         <Table striped highlightOnHover>
           <Table.Thead>
             <Table.Tr>
+              <Table.Th style={{ width: 80 }}>#</Table.Th>
               <Table.Th>Name</Table.Th>
               <Table.Th>Condition</Table.Th>
               <Table.Th>Status</Table.Th>
@@ -185,12 +190,20 @@ export function RunList({ caseId }: Props) {
           </Table.Thead>
           <Table.Tbody>
             {runs.map((run) => {
-              const cond = conditions.find((c) => c.id === run.condition_id);
-              const condLabel = cond
-                ? `${cond.name} (${cond.inflow_velocity} m/s)`
-                : run.condition_id;
+              // Use enriched fields from backend if available, otherwise fall back to conditions lookup
+              const condLabel = run.condition_name
+                ? `${run.condition_name} — ${run.condition_velocity} m/s, yaw ${run.condition_yaw}°`
+                : (() => {
+                    const cond = conditions.find((c) => c.id === run.condition_id);
+                    return cond ? `${cond.name} (${cond.inflow_velocity} m/s)` : run.condition_id;
+                  })();
               return (
                 <Table.Tr key={run.id}>
+                  <Table.Td>
+                    <Badge variant="outline" color="gray" size="sm">
+                      {run.run_number || "—"}
+                    </Badge>
+                  </Table.Td>
                   <Table.Td>{run.name}</Table.Td>
                   <Table.Td>
                     <Text size="sm" c="dimmed">

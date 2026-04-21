@@ -11,8 +11,11 @@ import {
   Button,
   Badge,
   Table,
+  Group,
+  ActionIcon,
+  Tooltip,
 } from "@mantine/core";
-import { IconArrowDown } from "@tabler/icons-react";
+import { IconArrowDown, IconSun, IconMoon, IconCamera } from "@tabler/icons-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { assembliesApi, type AssemblyResponse, type GeometryResponse } from "../../api/geometries";
@@ -37,6 +40,8 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
     selectedConditionMapId, setSelectedConditionMapId,
     selectedConditionId, setSelectedConditionId,
     landmarksGlbUrl, setLandmarksGlbUrl,
+    setCameraPreset,
+    viewerTheme, setViewerTheme,
   } = useViewerStore();
   const addJob = useJobsStore((s) => s.addJob);
   const updateJob = useJobsStore((s) => s.updateJob);
@@ -107,7 +112,7 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
       return transformApi.transform(selectedGeometryId, {
         name,
         condition_id: selectedCondition.id,
-        ride_height: selectedCondition.ride_height ?? { enabled: false },
+        ride_height: selectedCondition.ride_height ?? { enabled: false, adjust_body_wheel_separately: false, use_original_wheel_position: false },
         yaw_angle_deg: selectedCondition.yaw_angle,
         yaw_config: selectedCondition.yaw_config ?? { center_mode: "wheel_center", center_x: 0, center_y: 0 },
       });
@@ -165,7 +170,6 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
   }, [selectedCaseId, selectedRunId, overlays.wheelAxes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 選択中アセンブリのジオメトリ一覧から全パーツ名を収集
-  const selectedAssembly = assemblies.find((a) => a.id === selectedAssemblyId);
   const allParts = useMemo(() => {
     return geometries.flatMap(
       (g) => (g.analysis_result as { parts?: string[] } | null)?.parts ?? []
@@ -322,11 +326,58 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
         />
         <Switch
           size="xs"
+          label="Transform landmarks"
+          checked={overlays.landmarks}
+          onChange={(e) => setOverlay("landmarks", e.currentTarget.checked)}
+          disabled={!landmarksGlbUrl}
+        />
+        <Switch
+          size="xs"
+          label="Probe point spheres"
+          checked={overlays.probeSpheres}
+          onChange={(e) => setOverlay("probeSpheres", e.currentTarget.checked)}
+        />
+        <Switch
+          size="xs"
+          label="Partial volume boxes"
+          checked={overlays.partialVolumes}
+          onChange={(e) => setOverlay("partialVolumes", e.currentTarget.checked)}
+        />
+        <Switch
+          size="xs"
           label="Ground plane"
           checked={overlays.groundPlane}
           onChange={(e) => setOverlay("groundPlane", e.currentTarget.checked)}
         />
       </Stack>
+
+      <Divider label="Camera" labelPosition="left" />
+
+      <Group gap="xs" wrap="wrap">
+        {(["iso", "front", "rear", "side", "top"] as const).map((preset) => (
+          <Tooltip key={preset} label={`${preset} view`}>
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<IconCamera size={12} />}
+              onClick={() => setCameraPreset(preset)}
+            >
+              {preset}
+            </Button>
+          </Tooltip>
+        ))}
+      </Group>
+
+      <Group gap="xs" align="center">
+        <Text size="xs" c="dimmed">Background</Text>
+        <ActionIcon
+          size="sm"
+          variant="light"
+          onClick={() => setViewerTheme(viewerTheme === "dark" ? "light" : "dark")}
+        >
+          {viewerTheme === "dark" ? <IconSun size={14} /> : <IconMoon size={14} />}
+        </ActionIcon>
+      </Group>
 
       <Divider label="Parts" labelPosition="left" />
 
