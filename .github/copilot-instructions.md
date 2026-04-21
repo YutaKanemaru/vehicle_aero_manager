@@ -80,6 +80,8 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | 2A-3 | `SceneCanvas`, `OverlayObjects`, `PartListPanel` components | ✅ Complete |
 | 2A-4 | `TemplateBuilderPage` (`/template-builder`) + AppShell nav | ✅ Complete |
 | 2A-5 | Ride Height / Yaw Transform — `System` model + `ride_height_service.py` + Template Builder UI | ✅ Complete |
+| 2A-6 | 3D viewer enhancements: 3-panel layout, Ortho/Persp, FlatShading, Edges, ContextMenu, Probe/PV/SC overlays | ✅ Complete |
+| 2A-7 | Case/Run UX: `case_number`/`run_number`, Duplicate, `CaseCreateModal` Copy tab, `CaseCompareModal`, `Run.stl_path` | ✅ Complete |
 | 2B | Post-processing EnSight viewer (PyVista backend) | 🔲 Planned |
 
 ---
@@ -110,6 +112,11 @@ vehicle_aero_manager/
 │       ├── api/                 # API client — generated schema.d.ts + templateDefaults.ts + typed wrappers
 │       │   ├── systems.ts         # systemsApi + transformApi (Phase 2A-5)
 │       ├── components/          # UI components
+│       │   ├── cases/
+│       │   │   ├── CaseList.tsx             # table with compare-mode toggle
+│       │   │   ├── CaseCreateModal.tsx      # New Case tab + Copy from Case tab
+│       │   │   ├── CaseDuplicateModal.tsx
+│       │   │   └── CaseCompareModal.tsx     # 2-column run list comparison
 │       │   ├── maps/
 │       │   │   ├── MapList.tsx
 │       │   │   ├── MapCreateModal.tsx
@@ -1067,6 +1074,14 @@ class ConditionCreate(BaseModel):
     ride_height: RideHeightConditionConfig = Field(default_factory=RideHeightConditionConfig)
     yaw_config: YawConditionConfig = Field(default_factory=YawConditionConfig)
 
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        """Strip whitespace; reject empty string."""
+        if not v.strip():
+            raise ValueError("Condition name must not be empty")
+        return v.strip()
+
 class ConditionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str; map_id: str; name: str; inflow_velocity: float; yaw_angle: float
@@ -1096,8 +1111,9 @@ class SystemResponse(BaseModel):
     created_by: str; created_at: datetime
 ```
 
-- `CaseCreate`, `CaseUpdate`, `CaseResponse` (includes `run_count`)
-- `RunCreate`, `RunResponse` (includes `xml_path`, `status`)
+- `CaseCreate`, `CaseUpdate`, `CaseResponse` (includes `run_count`, `case_number`, `template_name`, `assembly_name`, `map_name`)
+- `CaseDuplicateRequest`: `{ name, description }` — copies active template/assembly/map from source case
+- `RunCreate`, `RunResponse` (includes `xml_path`, `stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`)
 - `DiffResult`: list of changed fields between two Runs
 
 **Service** (`app/services/configuration_service.py`)
@@ -1105,7 +1121,9 @@ class SystemResponse(BaseModel):
 - `list_conditions(map_id)`, `get_condition`, `create_condition`, `update_condition`, `delete_condition` — JSON fields serialized via `json.dumps(data.ride_height.model_dump())`
 - `list_cases`, `get_case`, `create_case`, `update_case`, `delete_case`
 - `create_run(case_id, condition_id)`, `list_runs(case_id)`
-- `generate_xml(run_id, db, background_tasks)` — background task: resolves Condition → `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml`; then `build_probe_csv_files()` writes one CSV per probe_file_instance beside the XML → update `run.status`
+- `generate_xml(run_id, db, background_tasks)` — background task: resolves Condition → `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml`; then `build_probe_csv_files()` writes one CSV per probe_file_instance beside the XML; copies first STL to `data/runs/{run_id}/input.stl` and stores path in `run.stl_path` → update `run.status`
+- `duplicate_case(db, source_case_id, data: CaseDuplicateRequest, current_user)` — copies Case row (same template/assembly/map); does NOT copy Runs
+- `create_case_with_runs(db, case_data, condition_ids, current_user)` — creates Case + one Run per Condition
 - `get_axes_glb(db, case_id, run_id) -> bytes`: resolves Run → Condition → Assembly → `viewer_service.build_axes_glb()`; raises 400 on ValueError
 - `get_diff(run_id_a, run_id_b, db)` → `DiffResult`
 - Permission check: `resource.created_by == current_user.id OR current_user.is_admin`
@@ -1133,7 +1151,9 @@ class SystemResponse(BaseModel):
 | `POST` | `/cases/{id}/runs/` | Create run (condition_id required) |
 | `POST` | `/cases/{id}/runs/{rid}/generate` | Trigger XML generation (background task) |
 | `GET` | `/cases/{id}/runs/{rid}/download` | Download generated XML |
+| `GET` | `/cases/{id}/runs/{rid}/download-stl` | Download input STL used for XML generation |
 | `GET` | `/cases/{id}/runs/{rid}/axes-glb` | On-demand axis-visualisation GLB |
+| `POST` | `/cases/{id}/duplicate` | Duplicate a Case (new name/description, same template/assembly/map) |
 | `GET` | `/runs/diff?a={rid}&b={rid}` | Diff two runs' settings |
 
 **API Endpoints** (`app/api/v1/systems.py`):
@@ -1155,6 +1175,7 @@ class SystemResponse(BaseModel):
 **Migrations**:
 - `4a08074381f4_add_condition_maps_conditions_refactor_` — ConditionMap + Condition tables; Run.condition_id replaces configuration_id
 - `8949ff1689b0_add_ride_height_yaw_to_conditions_and_` — systems table; `ride_height_json` + `yaw_config_json` on conditions
+- `ff0265eeeb01_add_stl_path_to_runs` — adds nullable `stl_path` Text column to `runs`
 
 ### Template Settings Extensions (`app/schemas/template_settings.py`)
 
@@ -1484,8 +1505,10 @@ turbulence_generator:
 - `src/components/maps/ConditionFormModal.tsx` — create/edit condition; two Accordions:
   - **Ride Height Transform**: enabled switch → target front/rear wheel axis heights → adjust separately switch → use original position switch → per-wheel RH targets
   - **Yaw Center Configuration**: `center_mode` Select (`wheel_center` / `user_input`) → center X/Y inputs when `user_input`
-- `src/components/cases/CaseList.tsx` — table with Template/Assembly badges, Run button
-- `src/components/cases/CaseCreateModal.tsx` — Template + Assembly selector
+- `src/components/cases/CaseList.tsx` — table with `case_number` badge, Template/Assembly/Map badges, Run button, Duplicate button; **Compare mode**: toggle button activates row-selection mode (highlight up to 2 rows), "Compare" button opens `CaseCompareModal`
+- `src/components/cases/CaseCreateModal.tsx` — Two-tab modal: **New Case** (Template + Assembly + optional Map + `withRuns` Switch) / **Copy from Case** (source Case select + auto-fill name → `casesApi.duplicate()`)
+- `src/components/cases/CaseDuplicateModal.tsx` — standalone duplicate form (also opened from Duplicate icon in CaseList row)
+- `src/components/cases/CaseCompareModal.tsx` — 2-column `Grid` showing `CaseColumn` per selected case; each column: case info badges + scrollable Run list table (`run_number` / `condition_name` / velocity / yaw / status badge)
 - `src/components/runs/RunList.tsx` — status badge, XML download link, Diff selector
 - `src/components/runs/DiffView.tsx` — side-by-side or diff-list view of two Run settings
 - Navigation: `AppShell.tsx` adds `Condition Maps` (IconList) and `Cases` (IconCar)
@@ -1689,22 +1712,29 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 
 ### Frontend
 
-**`src/stores/viewerStore.ts`** (new — Zustand)
+**`src/stores/viewerStore.ts`** (Zustand)
 ```typescript
 partStates: Record<string, { visible, color, opacity }>  // per-part 3D state
 searchQuery: string
 searchMode: "include" | "exclude"
-overlays: { domainBox, refinementBoxes, wheelAxes, groundPlane }
+overlays: {
+  domainBox, refinementBoxes, wheelAxes, groundPlane,
+  landmarks, probeSpheres, partialVolumes, sectionCuts  // all boolean
+}
 selectedAssemblyId: string | null
 selectedTemplateId: string | null
 selectedCaseId: string | null        // for axis GLB (Case that owns the Run)
 selectedRunId: string | null         // for axis GLB fetch
 axesGlbUrl: string | null            // blob URL of current axes GLB; null = no axes overlay
 ratio: 0.05                          // decimation ratio used for GLB fetch
-// Phase 2A-5 additions:
 selectedConditionMapId: string | null
 selectedConditionId: string | null
 landmarksGlbUrl: string | null       // blob URL for transform landmarks overlay
+cameraProjection: "perspective" | "orthographic"  // toggled by floating toolbar
+cameraPreset: string | null          // trigger: "top" | "front" | "side" | "iso" | "rear" | null
+viewerTheme: "dark" | "light"
+flatShading: boolean                 // default false; MeshStandardMaterial.flatShading
+showEdges: boolean                   // default false; THREE.EdgesGeometry overlay
 ```
 
 **`src/api/systems.ts`** (new)
@@ -1732,43 +1762,51 @@ landmarksGlbUrl: string | null       // blob URL for transform landmarks overlay
 
 **`src/components/geometries/GeometryList.tsx`** — violet badge + "Building 3D viewer cache..." text + refetchInterval triggers on `ready-decimating`
 
-**`src/components/viewer/SceneCanvas.tsx`** (new)
-- R3F `<Canvas>` + `<OrbitControls>` + lights + `<Grid>`
-- `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → `scene.traverse()` applies `partStates` (visible / color / opacity) to each `Mesh` node
+**`src/components/viewer/SceneCanvas.tsx`**
+- Outer `<div>` wrapper (holds `ContextMenuPanel` + `<Canvas>`)
+- R3F `<Canvas>` + `<OrbitControls makeDefault>` + lights + `<Grid>`
+- `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → `scene.traverse()` applies `partStates` (visible / color / opacity / flatShading) to each `Mesh`; `showEdges` adds/removes `THREE.LineSegments(EdgesGeometry)` children tagged `userData.isEdgeLine`
 - `<CameraFitter>`: `Box3.setFromObject(scene)` → positions camera to fit all geometry on first load
-- `<AxesGLBModel>`: loads axes GLB via `useGLTF(blobUrl)` → renders as-is (no part-visibility management); rendered only when `axesGlbUrl && overlays.wheelAxes`
+- `<AxesGLBModel>`: loads axes GLB → renders as-is; shown when `axesGlbUrl && overlays.wheelAxes`
+- `<LandmarksGLBModel>`: loads landmarks GLB → renders as-is; shown when `landmarksGlbUrl && overlays.landmarks`
+- `<CameraPresetController>`: watches `cameraPreset` store value → repositions camera using `Box3` + preset offset; clears preset after apply
+- `<CameraTypeController>`: watches `cameraProjection` → swaps `PerspectiveCamera` ↔ `OrthographicCamera` in R3F using `useThree().set()`; copies position/quaternion on switch
+- `<PointerEventHandler>`: attaches `dblclick` (Raycaster → `controls.target.copy(hitPoint)` to change orbit pivot) and `contextmenu` (Raycaster → identifies part name → calls `onContextMenu(x, y, partName)`) on `gl.domElement`
+- `<ContextMenuPanel>`: fixed-position React DOM div with "Hide" (part visible=false) and "Reset all" actions; closes on outside click via `useEffect` document listener
+- `<GizmoHelper>` + `<GizmoViewport>` at bottom-left
 - Accepts array of `GeometryResponse` (Assembly support) — fetches and overlays all GLBs in parallel
 - Shows `<Loader>` while fetching, error text on failure, placeholder text when no assembly selected
 
-**`src/components/viewer/OverlayObjects.tsx`** (new)
+**`src/components/viewer/OverlayObjects.tsx`**
 - Renders Three.js overlays from `templateSettings` + `vehicleBbox`:
   - **Domain Box** (`overlays.domainBox`): `setup.domain_bounding_box` × vehicle bbox → white wireframe `<boxGeometry>`
   - **Refinement Boxes** (`overlays.refinementBoxes`): `setup.meshing.box_refinement` — per-level color (RL1=light blue → RL7=red) wireframe boxes
   - **Ground Plane** (`overlays.groundPlane`): semi-transparent green plane at `z = vehicle_bbox.z_min`
+  - **Probe Spheres** (`overlays.probeSpheres`): `output.probe_files[].points[]` → yellow sphere (r=0.04) per point
+  - **Partial Volume Boxes** (`overlays.partialVolumes`): `output.partial_volumes[]` → orange wireframe boxes; `bbox_mode` selects coordinates: `user_defined` (bbox values as vehicle-relative multipliers), `from_meshing_box` (looks up matching box_refinement key), fallback = vehicle bbox
+  - **Section Cuts** (`overlays.sectionCuts`): `output.section_cuts[]` → magenta semi-transparent `PlaneGeometry` (10×10 m); quaternion computed via `THREE.Quaternion.setFromUnitVectors(Z_UP, normal)`
 - `vehicleBbox` is union of all geometries in the assembly (computed in `TemplateBuilderPage`)
 
-**`src/components/viewer/PartListPanel.tsx`** (new)
-- Full part list from `analysis_result.parts`, grouped with count badge
+**`src/components/viewer/PartListPanel.tsx`**
+- Full part list from `analysis_result.parts`, with count badge
 - Per-part: eye toggle / `ColorInput` / opacity `Slider`
 - Search bar + `SegmentedControl` (Include / Exclude) — filters visible list
-- "Toggle all filtered" + "Reset all" toolbar buttons
+- Toolbar buttons: **Toggle all filtered** (eye/eye-off) · **Show Only** (`IconEyeCheck` — hide everything except filtered parts) · **Invert** (`IconArrowsExchange` — flip visibility of all parts) · **Reset all** (`IconRefresh`)
 
-**`src/components/viewer/TemplateBuilderPage.tsx`** (new)
+**`src/components/viewer/TemplateBuilderPage.tsx`**
 - Route: `/template-builder`
-- Layout: fixed 300px left panel + flex-1 right `<SceneCanvas>`
-- Left panel sections:
+- **3-column layout**: 275px `ControlPanel` | 255px `PartListPanel` | flex-1 `<SceneCanvas>`
+- **`ViewerToolbar`** (floating, top-right of 3D panel, `position:absolute`): `SegmentedControl` Persp/Ortho → `setCameraProjection()` · `Switch` Flat → `setFlatShading()` · `Switch` Edges → `setShowEdges()`
+- `ControlPanel` sections (275px left, scrollable):
   1. Assembly `Select` → Template `Select`
-  2. **Axis Visualisation (Run)** — Case `Select` (filtered to selected Assembly's cases) + Run `Select` (only `status=ready` runs shown)
-     - `useEffect` on `[selectedCaseId, selectedRunId, overlays.wheelAxes]`: revokes previous blob URL, fetches `runsApi.getAxesGlbUrl()` when all three are set, stores in `viewerStore.axesGlbUrl`
-     - Case list cleared / run cleared when Assembly selection changes
-  3. **Ride Height Transform** — Condition Map `Select` → Condition `Select` → Geometry `Select` (only `status=ready` shown, disabled when `ride_height.enabled=false`) → "Apply Ride Height Transform" `Button`
-     - On success: `addJob(result.geometry_id, ...)` + `updateJob(..., "analyzing")` to Jobs Drawer; fetches `systemsApi.getLandmarksGlbUrl(result.system_id)` → `landmarksGlbUrl`
-     - Verification table: front/rear error in mm with 🟢/🟡 colour coding (< 1 mm = teal, else orange)
-  4. Overlay `Switch` group — `wheelAxes` switch disabled when no Run selected
-  5. `<PartListPanel>`
+  2. **Axis Visualisation (Run)** — Case `Select` (filtered to selected Assembly's cases) + Run `Select` (only `status=ready` runs shown); `useEffect` revokes/fetches axes GLB
+  3. **Ride Height Transform** — Condition Map → Condition → Geometry selects → "Apply Ride Height Transform" `Button`; verification table (front/rear error mm, teal/orange)
+  4. **Overlays** — `Switch` group (domainBox / refinementBoxes / wheelAxes / landmarks / probeSpheres / partialVolumes / groundPlane)
+  5. **Camera** — preset buttons (iso / front / rear / side / top) + theme toggle
+- `PartListPanel` receives `allParts` (all part names from assembly geometries)
+- `ControlPanel` receives `geometries` prop
 - Template overlay: fetches `listVersions`, finds active version, passes `settings` to `<OverlayObjects>`
 - `vehicleBbox`: union of `analysis_result.vehicle_bbox` across all geometries in selected assembly
-- `ControlPanel` receives `geometries` prop (passed from `TemplateBuilderPage`)
 
 **`src/components/geometries/GeometryUploadModal.tsx`** — Decimation Ratio Slider:
 - `form.initialValues.decimationRatio: 0.05`
