@@ -84,6 +84,7 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | 2A-7 | Case/Run UX: `case_number`/`run_number`, Duplicate, `CaseCreateModal` Copy tab, `CaseCompareModal`, `Run.stl_path` | ✅ Complete |
 | 2A-8 | Launch Assembly Builder button in TemplateBuilderPage — `IconPackage` ActionIcon beside Assembly Select opens `AssemblyGeometriesDrawer`; `handleBuilderClose` double-invalidates queries for live 3D refresh | ✅ Complete |
 | 2A-9 | Folder structure + sort for all 5 list views — `TemplateFolder`, `ConditionMapFolder`, `CaseFolder` DB tables + migration; folder CRUD endpoints (`/folders/` routes before `/{id}`); `useSortedItems` hook (name/created_at, asc/desc); `FolderSection` (Paper+Collapse) + `SortTh` headers in TemplateList, MapList, CaseList (new folders) + sort-only in existing GeometryList and AssemblyList | ✅ Complete |
+| 2A-10 | `AssemblyGeometriesDrawer` redesign — `SegmentedControl` tab switching (Current / Add geometries); Add panel shows folder-grouped collapsible `FolderBlock` sections (Paper + Collapse) with per-folder select-all checkbox; flat fallback when no folders exist; fetches `foldersApi.list()` + `geometriesApi.list()` on open | ✅ Complete |
 | 2B | Post-processing EnSight viewer (PyVista backend) | 🔲 Planned |
 
 ---
@@ -918,7 +919,7 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
 | `GeometryLinkModal.tsx` | Link only登録フォーム: name, description, file_path (server absolute path), folder select. JSON POST を使用（XHR不要）。成功後は uploadと同様に job トラッカーに登録。 |
 | `AssemblyList.tsx` | Folder-hierarchy view: assemblies grouped into collapsible `FolderSection` panels (Paper + Collapse). Uncategorized assemblies shown last. Each assembly row has manage-geometries action + move-to-folder Popover. Header has "New Folder" (IconFolderPlus) + "New Assembly" buttons. Folder delete: `delete_assembly_folder` sets all children to uncategorized. |
 | `AssemblyCreateModal.tsx` | Create assembly with optional template link (dropdown from templates list) + optional folder select (`assemblyFoldersApi.list()`) |
-| `AssemblyGeometriesDrawer.tsx` | Right-side drawer: shows current geometries (with remove button), lists available `ready` geometries to add (multi-checkbox select) |
+| `AssemblyGeometriesDrawer.tsx` | Right-side drawer with `SegmentedControl` tab switching: **Current** tab — geometry rows with status badge + Remove button; **Add geometries** tab — geometries grouped into collapsible `FolderBlock` sections (Paper + Collapse, open by default), each folder header has select-all checkbox (with indeterminate state) + count badge + chevron toggle; uncategorized geometries shown as an "Uncategorized" folder when other folders exist, or as a plain flat list when no folders are defined; footer sticky "Add selected (N)" button; fetches `foldersApi.list()` + `geometriesApi.list()` (enabled only when `opened`) |
 
 **Navigation**: `AppShell.tsx` nav includes `Geometries` (IconBox) and `Assemblies` (IconStack2).
 
