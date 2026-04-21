@@ -426,6 +426,56 @@ def classify_wheels(
     return {k: v for k, v in result.items() if v is not None}
 
 
+def _assign_non_tire_wheel_parts(
+    part_info: dict,
+    target_names: "TargetNames",
+    wheel_kin_map: dict[str, dict],
+) -> dict[str, list[str]]:
+    """
+    tn.wheel パターンにマッチする全パーツのうち、明示タイヤPIDを除いた部品を
+    各コーナーの車軸中心（wheel_kin_map）とのユークリッド距離で最近傍コーナーに振り分ける。
+
+    Returns: {"fr_lh": ["Rim_FL", "Spokes_FL", ...], "fr_rh": [...], ...}
+    """
+    import math
+
+    tire_pids = {
+        target_names.wheel_tire_fr_lh,
+        target_names.wheel_tire_fr_rh,
+        target_names.wheel_tire_rr_lh,
+        target_names.wheel_tire_rr_rh,
+    } - {""}  # 未設定の空文字を除外
+
+    # ホイールパターンにマッチ & タイヤPID除外 & OSM/VREV除外
+    candidate_parts = {
+        name: info for name, info in part_info.items()
+        if _matches_any(name, target_names.wheel)
+        and name not in tire_pids
+        and not _matches_any(name, ["VREV_", "Overset"])
+    }
+
+    result: dict[str, list[str]] = {"fr_lh": [], "fr_rh": [], "rr_lh": [], "rr_rh": []}
+
+    for name, info in candidate_parts.items():
+        cx, cy, cz = info["centroid"]
+        best_key = None
+        best_dist = float("inf")
+        for key, kin in wheel_kin_map.items():
+            kc = kin["center"]
+            dist = math.sqrt(
+                (cx - kc["x_pos"]) ** 2
+                + (cy - kc["y_pos"]) ** 2
+                + (cz - kc["z_pos"]) ** 2
+            )
+            if dist < best_dist:
+                best_dist = dist
+                best_key = key
+        if best_key:
+            result[best_key].append(name)
+
+    return result
+
+
 def compute_wheel_kinematics(
     part_info: dict,
     inflow_velocity: float,
@@ -1113,20 +1163,31 @@ def assemble_ufx_solver_deck(
         "rr_lh": tn.wheel_tire_rr_lh, "rr_rh": tn.wheel_tire_rr_rh,
     }
     if is_aero and rotate_wheels:
+        non_tire_map = _assign_non_tire_wheel_parts(part_info, tn, wheel_kin_map)
+        roughness_val = tn.tire_roughness if tn.tire_roughness > 0 else None
         for key, kin in wheel_kin_map.items():
             tire_pid = tire_pid_map.get(key, "")
+            bc = FluidBCRotating(
+                type="rotating",
+                rpm=kin["rpm"],
+                center=XYZPos(**kin["center"]),
+                axis=XYZDir(**kin["axis"]),
+            )
+            # ① タイヤ: roughness 付き
             if tire_pid:
-                roughness = tn.tire_roughness if tn.tire_roughness > 0 else None
+                wall_instances.append(WallInstance(
+                    name=f"Wheel_{key.upper()}_Tire",
+                    parts=[tire_pid],
+                    roughness=roughness_val,
+                    fluid_bc_settings=bc,
+                ))
+            # ② リム・スポーク等: roughness 無し、複数パーツ
+            non_tire_parts = non_tire_map.get(key, [])
+            if non_tire_parts:
                 wall_instances.append(WallInstance(
                     name=f"Wheel_{key.upper()}",
-                    parts=[tire_pid],
-                    roughness=roughness,
-                    fluid_bc_settings=FluidBCRotating(
-                        type="rotating",
-                        rpm=kin["rpm"],
-                        center=XYZPos(**kin["center"]),
-                        axis=XYZDir(**kin["axis"]),
-                    ),
+                    parts=non_tire_parts,
+                    fluid_bc_settings=bc,
                 ))
     else:
         # ghn / fan_noise / aero static: wheel = static BC
