@@ -8,58 +8,38 @@ import {
   Tooltip,
   Badge,
   Drawer,
-  TextInput,
-  NumberInput,
 } from "@mantine/core";
 import {
   IconPlus,
   IconTrash,
   IconRefresh,
   IconSettings,
+  IconPencil,
 } from "@tabler/icons-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { useDisclosure } from "@mantine/hooks";
-import { useForm } from "@mantine/form";
 import {
   mapsApi,
   conditionsApi,
   type ConditionMapResponse,
-  type ConditionCreate,
+  type ConditionResponse,
 } from "../../api/configurations";
 import { useAuthStore } from "../../stores/auth";
 import { MapCreateModal } from "./MapCreateModal";
+import { ConditionFormModal } from "./ConditionFormModal";
 
 // ── Condition form inside the drawer ─────────────────────────────────────────
 
 function ConditionSection({ map }: { map: ConditionMapResponse }) {
   const queryClient = useQueryClient();
+  const [addOpened, { open: openAdd, close: closeAdd }] = useDisclosure(false);
+  const [editCond, setEditCond] = useState<ConditionResponse | null>(null);
 
   const { data: conditions = [] } = useQuery({
     queryKey: ["conditions", map.id],
     queryFn: () => conditionsApi.list(map.id),
-  });
-
-  const form = useForm<ConditionCreate>({
-    initialValues: { name: "", inflow_velocity: 38.88, yaw_angle: 0 },
-    validate: {
-      name: (v) => (v.trim() ? null : "Required"),
-      inflow_velocity: (v) => (v > 0 ? null : "Must be > 0"),
-    },
-  });
-
-  const addMutation = useMutation({
-    mutationFn: (data: ConditionCreate) =>
-      conditionsApi.create(map.id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["conditions", map.id] });
-      queryClient.invalidateQueries({ queryKey: ["maps"] });
-      notifications.show({ message: "Condition added", color: "green" });
-      form.reset();
-    },
-    onError: (e: Error) =>
-      notifications.show({ message: e.message, color: "red" }),
   });
 
   const deleteMutation = useMutation({
@@ -75,7 +55,6 @@ function ConditionSection({ map }: { map: ConditionMapResponse }) {
 
   return (
     <Stack gap="md">
-      {/* Existing conditions */}
       {conditions.length === 0 ? (
         <Text c="dimmed" size="sm">No conditions yet.</Text>
       ) : (
@@ -85,6 +64,7 @@ function ConditionSection({ map }: { map: ConditionMapResponse }) {
               <Table.Th>Name</Table.Th>
               <Table.Th>Velocity (m/s)</Table.Th>
               <Table.Th>Yaw (deg)</Table.Th>
+              <Table.Th>Ride Height</Table.Th>
               <Table.Th />
             </Table.Tr>
           </Table.Thead>
@@ -95,18 +75,35 @@ function ConditionSection({ map }: { map: ConditionMapResponse }) {
                 <Table.Td>{c.inflow_velocity}</Table.Td>
                 <Table.Td>{c.yaw_angle}</Table.Td>
                 <Table.Td>
-                  <ActionIcon
-                    size="sm"
-                    color="red"
-                    variant="subtle"
-                    loading={deleteMutation.isPending && deleteMutation.variables === c.id}
-                    onClick={() => {
-                      if (confirm(`Delete condition "${c.name}"?`))
-                        deleteMutation.mutate(c.id);
-                    }}
-                  >
-                    <IconTrash size={12} />
-                  </ActionIcon>
+                  {c.ride_height?.enabled ? (
+                    <Badge color="teal" variant="light" size="sm">Enabled</Badge>
+                  ) : (
+                    <Text size="xs" c="dimmed">—</Text>
+                  )}
+                </Table.Td>
+                <Table.Td>
+                  <Group gap={4} wrap="nowrap">
+                    <ActionIcon
+                      size="sm"
+                      color="blue"
+                      variant="subtle"
+                      onClick={() => setEditCond(c)}
+                    >
+                      <IconPencil size={12} />
+                    </ActionIcon>
+                    <ActionIcon
+                      size="sm"
+                      color="red"
+                      variant="subtle"
+                      loading={deleteMutation.isPending && deleteMutation.variables === c.id}
+                      onClick={() => {
+                        if (confirm(`Delete condition "${c.name}"?`))
+                          deleteMutation.mutate(c.id);
+                      }}
+                    >
+                      <IconTrash size={12} />
+                    </ActionIcon>
+                  </Group>
                 </Table.Td>
               </Table.Tr>
             ))}
@@ -114,38 +111,32 @@ function ConditionSection({ map }: { map: ConditionMapResponse }) {
         </Table>
       )}
 
-      {/* Add condition form */}
-      <Text fw={500} size="sm">Add Condition</Text>
-      <form onSubmit={form.onSubmit((v) => addMutation.mutate(v))}>
-        <Group align="flex-end" gap="sm">
-          <TextInput
-            label="Name"
-            placeholder="e.g. 140kph_yaw0"
-            required
-            w={160}
-            {...form.getInputProps("name")}
-          />
-          <NumberInput
-            label="Velocity (m/s)"
-            required
-            min={0.1}
-            step={0.01}
-            decimalScale={2}
-            w={130}
-            {...form.getInputProps("inflow_velocity")}
-          />
-          <NumberInput
-            label="Yaw (deg)"
-            step={0.5}
-            decimalScale={1}
-            w={110}
-            {...form.getInputProps("yaw_angle")}
-          />
-          <Button type="submit" size="sm" loading={addMutation.isPending}>
-            Add
-          </Button>
-        </Group>
-      </form>
+      <Group>
+        <Button
+          size="sm"
+          leftSection={<IconPlus size={14} />}
+          onClick={openAdd}
+        >
+          Add Condition
+        </Button>
+      </Group>
+
+      {/* Add modal */}
+      <ConditionFormModal
+        opened={addOpened}
+        onClose={closeAdd}
+        mapId={map.id}
+      />
+
+      {/* Edit modal */}
+      {editCond && (
+        <ConditionFormModal
+          opened={!!editCond}
+          onClose={() => setEditCond(null)}
+          mapId={map.id}
+          condition={editCond}
+        />
+      )}
     </Stack>
   );
 }

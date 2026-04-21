@@ -10,8 +10,10 @@ from app.schemas.geometry import (
     GeometryResponse, GeometryUpdate, GeometryLinkRequest,
     GeometryFolderCreate, GeometryFolderUpdate, GeometryFolderResponse,
 )
+from app.schemas.configuration import TransformRequest
 from app.services import geometry_service
 from app.services import viewer_service
+from app.services import ride_height_service
 
 router = APIRouter()
 
@@ -178,3 +180,59 @@ def get_geometry_glb(
         raise HTTPException(status_code=500, detail=f"GLB generation failed: {e}")
 
     return Response(content=glb_bytes, media_type="model/gltf-binary")
+
+
+# ─── Ride Height / Yaw Transform ─────────────────────────────────────────────
+
+@router.post("/{geometry_id}/transform", status_code=201)
+def transform_geometry(
+    geometry_id: str,
+    data: TransformRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Apply ride height + yaw transform to an STL, producing a new Geometry + System record."""
+
+    geometry = geometry_service.get_geometry(db, geometry_id)
+    if geometry.status != "ready":
+        raise HTTPException(status_code=400, detail="Geometry analysis not complete")
+    if geometry.analysis_result is None:
+        raise HTTPException(status_code=400, detail="Geometry has no analysis result")
+
+    analysis_result = geometry.analysis_result  # already parsed by field_validator
+
+    # Compute transform
+    transform_snapshot = ride_height_service.compute_transform(
+        analysis_result=analysis_result,
+        rh_cfg=data.ride_height,
+        yaw_angle_deg=data.yaw_angle_deg,
+        yaw_cfg=data.yaw_config,
+    )
+
+    # Create System + new Geometry
+    system, geom = ride_height_service.create_system_and_geometry(
+        db=db,
+        source_geometry=geometry,
+        transform_snapshot=transform_snapshot,
+        name=data.name,
+        current_user=current_user,
+        condition_id=data.condition_id,
+        background_tasks=background_tasks,
+    )
+
+    import json
+    snap = None
+    if system.transform_snapshot:
+        try:
+            snap = json.loads(system.transform_snapshot)
+        except Exception:
+            snap = None
+
+    return {
+        "system_id": system.id,
+        "geometry_id": geom.id,
+        "geometry_name": geom.name,
+        "geometry_status": geom.status,
+        "transform_snapshot": snap,
+    }

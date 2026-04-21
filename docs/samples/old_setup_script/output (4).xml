@@ -24,15 +24,17 @@
     </wall_modeling>
   </simulation>
   <geometry>
-    <source_file>Mirrors.stl</source_file>
-    <baffle_parts/>
+    <source_file>aurora_OSM_baffle.stl</source_file>
+    <baffle_parts>
+      <name>Underbody_Shield_Rear_Baffle</name>
+    </baffle_parts>
     <domain_bounding_box>
-      <x_min>-0.1609769999999997</x_min>
-      <x_max>2.9283189999999992</x_max>
-      <y_min>-26.10412</y_min>
-      <y_max>26.10413</y_max>
-      <z_min>1.01765</z_min>
-      <z_max>3.7458400000000003</z_max>
+      <x_min>-25.733154000000003</x_min>
+      <x_max>53.70915000000001</x_max>
+      <y_min>-26.6925</y_min>
+      <y_max>26.6925</y_max>
+      <z_min>-0.0007299999999999997</z_min>
+      <z_max>29.940519999999996</z_max>
     </domain_bounding_box>
     <triangle_plinth>false</triangle_plinth>
     <surface_mesh_optimization>
@@ -49,10 +51,10 @@
         <location>z_min</location>
         <export_mesh>true</export_mesh>
         <bounding_range>
-          <x_min>0.7009685000000001</x_min>
-          <x_max>1.1009685</x_max>
-          <y_min>-0.6720775</y_min>
-          <y_max>-0.37207749999999995</y_max>
+          <x_min>-0.20174</x_min>
+          <x_max>0.19826000000000002</x_max>
+          <y_min>-0.974408</y_min>
+          <y_max>-0.674408</y_max>
         </bounding_range>
       </domain_part_instance>
       <domain_part_instance>
@@ -60,10 +62,10 @@
         <location>z_min</location>
         <export_mesh>true</export_mesh>
         <bounding_range>
-          <x_min>0.7009685000000001</x_min>
-          <x_max>1.1009685</x_max>
-          <y_min>0.3720875</y_min>
-          <y_max>0.6720875000000001</y_max>
+          <x_min>-0.20174</x_min>
+          <x_max>0.19826000000000002</x_max>
+          <y_min>0.67441</y_min>
+          <y_max>0.97441</y_max>
         </bounding_range>
       </domain_part_instance>
       <domain_part_instance>
@@ -71,10 +73,10 @@
         <location>z_min</location>
         <export_mesh>true</export_mesh>
         <bounding_range>
-          <x_min>0.7009685000000001</x_min>
-          <x_max>1.1009685</x_max>
-          <y_min>-0.6720775</y_min>
-          <y_max>-0.37207749999999995</y_max>
+          <x_min>2.8296699999999997</x_min>
+          <x_max>3.22967</x_max>
+          <y_min>-0.974408</y_min>
+          <y_max>-0.674408</y_max>
         </bounding_range>
       </domain_part_instance>
       <domain_part_instance>
@@ -82,10 +84,10 @@
         <location>z_min</location>
         <export_mesh>true</export_mesh>
         <bounding_range>
-          <x_min>0.7009685000000001</x_min>
-          <x_max>1.1009685</x_max>
-          <y_min>0.3720875</y_min>
-          <y_max>0.6720875000000001</y_max>
+          <x_min>2.8296699999999997</x_min>
+          <x_max>3.22967</x_max>
+          <y_min>0.67441</y_min>
+          <y_max>0.97441</y_max>
         </bounding_range>
       </domain_part_instance>
       <domain_part_instance>
@@ -93,8 +95,8 @@
         <location>z_min</location>
         <export_mesh>true</export_mesh>
         <bounding_range>
-          <x_min>-3.0990314999999997</x_min>
-          <x_max>4.9009685</x_max>
+          <x_min>-2.486035</x_min>
+          <x_max>5.513965</x_max>
           <y_min>-0.6</y_min>
           <y_max>0.6</y_max>
         </bounding_range>
@@ -104,10 +106,10 @@
         <location>z_min</location>
         <export_mesh>false</export_mesh>
         <bounding_range>
-          <x_min>-3.0990314999999997</x_min>
-          <x_max>1.14231975</x_max>
-          <y_min>-1.5662425</y_min>
-          <y_max>1.5662525</y_max>
+          <x_min>-2.486035</x_min>
+          <x_max>7.781568</x_max>
+          <y_min>-1.60155</y_min>
+          <y_max>1.60155</y_max>
         </bounding_range>
       </domain_part_instance>
     </domain_part>
@@ -125,96 +127,96 @@
           <name>Box_RL1</name>
           <refinement_level>1</refinement_level>
           <bounding_box>
-            <x_min>0.6113470000000001</x_min>
-            <x_max>1.576752</x_max>
-            <y_min>-3.1324899999999998</y_min>
-            <y_max>3.1325000000000003</y_max>
-            <z_min>0.9915719999999999</z_min>
-            <z_max>1.333625</z_max>
+            <x_min>-5.872578000000001</x_min>
+            <x_max>18.953142</x_max>
+            <y_min>-3.2031</y_min>
+            <y_max>3.2031</y_max>
+            <z_min>-0.28597999999999996</z_min>
+            <z_max>3.5548949999999997</z_max>
           </bounding_box>
         </box_instance>
         <box_instance>
           <name>Box_RL2</name>
           <refinement_level>2</refinement_level>
           <bounding_box>
-            <x_min>0.7078875</x_min>
-            <x_max>1.2871305</x_max>
-            <y_min>-2.6104075</y_min>
-            <y_max>2.6104175</y_max>
-            <z_min>0.9915719999999999</z_min>
-            <z_max>1.26843</z_max>
+            <x_min>-3.390006</x_min>
+            <x_max>11.505426</x_max>
+            <y_min>-2.66925</y_min>
+            <y_max>2.66925</y_max>
+            <z_min>-0.28597999999999996</z_min>
+            <z_max>2.8417699999999995</z_max>
           </bounding_box>
         </box_instance>
         <box_instance>
           <name>Box_RL3</name>
           <refinement_level>3</refinement_level>
           <bounding_box>
-            <x_min>0.7465037000000001</x_min>
-            <x_max>1.1905899999999998</x_max>
-            <y_min>-2.088325</y_min>
-            <y_max>2.088335</y_max>
-            <z_min>0.9915719999999999</z_min>
-            <z_max>1.2358325</z_max>
+            <x_min>-2.3969772000000003</x_min>
+            <x_max>9.022854</x_max>
+            <y_min>-2.1354</y_min>
+            <y_max>2.1354</y_max>
+            <z_min>-0.28597999999999996</z_min>
+            <z_max>2.4852074999999996</z_max>
           </bounding_box>
         </box_instance>
         <box_instance>
           <name>Box_RL4</name>
           <refinement_level>4</refinement_level>
           <bounding_box>
-            <x_min>0.7658118</x_min>
-            <x_max>1.1133576</x_max>
-            <y_min>-1.6706590000000001</y_min>
-            <y_max>1.6706690000000002</y_max>
-            <z_min>0.9915719999999999</z_min>
-            <z_max>1.2032349999999998</z_max>
+            <x_min>-1.9004628000000001</x_min>
+            <x_max>7.0367964</x_max>
+            <y_min>-1.70832</y_min>
+            <y_max>1.70832</y_max>
+            <z_min>-0.28597999999999996</z_min>
+            <z_max>2.1286449999999997</z_max>
           </bounding_box>
         </box_instance>
         <box_instance>
           <name>Box_RL5</name>
           <refinement_level>5</refinement_level>
           <bounding_box>
-            <x_min>0.7851199</x_min>
-            <x_max>1.0554333</x_max>
-            <y_min>-1.3574095</y_min>
-            <y_max>1.3574195</y_max>
-            <z_min>0.9915719999999999</z_min>
-            <z_max>1.1706375</z_max>
+            <x_min>-1.4039484</x_min>
+            <x_max>5.5472532</x_max>
+            <y_min>-1.3880100000000002</y_min>
+            <y_max>1.3880100000000002</y_max>
+            <z_min>-0.28597999999999996</z_min>
+            <z_max>1.7720824999999998</z_max>
           </bounding_box>
         </box_instance>
         <box_instance>
           <name>box_ground_RL5</name>
           <refinement_level>5</refinement_level>
           <bounding_box>
-            <x_min>-3.1090314999999995</x_min>
-            <x_max>1.14231975</x_max>
-            <y_min>-1.5662425</y_min>
-            <y_max>1.5662525</y_max>
-            <z_min>1.00765</z_min>
-            <z_max>1.1616499999999998</z_max>
+            <x_min>-2.496035</x_min>
+            <x_max>7.781568</x_max>
+            <y_min>-1.60155</y_min>
+            <y_max>1.60155</y_max>
+            <z_min>-0.01073</z_min>
+            <z_max>0.14327</z_max>
           </bounding_box>
         </box_instance>
         <box_instance>
           <name>box_ground_RL6</name>
           <refinement_level>6</refinement_level>
           <bounding_box>
-            <x_min>-3.1090314999999995</x_min>
-            <x_max>1.14231975</x_max>
-            <y_min>-1.5662425</y_min>
-            <y_max>1.5662525</y_max>
-            <z_min>1.00765</z_min>
-            <z_max>1.04165</z_max>
+            <x_min>-2.496035</x_min>
+            <x_max>7.781568</x_max>
+            <y_min>-1.60155</y_min>
+            <y_max>1.60155</y_max>
+            <z_min>-0.01073</z_min>
+            <z_max>0.02327</z_max>
           </bounding_box>
         </box_instance>
         <box_instance>
           <name>boxRL_tg_body</name>
           <refinement_level>6</refinement_level>
           <bounding_box>
-            <x_min>0.78477395</x_min>
-            <x_max>0.8398744800000001</x_max>
-            <y_min>-0.9497435</y_min>
-            <y_max>0.9497535</y_max>
-            <z_min>1.010689</z_min>
-            <z_max>1.1024034999999999</z_max>
+            <x_min>-1.1656912</x_min>
+            <x_max>-0.4902224799999999</x_max>
+            <y_min>-0.9709300000000001</y_min>
+            <y_max>0.9709300000000001</y_max>
+            <z_min>0.12189499999999999</z_min>
+            <z_max>0.9263324999999999</z_max>
           </bounding_box>
         </box_instance>
       </box>
@@ -232,7 +234,78 @@
       </offset>
       <custom/>
     </refinement>
-    <overset/>
+    <overset>
+      <rotating>
+        <rotating_instance>
+          <name>VREV_Front_Left</name>
+          <rpm>2845.904118080434</rpm>
+          <center>
+            <x_pos>-0.00174</x_pos>
+            <y_pos>-0.824408</y_pos>
+            <z_pos>0.362716</z_pos>
+          </center>
+          <axis>
+            <x_dir>0.0005547450152765342</x_dir>
+            <y_dir>0.9999998154843325</y_dir>
+            <z_dir>-0.0002475666955084055</z_dir>
+          </axis>
+          <parts>
+            <name>VREV_Front_Left</name>
+          </parts>
+        </rotating_instance>
+        <rotating_instance>
+          <name>VREV_Front_Right</name>
+          <rpm>2846.766047092087</rpm>
+          <center>
+            <x_pos>-0.00174</x_pos>
+            <y_pos>0.82441</y_pos>
+            <z_pos>0.362716</z_pos>
+          </center>
+          <axis>
+            <x_dir>-0.0003823970376131522</x_dir>
+            <y_dir>0.9999999253247984</y_dir>
+            <z_dir>5.588294090386192e-05</z_dir>
+          </axis>
+          <parts>
+            <name>VREV_Front_Right</name>
+          </parts>
+        </rotating_instance>
+        <rotating_instance>
+          <name>VREV_Rear_Left</name>
+          <rpm>2845.904118080434</rpm>
+          <center>
+            <x_pos>3.02967</x_pos>
+            <y_pos>-0.824408</y_pos>
+            <z_pos>0.354729</z_pos>
+          </center>
+          <axis>
+            <x_dir>0.0005235352499227049</x_dir>
+            <y_dir>0.9999998459456336</y_dir>
+            <z_dir>0.00018444389818261797</z_dir>
+          </axis>
+          <parts>
+            <name>VREV_Rear_Left</name>
+          </parts>
+        </rotating_instance>
+        <rotating_instance>
+          <name>VREV_Rear_Right</name>
+          <rpm>2846.766047092087</rpm>
+          <center>
+            <x_pos>3.02967</x_pos>
+            <y_pos>0.82441</y_pos>
+            <z_pos>0.354729</z_pos>
+          </center>
+          <axis>
+            <x_dir>-0.00030590780652023375</x_dir>
+            <y_dir>0.9999998957637538</y_dir>
+            <z_dir>-0.0003389585461041067</z_dir>
+          </axis>
+          <parts>
+            <name>VREV_Rear_Right</name>
+          </parts>
+        </rotating_instance>
+      </rotating>
+    </overset>
   </meshing>
   <boundary_conditions>
     <inlet>
@@ -264,6 +337,174 @@
     </outlet>
     <static/>
     <wall>
+      <wall_instance>
+        <name>Wheel_FR_LH_Tire</name>
+        <parts>
+          <name>Wheel_Tire_Front_Left</name>
+        </parts>
+        <roughness>0.001</roughness>
+        <fluid_bc_settings>
+          <rpm>2845.904118080434</rpm>
+          <type>rotating</type>
+          <center>
+            <x_pos>-0.00174</x_pos>
+            <y_pos>-0.824408</y_pos>
+            <z_pos>0.362716</z_pos>
+          </center>
+          <axis>
+            <x_dir>0.0005547450152765342</x_dir>
+            <y_dir>0.9999998154843325</y_dir>
+            <z_dir>-0.0002475666955084055</z_dir>
+          </axis>
+        </fluid_bc_settings>
+      </wall_instance>
+      <wall_instance>
+        <name>Wheel_FR_LH</name>
+        <parts>
+          <name>Wheel_Rim_Front_Left</name>
+          <name>Wheel_Spokes_Front_Left</name>
+        </parts>
+        <fluid_bc_settings>
+          <rpm>2845.904118080434</rpm>
+          <type>rotating</type>
+          <center>
+            <x_pos>-0.00174</x_pos>
+            <y_pos>-0.824408</y_pos>
+            <z_pos>0.362716</z_pos>
+          </center>
+          <axis>
+            <x_dir>0.0005547450152765342</x_dir>
+            <y_dir>0.9999998154843325</y_dir>
+            <z_dir>-0.0002475666955084055</z_dir>
+          </axis>
+        </fluid_bc_settings>
+      </wall_instance>
+      <wall_instance>
+        <name>Wheel_FR_RH_Tire</name>
+        <parts>
+          <name>Wheel_Tire_Front_Right</name>
+        </parts>
+        <roughness>0.001</roughness>
+        <fluid_bc_settings>
+          <rpm>2846.766047092087</rpm>
+          <type>rotating</type>
+          <center>
+            <x_pos>-0.00174</x_pos>
+            <y_pos>0.82441</y_pos>
+            <z_pos>0.362716</z_pos>
+          </center>
+          <axis>
+            <x_dir>-0.0003823970376131522</x_dir>
+            <y_dir>0.9999999253247984</y_dir>
+            <z_dir>5.588294090386192e-05</z_dir>
+          </axis>
+        </fluid_bc_settings>
+      </wall_instance>
+      <wall_instance>
+        <name>Wheel_FR_RH</name>
+        <parts>
+          <name>Wheel_Rim_Front_Right</name>
+          <name>Wheel_Spokes_Front_Right</name>
+        </parts>
+        <fluid_bc_settings>
+          <rpm>2846.766047092087</rpm>
+          <type>rotating</type>
+          <center>
+            <x_pos>-0.00174</x_pos>
+            <y_pos>0.82441</y_pos>
+            <z_pos>0.362716</z_pos>
+          </center>
+          <axis>
+            <x_dir>-0.0003823970376131522</x_dir>
+            <y_dir>0.9999999253247984</y_dir>
+            <z_dir>5.588294090386192e-05</z_dir>
+          </axis>
+        </fluid_bc_settings>
+      </wall_instance>
+      <wall_instance>
+        <name>Wheel_RR_LH_Tire</name>
+        <parts>
+          <name>Wheel_Tire_Rear_Left</name>
+        </parts>
+        <roughness>0.001</roughness>
+        <fluid_bc_settings>
+          <rpm>2845.904118080434</rpm>
+          <type>rotating</type>
+          <center>
+            <x_pos>3.02967</x_pos>
+            <y_pos>-0.824408</y_pos>
+            <z_pos>0.354729</z_pos>
+          </center>
+          <axis>
+            <x_dir>0.0005235352499227049</x_dir>
+            <y_dir>0.9999998459456336</y_dir>
+            <z_dir>0.00018444389818261797</z_dir>
+          </axis>
+        </fluid_bc_settings>
+      </wall_instance>
+      <wall_instance>
+        <name>Wheel_RR_LH</name>
+        <parts>
+          <name>Wheel_Rim_Rear_Left</name>
+          <name>Wheel_Spokes_Rear_Left</name>
+        </parts>
+        <fluid_bc_settings>
+          <rpm>2845.904118080434</rpm>
+          <type>rotating</type>
+          <center>
+            <x_pos>3.02967</x_pos>
+            <y_pos>-0.824408</y_pos>
+            <z_pos>0.354729</z_pos>
+          </center>
+          <axis>
+            <x_dir>0.0005235352499227049</x_dir>
+            <y_dir>0.9999998459456336</y_dir>
+            <z_dir>0.00018444389818261797</z_dir>
+          </axis>
+        </fluid_bc_settings>
+      </wall_instance>
+      <wall_instance>
+        <name>Wheel_RR_RH_Tire</name>
+        <parts>
+          <name>Wheel_Tire_Rear_Right</name>
+        </parts>
+        <roughness>0.001</roughness>
+        <fluid_bc_settings>
+          <rpm>2846.766047092087</rpm>
+          <type>rotating</type>
+          <center>
+            <x_pos>3.02967</x_pos>
+            <y_pos>0.82441</y_pos>
+            <z_pos>0.354729</z_pos>
+          </center>
+          <axis>
+            <x_dir>-0.00030590780652023375</x_dir>
+            <y_dir>0.9999998957637538</y_dir>
+            <z_dir>-0.0003389585461041067</z_dir>
+          </axis>
+        </fluid_bc_settings>
+      </wall_instance>
+      <wall_instance>
+        <name>Wheel_RR_RH</name>
+        <parts>
+          <name>Wheel_Rim_Rear_Right</name>
+          <name>Wheel_Spokes_Rear_Right</name>
+        </parts>
+        <fluid_bc_settings>
+          <rpm>2846.766047092087</rpm>
+          <type>rotating</type>
+          <center>
+            <x_pos>3.02967</x_pos>
+            <y_pos>0.82441</y_pos>
+            <z_pos>0.354729</z_pos>
+          </center>
+          <axis>
+            <x_dir>-0.00030590780652023375</x_dir>
+            <y_dir>0.9999998957637538</y_dir>
+            <z_dir>-0.0003389585461041067</z_dir>
+          </axis>
+        </fluid_bc_settings>
+      </wall_instance>
       <wall_instance>
         <name>Belt_Wheel_FR_LH</name>
         <parts>
@@ -366,7 +607,53 @@
     </wall>
   </boundary_conditions>
   <sources>
-    <porous/>
+    <porous>
+      <porous_instance>
+        <name>Porous_Media_Condenser*</name>
+        <inertial_resistance>200.0</inertial_resistance>
+        <viscous_resistance>600.0</viscous_resistance>
+        <porous_axis>
+          <x_dir>0.9999917214834029</x_dir>
+          <y_dir>0.0007188512209113066</y_dir>
+          <z_dir>-0.004005024042674231</z_dir>
+        </porous_axis>
+        <parts>
+          <name>Porous_Media_Condenser_Inlet</name>
+          <name>Porous_Media_Condenser_Outlet</name>
+          <name>Porous_Media_Condenser_Walls</name>
+        </parts>
+      </porous_instance>
+      <porous_instance>
+        <name>Porous_Media_Low_Temperature_Radiator*</name>
+        <inertial_resistance>100.0</inertial_resistance>
+        <viscous_resistance>500.0</viscous_resistance>
+        <porous_axis>
+          <x_dir>0.9610094921745831</x_dir>
+          <y_dir>0.27651538064320913</y_dir>
+          <z_dir>-1.476790932999502e-05</z_dir>
+        </porous_axis>
+        <parts>
+          <name>Porous_Media_Low_Temperature_Radiator_Inlet</name>
+          <name>Porous_Media_Low_Temperature_Radiator_Outlet</name>
+          <name>Porous_Media_Low_Temperature_Radiator_Walls</name>
+        </parts>
+      </porous_instance>
+      <porous_instance>
+        <name>Porous_Media_Transmission_Oil_Cooler*</name>
+        <inertial_resistance>100.0</inertial_resistance>
+        <viscous_resistance>500.0</viscous_resistance>
+        <porous_axis>
+          <x_dir>0.9652508881225427</x_dir>
+          <y_dir>-0.26132493711698657</y_dir>
+          <z_dir>-1.4813700961035452e-05</z_dir>
+        </porous_axis>
+        <parts>
+          <name>Porous_Media_Transmission_Oil_Cooler_Inlet</name>
+          <name>Porous_Media_Transmission_Oil_Cooler_Outlet</name>
+          <name>Porous_Media_Transmission_Oil_Cooler_Walls</name>
+        </parts>
+      </porous_instance>
+    </porous>
     <mrf/>
     <turbulence>
       <turbulence_instance>
@@ -375,13 +662,13 @@
         <length_scale>0.012</length_scale>
         <turbulence_intensity>0.05</turbulence_intensity>
         <point>
-          <x_pos>-3.1090314999999995</x_pos>
+          <x_pos>-2.496035</x_pos>
         </point>
         <bounding_box>
-          <y_min>-1.5662425</y_min>
-          <z_min>1.01765</z_min>
-          <y_max>1.5662525</y_max>
-          <z_max>1.04165</z_max>
+          <y_min>-1.60155</y_min>
+          <z_min>-0.0007299999999999997</z_min>
+          <y_max>1.60155</y_max>
+          <z_max>0.02327</z_max>
         </bounding_box>
       </turbulence_instance>
       <turbulence_instance>
@@ -390,13 +677,13 @@
         <length_scale>0.012</length_scale>
         <turbulence_intensity>0.01</turbulence_intensity>
         <point>
-          <x_pos>0.7947739500000001</x_pos>
+          <x_pos>-1.1556912</x_pos>
         </point>
         <bounding_box>
-          <y_min>-0.9397435</y_min>
-          <z_min>1.020689</z_min>
-          <y_max>0.9397535</y_max>
-          <z_max>1.0924034999999999</z_max>
+          <y_min>-0.9609300000000001</y_min>
+          <z_min>0.13189499999999998</z_min>
+          <y_max>0.9609300000000001</y_max>
+          <z_max>0.9163324999999999</z_max>
         </bounding_box>
       </turbulence_instance>
     </turbulence>
@@ -475,9 +762,9 @@
     </general>
     <moment_reference_system>
       <origin>
-        <x_pos>0.9009685000000001</x_pos>
+        <x_pos>1.513965</x_pos>
         <y_pos>0.0</y_pos>
-        <z_pos>1.01765</z_pos>
+        <z_pos>0.3587225</z_pos>
       </origin>
       <roll_axis>
         <x_dir>1.0</x_dir>
@@ -501,7 +788,7 @@
       <reference_area_auto>true</reference_area_auto>
       <reference_area>1.0</reference_area>
       <reference_length_auto>true</reference_length_auto>
-      <reference_length>1.0</reference_length>
+      <reference_length>3.0314099999999997</reference_length>
       <coefficients_along_axis>
         <num_sections_x>100</num_sections_x>
         <num_sections_y>0</num_sections_y>
@@ -537,12 +824,12 @@
           <z_pos>0.0</z_pos>
         </point>
         <bounding_box>
-          <x_min>-0.1609769999999997</x_min>
-          <x_max>2.9283189999999992</x_max>
-          <y_min>-26.10412</y_min>
-          <y_max>26.10413</y_max>
-          <z_min>1.01765</z_min>
-          <z_max>3.7458400000000003</z_max>
+          <x_min>-25.733154000000003</x_min>
+          <x_max>53.70915000000001</x_max>
+          <y_min>-26.6925</y_min>
+          <y_max>26.6925</y_max>
+          <z_min>-0.0007299999999999997</z_min>
+          <z_max>29.940519999999996</z_max>
         </bounding_box>
         <output_frequency>4644.0</output_frequency>
         <output_start_iteration>4644</output_start_iteration>
@@ -569,27 +856,47 @@
         </output_variables>
       </section_cut_instance>
     </section_cut>
-    <probe_file>
-      <probe_file_instance>
-        <name>probe_1</name>
-        <source_file>probe_1.csv</source_file>
-        <type>volume</type>
-        <radius>0.0</radius>
-        <output_frequency>1548.0</output_frequency>
-        <scientific_notation>true</scientific_notation>
-        <output_precision>7</output_precision>
-        <output_start_iteration>0</output_start_iteration>
-        <output_variables>
-          <pressure>true</pressure>
-        </output_variables>
-      </probe_file_instance>
-    </probe_file>
+    <probe_file/>
     <partial_surface>
       <partial_surface_instance>
         <name>Partial_Surface_1</name>
         <parts>
-          <name>c_mirror_LHS</name>
-          <name>c_mirror_RHS</name>
+          <name>Body_Exterior COMMENT: Exported from Inspire HWVERSION_2024.0.0.24_May  1 2024_13:41:37 Build 14556, Altair Inc. Unit : m</name>
+          <name>Body_Exterior_Grille_Bars</name>
+          <name>Body_Exterior_Mirror_Left</name>
+          <name>Body_Exterior_Mirror_Right</name>
+          <name>Monitor_Surface_Grille</name>
+          <name>Other</name>
+          <name>Porous_Media_Condenser_Inlet</name>
+          <name>Porous_Media_Condenser_Outlet</name>
+          <name>Porous_Media_Condenser_Walls</name>
+          <name>Porous_Media_Low_Temperature_Radiator_Inlet</name>
+          <name>Porous_Media_Low_Temperature_Radiator_Outlet</name>
+          <name>Porous_Media_Low_Temperature_Radiator_Walls</name>
+          <name>Porous_Media_Transmission_Oil_Cooler_Inlet</name>
+          <name>Porous_Media_Transmission_Oil_Cooler_Outlet</name>
+          <name>Porous_Media_Transmission_Oil_Cooler_Walls</name>
+          <name>Underbody_Diffuser_Rear_RL7</name>
+          <name>Underbody_Tire_Spolier_Front_Left_RL7</name>
+          <name>Underbody_Tire_Spolier_Front_Right_RL7</name>
+          <name>Underbody_Tire_Spolier_Rear_Left_RL7</name>
+          <name>Underbody_Tire_Spolier_Rear_Right_RL7</name>
+          <name>VREV_Front_Left</name>
+          <name>VREV_Front_Right</name>
+          <name>VREV_Rear_Left</name>
+          <name>VREV_Rear_Right</name>
+          <name>Wheel_Rim_Front_Left</name>
+          <name>Wheel_Rim_Front_Right</name>
+          <name>Wheel_Rim_Rear_Left</name>
+          <name>Wheel_Rim_Rear_Right</name>
+          <name>Wheel_Spokes_Front_Left</name>
+          <name>Wheel_Spokes_Front_Right</name>
+          <name>Wheel_Spokes_Rear_Left</name>
+          <name>Wheel_Spokes_Rear_Right</name>
+          <name>Wheel_Tire_Front_Left</name>
+          <name>Wheel_Tire_Front_Right</name>
+          <name>Wheel_Tire_Rear_Left</name>
+          <name>Wheel_Tire_Rear_Right</name>
         </parts>
         <merge_output_files>false</merge_output_files>
         <delete_unmerged_output_files>false</delete_unmerged_output_files>
@@ -630,12 +937,12 @@
         <output_frequency>464.0</output_frequency>
         <output_start_iteration>2322</output_start_iteration>
         <bounding_box>
-          <x_min>0.7851199</x_min>
-          <x_max>1.0554333</x_max>
-          <y_min>-1.3574095</y_min>
-          <y_max>1.3574195</y_max>
-          <z_min>0.9915719999999999</z_min>
-          <z_max>1.1706375</z_max>
+          <x_min>-1.4039484</x_min>
+          <x_max>5.5472532</x_max>
+          <y_min>-1.3880100000000002</y_min>
+          <y_max>1.3880100000000002</y_max>
+          <z_min>-0.28597999999999996</z_min>
+          <z_max>1.7720824999999998</z_max>
         </bounding_box>
         <output_variables>
           <pressure>true</pressure>

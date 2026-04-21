@@ -341,3 +341,75 @@ def build_axes_glb(
         return tmp_path.read_bytes()
     finally:
         tmp_path.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Landmark GLB — visualise transform before/after points
+# ---------------------------------------------------------------------------
+
+# Corner colours (RGBA float): FR_LH=red, FR_RH=blue, RR_LH=orange, RR_RH=green, body=white
+_LANDMARK_COLORS: dict[str, tuple[float, float, float, float]] = {
+    "front_wheel": (1.0, 0.15, 0.15, 1.0),   # red
+    "rear_wheel":  (0.15, 0.4, 1.0,  1.0),   # blue
+    "wheelbase":   (1.0, 1.0, 1.0,  1.0),    # white
+    "before":      (0.5, 0.5, 0.5,  0.5),    # translucent grey
+}
+
+
+def build_landmarks_glb(transform_snapshot: dict) -> bytes:
+    """Build a GLB visualising landmark points before and after transform.
+
+    Each landmark emits two spheres:
+      - before: grey translucent (0.5, 0.5, 0.5, 0.5)
+      - after:  colour-coded by type
+
+    Returns raw GLB bytes. Raises ValueError if snapshot has no landmarks.
+    """
+    landmarks: dict = transform_snapshot.get("landmarks", {})
+    if not landmarks:
+        raise ValueError("transform_snapshot contains no landmark data")
+
+    sphere_r = 0.04  # 40 mm radius sphere — visible at vehicle scale
+
+    solids: list = []
+    colors: list[tuple[float, float, float, float]] = []
+
+    def _add_sphere(name: str, center: list[float], color: tuple):
+        s = _make_sphere_solid(name, center, sphere_r)
+        solids.append(s)
+        colors.append(color)
+
+    for key, entry in landmarks.items():
+        before: list[float] | float = entry.get("before")
+        after:  list[float] | float = entry.get("after")
+
+        # Scalar (bbox z_min) → convert to 3-D point at origin XY
+        if isinstance(before, (int, float)):
+            before = [0.0, 0.0, float(before)]
+        if isinstance(after, (int, float)):
+            after = [0.0, 0.0, float(after)]
+
+        if before:
+            _add_sphere(f"{key}_before", before, _LANDMARK_COLORS["before"])
+
+        # Choose after-colour based on key content
+        if after:
+            if "front" in key:
+                col = _LANDMARK_COLORS["front_wheel"]
+            elif "rear" in key:
+                col = _LANDMARK_COLORS["rear_wheel"]
+            else:
+                col = _LANDMARK_COLORS["wheelbase"]
+            _add_sphere(f"{key}_after", after, col)
+
+    if not solids:
+        raise ValueError("No landmark points could be built")
+
+    import tempfile
+    tmp_path = Path(tempfile.mktemp(suffix=".glb"))
+    try:
+        GLBExporter.export(solids, tmp_path, colors=colors)
+        return tmp_path.read_bytes()
+    finally:
+        tmp_path.unlink(missing_ok=True)
+

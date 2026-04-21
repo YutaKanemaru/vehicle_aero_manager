@@ -145,12 +145,15 @@ def get_condition(db: Session, map_id: str, condition_id: str) -> Condition:
 
 
 def create_condition(db: Session, map_id: str, data: ConditionCreate, current_user: User) -> Condition:
+    import json as _json
     _get_map_or_404(db, map_id)
     c = Condition(
         map_id=map_id,
         name=data.name,
         inflow_velocity=data.inflow_velocity,
         yaw_angle=data.yaw_angle,
+        ride_height_json=_json.dumps(data.ride_height.model_dump()),
+        yaw_config_json=_json.dumps(data.yaw_config.model_dump()),
         created_by=current_user.id,
     )
     db.add(c)
@@ -162,6 +165,7 @@ def create_condition(db: Session, map_id: str, data: ConditionCreate, current_us
 def update_condition(
     db: Session, map_id: str, condition_id: str, data: ConditionUpdate, current_user: User
 ) -> Condition:
+    import json as _json
     c = _get_condition_or_404(db, map_id, condition_id)
     _check_owner_or_admin(c, current_user)
     if data.name is not None:
@@ -170,6 +174,10 @@ def update_condition(
         c.inflow_velocity = data.inflow_velocity
     if data.yaw_angle is not None:
         c.yaw_angle = data.yaw_angle
+    if data.ride_height is not None:
+        c.ride_height_json = _json.dumps(data.ride_height.model_dump())
+    if data.yaw_config is not None:
+        c.yaw_config_json = _json.dumps(data.yaw_config.model_dump())
     db.commit()
     db.refresh(c)
     return c

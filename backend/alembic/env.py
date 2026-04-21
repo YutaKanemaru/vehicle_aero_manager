@@ -11,6 +11,7 @@ from app.models.user import User  # noqa: F401 - register model with Base
 from app.models.template import Template, TemplateVersion  # noqa: F401
 from app.models.geometry import Geometry, GeometryAssembly, GeometryFolder, AssemblyFolder  # noqa: F401
 from app.models.configuration import Case, ConditionMap, Condition, Run  # noqa: F401
+from app.models.system import System  # noqa: F401
 
 config = context.config
 

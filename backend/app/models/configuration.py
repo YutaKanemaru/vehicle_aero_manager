@@ -42,6 +42,9 @@ class Condition(Base):
     name: Mapped[str] = mapped_column(String(255))
     inflow_velocity: Mapped[float] = mapped_column(Float)
     yaw_angle: Mapped[float] = mapped_column(Float, default=0.0)
+    # JSON strings for ride height and yaw config (nullable for backward compat)
+    ride_height_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    yaw_config_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=func.now()
@@ -51,6 +54,26 @@ class Condition(Base):
     )
 
     map: Mapped["ConditionMap"] = relationship("ConditionMap", back_populates="conditions")
+
+    @property
+    def ride_height(self) -> dict:
+        import json as _json
+        if self.ride_height_json:
+            try:
+                return _json.loads(self.ride_height_json)
+            except Exception:
+                pass
+        return {}
+
+    @property
+    def yaw_config(self) -> dict:
+        import json as _json
+        if self.yaw_config_json:
+            try:
+                return _json.loads(self.yaw_config_json)
+            except Exception:
+                pass
+        return {}
 
 
 class Case(Base):

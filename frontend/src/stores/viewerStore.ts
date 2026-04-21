@@ -51,6 +51,16 @@ interface ViewerStore {
   // Overlays
   overlays: ViewerOverlays;
   setOverlay: (key: keyof ViewerOverlays, value: boolean) => void;
+
+  // Ride height transform — condition selection
+  selectedConditionMapId: string | null;
+  setSelectedConditionMapId: (id: string | null) => void;
+  selectedConditionId: string | null;
+  setSelectedConditionId: (id: string | null) => void;
+
+  // Landmarks GLB overlay (transform result)
+  landmarksGlbUrl: string | null;
+  setLandmarksGlbUrl: (url: string | null) => void;
 }
 
 export const useViewerStore = create<ViewerStore>((set, get) => ({
@@ -101,4 +111,12 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
   },
   setOverlay: (key, value) =>
     set((s) => ({ overlays: { ...s.overlays, [key]: value } })),
-}));
+
+  selectedConditionMapId: null,
+  setSelectedConditionMapId: (id) => set({ selectedConditionMapId: id }),
+  selectedConditionId: null,
+  setSelectedConditionId: (id) => set({ selectedConditionId: id }),
+
+  landmarksGlbUrl: null,
+  setLandmarksGlbUrl: (url) => set({ landmarksGlbUrl: url }),
+});

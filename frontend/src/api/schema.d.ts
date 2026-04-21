@@ -430,6 +430,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/geometries/{geometry_id}/transform": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transform Geometry
+         * @description Apply ride height + yaw transform to an STL, producing a new Geometry + System record.
+         */
+        post: operations["transform_geometry_api_v1_geometries__geometry_id__transform_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assemblies/folders/": {
         parameters: {
             query?: never;
@@ -684,6 +704,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cases/{case_id}/runs/{run_id}/axes-glb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Axes Glb
+         * @description Return a GLB file containing wheel-rotation-axis arrows and porous-flow-axis arrows.
+         */
+        get: operations["get_axes_glb_api_v1_cases__case_id__runs__run_id__axes_glb_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/diff": {
         parameters: {
             query?: never;
@@ -693,6 +733,61 @@ export interface paths {
         };
         /** Diff Runs */
         get: operations["diff_runs_api_v1_runs_diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/systems/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Systems */
+        get: operations["list_systems_api_v1_systems__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/systems/{system_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get System */
+        get: operations["get_system_api_v1_systems__system_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete System */
+        delete: operations["delete_system_api_v1_systems__system_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/systems/{system_id}/landmarks-glb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Landmarks Glb
+         * @description Return a GLB visualising landmark points (before/after transform).
+         */
+        get: operations["get_landmarks_glb_api_v1_systems__system_id__landmarks_glb_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1101,6 +1196,8 @@ export interface components {
              * @default 0
              */
             yaw_angle: number;
+            ride_height?: components["schemas"]["RideHeightConditionConfig"];
+            yaw_config?: components["schemas"]["YawConditionConfig"];
         };
         /** ConditionMapCreate */
         ConditionMapCreate: {
@@ -1154,6 +1251,8 @@ export interface components {
             inflow_velocity: number;
             /** Yaw Angle */
             yaw_angle: number;
+            ride_height?: components["schemas"]["RideHeightConditionConfig"];
+            yaw_config?: components["schemas"]["YawConditionConfig"];
             /** Created By */
             created_by: string;
             /**
@@ -1175,6 +1274,8 @@ export interface components {
             inflow_velocity?: number | null;
             /** Yaw Angle */
             yaw_angle?: number | null;
+            ride_height?: components["schemas"]["RideHeightConditionConfig"] | null;
+            yaw_config?: components["schemas"]["YawConditionConfig"] | null;
         };
         /** CustomRefinement */
         CustomRefinement: {
@@ -2248,6 +2349,32 @@ export interface components {
              */
             description: string;
         };
+        /** RideHeightConditionConfig */
+        RideHeightConditionConfig: {
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /** Target Front Wheel Axis Rh */
+            target_front_wheel_axis_rh?: number | null;
+            /** Target Rear Wheel Axis Rh */
+            target_rear_wheel_axis_rh?: number | null;
+            /**
+             * Adjust Body Wheel Separately
+             * @default false
+             */
+            adjust_body_wheel_separately: boolean;
+            /**
+             * Use Original Wheel Position
+             * @default false
+             */
+            use_original_wheel_position: boolean;
+            /** Target Front Wheel Rh */
+            target_front_wheel_rh?: number | null;
+            /** Target Rear Wheel Rh */
+            target_rear_wheel_rh?: number | null;
+        };
         /** RunCreate */
         RunCreate: {
             /** Name */
@@ -2625,6 +2752,30 @@ export interface components {
              */
             yaw_angle: number;
         };
+        /** SystemResponse */
+        SystemResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Source Geometry Id */
+            source_geometry_id: string;
+            /** Result Geometry Id */
+            result_geometry_id: string | null;
+            /** Condition Id */
+            condition_id: string | null;
+            /** Transform Snapshot */
+            transform_snapshot: {
+                [key: string]: unknown;
+            } | null;
+            /** Created By */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** TargetNames */
         TargetNames: {
             /** Wheel */
@@ -2811,6 +2962,23 @@ export interface components {
              */
             token_type: string;
         };
+        /**
+         * TransformRequest
+         * @description POST /geometries/{id}/transform
+         */
+        TransformRequest: {
+            /** Name */
+            name: string;
+            /** Condition Id */
+            condition_id?: string | null;
+            ride_height?: components["schemas"]["RideHeightConditionConfig"];
+            /**
+             * Yaw Angle Deg
+             * @default 0
+             */
+            yaw_angle_deg: number;
+            yaw_config?: components["schemas"]["YawConditionConfig"];
+        };
         /** TriangleSplittingInstanceConfig */
         TriangleSplittingInstanceConfig: {
             /** Name */
@@ -2909,6 +3077,25 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** YawConditionConfig */
+        YawConditionConfig: {
+            /**
+             * Center Mode
+             * @default wheel_center
+             * @enum {string}
+             */
+            center_mode: "wheel_center" | "user_input";
+            /**
+             * Center X
+             * @default 0
+             */
+            center_x: number;
+            /**
+             * Center Y
+             * @default 0
+             */
+            center_y: number;
         };
     };
     responses: never;
@@ -3886,6 +4073,41 @@ export interface operations {
             };
         };
     };
+    transform_geometry_api_v1_geometries__geometry_id__transform_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                geometry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransformRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_assembly_folders_api_v1_assemblies_folders__get: {
         parameters: {
             query?: never;
@@ -4805,6 +5027,38 @@ export interface operations {
             };
         };
     };
+    get_axes_glb_api_v1_cases__case_id__runs__run_id__axes_glb_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     diff_runs_api_v1_runs_diff_get: {
         parameters: {
             query: {
@@ -4826,6 +5080,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiffResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_systems_api_v1_systems__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemResponse"][];
+                };
+            };
+        };
+    };
+    get_system_api_v1_systems__system_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                system_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_system_api_v1_systems__system_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                system_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_landmarks_glb_api_v1_systems__system_id__landmarks_glb_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                system_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

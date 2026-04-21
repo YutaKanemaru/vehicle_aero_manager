@@ -1,7 +1,62 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+# ---------------------------------------------------------------------------
+# Ride Height / Yaw config (stored in Condition)
+# ---------------------------------------------------------------------------
+
+class RideHeightConditionConfig(BaseModel):
+    enabled: bool = False
+    target_front_wheel_axis_rh: float | None = None  # m from ground
+    target_rear_wheel_axis_rh: float | None = None   # m from ground
+    adjust_body_wheel_separately: bool = False
+    use_original_wheel_position: bool = False  # True = return wheels to origin position
+    # used when adjust_body_wheel_separately=True and use_original_wheel_position=False
+    target_front_wheel_rh: float | None = None
+    target_rear_wheel_rh: float | None = None
+
+
+class YawConditionConfig(BaseModel):
+    center_mode: Literal["wheel_center", "user_input"] = "wheel_center"
+    center_x: float = 0.0
+    center_y: float = 0.0
+
+
+# ---------------------------------------------------------------------------
+# System (transform record)
+# ---------------------------------------------------------------------------
+
+class SystemCreate(BaseModel):
+    name: str
+    source_geometry_id: str
+    condition_id: str | None = None
+    ride_height: RideHeightConditionConfig = Field(default_factory=RideHeightConditionConfig)
+    yaw_angle_deg: float = 0.0
+    yaw_config: YawConditionConfig = Field(default_factory=YawConditionConfig)
+
+
+class SystemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    name: str
+    source_geometry_id: str
+    result_geometry_id: str | None
+    condition_id: str | None
+    transform_snapshot: dict | None
+    created_by: str
+    created_at: datetime
+
+
+class TransformRequest(BaseModel):
+    """POST /geometries/{id}/transform"""
+    name: str  # name for the resulting Geometry
+    condition_id: str | None = None
+    ride_height: RideHeightConditionConfig = Field(default_factory=RideHeightConditionConfig)
+    yaw_angle_deg: float = 0.0
+    yaw_config: YawConditionConfig = Field(default_factory=YawConditionConfig)
 
 
 # ---------------------------------------------------------------------------
@@ -37,12 +92,16 @@ class ConditionCreate(BaseModel):
     name: str
     inflow_velocity: float
     yaw_angle: float = 0.0
+    ride_height: RideHeightConditionConfig = Field(default_factory=RideHeightConditionConfig)
+    yaw_config: YawConditionConfig = Field(default_factory=YawConditionConfig)
 
 
 class ConditionUpdate(BaseModel):
     name: str | None = None
     inflow_velocity: float | None = None
     yaw_angle: float | None = None
+    ride_height: RideHeightConditionConfig | None = None
+    yaw_config: YawConditionConfig | None = None
 
 
 class ConditionResponse(BaseModel):
@@ -52,9 +111,38 @@ class ConditionResponse(BaseModel):
     name: str
     inflow_velocity: float
     yaw_angle: float
+    ride_height: RideHeightConditionConfig = Field(default_factory=RideHeightConditionConfig)
+    yaw_config: YawConditionConfig = Field(default_factory=YawConditionConfig)
     created_by: str
     created_at: datetime
     updated_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _parse_json_fields(cls, data):
+        """Parse ride_height and yaw_config from ORM dict properties."""
+        if hasattr(data, "__dict__"):
+            rh = getattr(data, "ride_height", None)
+            yc = getattr(data, "yaw_config", None)
+            if isinstance(rh, dict):
+                object.__setattr__(data, "_ride_height_parsed", rh)
+            if isinstance(yc, dict):
+                object.__setattr__(data, "_yaw_config_parsed", yc)
+        return data
+
+    @model_validator(mode="after")
+    def _apply_parsed(self):
+        if hasattr(self, "_ride_height_parsed"):
+            try:
+                self.ride_height = RideHeightConditionConfig(**self._ride_height_parsed)
+            except Exception:
+                pass
+        if hasattr(self, "_yaw_config_parsed"):
+            try:
+                self.yaw_config = YawConditionConfig(**self._yaw_config_parsed)
+            except Exception:
+                pass
+        return self
 
 
 # ---------------------------------------------------------------------------
