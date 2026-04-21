@@ -971,7 +971,12 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                         <IconTrash size={14} />
                       </ActionIcon>
                     </Group>
-                    <TextInput label="Part name (must match STL part name exactly)" {...form.getInputProps(`porous_coefficients.${idx}.part_name`)} />
+                    <TextInput
+                      label="Part Name Pattern"
+                      placeholder="e.g. HX_Rad_* or Porous_Condenser"
+                      description="Glob wildcards supported: HX_* (prefix), *_HX (suffix), *_HX_* (contains). No wildcard: matches parts starting or ending with this value (case-insensitive). Multiple STL parts can match one entry."
+                      {...form.getInputProps(`porous_coefficients.${idx}.part_name`)}
+                    />
                     <SimpleGrid cols={2}>
                       <NumberInput label="Inertial resistance (1/m)" decimalScale={2} step={1} {...form.getInputProps(`porous_coefficients.${idx}.inertial_resistance`)} />
                       <NumberInput label="Viscous resistance (1/s)" decimalScale={2} step={1} {...form.getInputProps(`porous_coefficients.${idx}.viscous_resistance`)} />
