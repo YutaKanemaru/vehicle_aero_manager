@@ -588,6 +588,7 @@ Ultrafluid XML file
 
 **Service** (`app/services/template_service.py`)
 - `list_templates`, `get_template`, `create_template`, `update_template`, `delete_template`
+- `delete_template()`: raises HTTP 400 if any `Case.template_id` references this template — delete those cases first
 - `list_versions`, `create_version`, `activate_version`
 - `update_version_settings(db, template_id, version_id, data: TemplateVersionUpdate, current_user)` — overwrites `settings` (and optionally `comment`) of an existing version **in-place**; no new version row created
 - `validate_settings(data: dict) -> SettingsValidateResponse` — validates raw dict via `TemplateSettings.model_validate()`; returns normalized settings on success
@@ -804,7 +805,7 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
 | `GeometryFolder` | Optional organisational folder for grouping Geometries (e.g. by vehicle type) |
 | `Geometry` | Single STL file entity — stores file path, status, and analysis results |
 | `AssemblyFolder` | Optional organisational folder for grouping Assemblies |
-| `GeometryAssembly` | Named collection of Geometries — optionally linked to a Template and an AssemblyFolder |
+| `GeometryAssembly` | Named collection of Geometries — optionally linked to an AssemblyFolder |
 | `assembly_geometry_link` | Many-to-many association table |
 
 **Part swap workflow**: change which `Geometry` objects are members of a `GeometryAssembly`.
@@ -816,7 +817,7 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
 - `GeometryFolder`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`; `geometries` one-to-many relationship
 - `Geometry`: `id`, `name`, `description`, `folder_id` (nullable FK→geometry_folders), `file_path` (upload時: `upload_dir` 相対パス / link時: 絶対パス), `original_filename`, `file_size`, `is_linked: bool` (default `False` — `True` の場合消死時にファイルを肝ない), `status` (`pending`/`analyzing`/`ready`/`error`), `analysis_result` (JSON string), `error_message`, `uploaded_by` (FK→users), `created_at`, `updated_at`
 - `AssemblyFolder`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`; `assemblies` one-to-many relationship
-- `GeometryAssembly`: `id`, `name`, `description`, `template_id` (nullable FK→templates), `folder_id` (nullable FK→assembly_folders), `created_by`, `created_at`, `updated_at`; `geometries` many-to-many relationship; `folder` many-to-one relationship
+- `GeometryAssembly`: `id`, `name`, `description`, `folder_id` (nullable FK→assembly_folders), `created_by`, `created_at`, `updated_at`; `geometries` many-to-many relationship; `folder` many-to-one relationship
 - `assembly_geometry_link`: association table (`assembly_id`, `geometry_id`)
 - Class ordering in file: `assembly_geometry_link` → `GeometryFolder` → `Geometry` → `AssemblyFolder` → `GeometryAssembly`
 
@@ -854,6 +855,7 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
 - Assembly folder CRUD: `list_assembly_folders`, `create_assembly_folder`, `update_assembly_folder`, `delete_assembly_folder` — delete sets `assembly.folder_id = None` for all children
 - `_assembly_folder_or_404(db, folder_id)` helper validates assembly folder existence
 - `create_assembly()` accepts `folder_id`; `update_assembly()` handles `folder_id` via `model_fields_set`
+- `delete_assembly()`: raises HTTP 400 if any `Case.assembly_id` references this assembly — delete or reassign those cases first
 - `add_geometry_to_assembly`, `remove_geometry_from_assembly`
 - Permission check: `resource.created_by == current_user.id OR current_user.is_admin`
 
@@ -918,8 +920,8 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
 | `GeometryUploadModal.tsx` | Upload form: name, description, folder select (from `foldersApi.list()`), STL file input. **Modal closes immediately** after registering jobs in the drawer — XHR transfers continue in background (fire-and-forget). No `uploading` blocking state on the modal. Progress tracked exclusively in Jobs Drawer via `updateUploadProgress`. |
 | `GeometryLinkModal.tsx` | Link only登録フォーム: name, description, file_path (server absolute path), folder select. JSON POST を使用（XHR不要）。成功後は uploadと同様に job トラッカーに登録。 |
 | `AssemblyList.tsx` | Folder-hierarchy view: assemblies grouped into collapsible `FolderSection` panels (Paper + Collapse). Uncategorized assemblies shown last. Each assembly row has manage-geometries action + move-to-folder Popover. Header has "New Folder" (IconFolderPlus) + "New Assembly" buttons. Folder delete: `delete_assembly_folder` sets all children to uncategorized. |
-| `AssemblyCreateModal.tsx` | Create assembly with optional template link (dropdown from templates list) + optional folder select (`assemblyFoldersApi.list()`) |
-| `AssemblyGeometriesDrawer.tsx` | Right-side drawer with `SegmentedControl` tab switching: **Current** tab — geometry rows with status badge + Remove button; **Add geometries** tab — geometries grouped into collapsible `FolderBlock` sections (Paper + Collapse, open by default), each folder header has select-all checkbox (with indeterminate state) + count badge + chevron toggle; uncategorized geometries shown as an "Uncategorized" folder when other folders exist, or as a plain flat list when no folders are defined; footer sticky "Add selected (N)" button; fetches `foldersApi.list()` + `geometriesApi.list()` (enabled only when `opened`) |
+| `AssemblyCreateModal.tsx` | Create assembly with optional folder select (`assemblyFoldersApi.list()`) — **no template link** (removed) |
+| `AssemblyGeometriesDrawer.tsx` | Right-side drawer; accepts `assemblyId: string | null` and fetches assembly data via `useQuery(["assembly", assemblyId])` internally (always fresh). `SegmentedControl` tab switching: **Current** tab — geometry rows with status badge + Remove button; **Add geometries** tab — geometries grouped into collapsible `FolderBlock` sections (Paper + Collapse, open by default), each folder header has select-all checkbox (with indeterminate state) + count badge + chevron toggle; uncategorized geometries shown as an "Uncategorized" folder when other folders exist, or as a plain flat list when no folders are defined; footer sticky "Add selected (N)" button; fetches `foldersApi.list()` + `geometriesApi.list()` (enabled only when `opened`); mutation `onSuccess` invalidates `["assembly", assemblyId]` + `["assemblies"]` for instant UI refresh |
 
 **Navigation**: `AppShell.tsx` nav includes `Geometries` (IconBox) and `Assemblies` (IconStack2).
 
@@ -1121,7 +1123,9 @@ class SystemResponse(BaseModel):
 
 **Service** (`app/services/configuration_service.py`)
 - `list_maps`, `get_map`, `create_map`, `update_map`, `delete_map`
+- `delete_map()`: raises HTTP 400 if any `Case.map_id` references this map — unlink or delete those cases first
 - `list_conditions(map_id)`, `get_condition`, `create_condition`, `update_condition`, `delete_condition` — JSON fields serialized via `json.dumps(data.ride_height.model_dump())`
+- `delete_condition()`: raises HTTP 400 if any `Run.condition_id` references this condition — delete those runs first
 - `list_cases`, `get_case`, `create_case`, `update_case`, `delete_case`
 - `create_run(case_id, condition_id)`, `list_runs(case_id)`
 - `generate_xml(run_id, db, background_tasks)` — background task: resolves Condition → `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml`; then `build_probe_csv_files()` writes one CSV per probe_file_instance beside the XML; copies first STL to `data/runs/{run_id}/input.stl` and stores path in `run.stl_path` → update `run.status`
