@@ -8,37 +8,6 @@ import {
   Tooltip,
   Badge,
   Drawer,
-} from "@mantine/core";
-import {
-  IconPlus,
-  IconTrash,
-  IconRefresh,
-  IconSettings,
-  IconCopy,
-  IconArrowsLeftRight,
-} from "@tabler/icons-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { notifications } from "@mantine/notifications";
-import { useState } from "react";
-import { useDisclosure } from "@mantine/hooks";
-import { casesApi } from "../../api/configurations";
-import type { CaseResponse } from "../../api/configurations";
-import { useAuthStore } from "../../stores/auth";
-import { CaseCreateModal } from "./CaseCreateModal";
-import { CaseDuplicateModal } from "./CaseDuplicateModal";
-import { CaseCompareModal } from "./CaseCompareModal";
-import { RunList } from "../runs/RunList";
-
-import {
-  Table,
-  Button,
-  Group,
-  Text,
-  Stack,
-  ActionIcon,
-  Tooltip,
-  Badge,
-  Drawer,
   Paper,
   Collapse,
   Modal,
@@ -441,7 +410,7 @@ export function CaseList() {
     );
   }
 
-  const canDelete = (c: CaseResponse) => c.created_by === user?.id || user?.is_admin;
+  const canDelete = (c: CaseResponse) => c.created_by === user?.id || !!user?.is_admin;
 
   // Group by folder
   const byFolder = new Map<string | null, CaseResponse[]>();
