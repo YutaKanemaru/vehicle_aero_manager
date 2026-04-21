@@ -1591,18 +1591,22 @@ def assemble_ufx_solver_deck(
     ref_area = aero_cfg.reference_area or 1.0
 
     # ── Output bounding box ───────────────────────────────────────────────
-    if fd.bbox is not None and len(fd.bbox) == 6:
+    # Evaluate bbox_mode first; fd.bbox is only used when mode is "user_defined"
+    if fd.bbox_mode == "from_meshing_box" and fd.bbox_source_box_name and fd.bbox_source_box_name in setup.meshing.box_refinement:
+        br = setup.meshing.box_refinement[fd.bbox_source_box_name]
+        br_mode = getattr(br, "mode", "vehicle_bbox_factors")
+        if br_mode == "vehicle_bbox_factors" and vbbox:
+            abs_box = compute_domain_bbox(vbbox, br.box, ground_z=ground_height)
+        else:
+            abs_box = {"x_min": br.box[0], "x_max": br.box[1],
+                       "y_min": br.box[2], "y_max": br.box[3],
+                       "z_min": br.box[4], "z_max": br.box[5]}
+        out_bb = BoundingBox(**abs_box)
+    elif fd.bbox_mode == "user_defined" and fd.bbox is not None and len(fd.bbox) == 6:
         out_bb = BoundingBox(
             x_min=fd.bbox[0], x_max=fd.bbox[1],
             y_min=fd.bbox[2], y_max=fd.bbox[3],
             z_min=fd.bbox[4], z_max=fd.bbox[5],
-        )
-    elif fd.bbox_mode == "from_meshing_box" and fd.bbox_source_box_name and fd.bbox_source_box_name in setup.meshing.box_refinement:
-        br = setup.meshing.box_refinement[fd.bbox_source_box_name]
-        out_bb = BoundingBox(
-            x_min=br.box[0], x_max=br.box[1],
-            y_min=br.box[2], y_max=br.box[3],
-            z_min=br.box[4], z_max=br.box[5],
         )
     else:
         out_bb = domain_bb
