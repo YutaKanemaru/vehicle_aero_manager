@@ -390,6 +390,46 @@ export interface paths {
         patch: operations["update_geometry_api_v1_geometries__geometry_id__patch"];
         trace?: never;
     };
+    "/api/v1/geometries/{geometry_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Geometry File
+         * @description 元のSTLファイルをダウンロードする。
+         */
+        get: operations["download_geometry_file_api_v1_geometries__geometry_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/geometries/{geometry_id}/glb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Geometry Glb
+         * @description STLをデシメーションしたGLBファイルを返す。初回は生成してキャッシュする。
+         */
+        get: operations["get_geometry_glb_api_v1_geometries__geometry_id__glb_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/assemblies/folders/": {
         parameters: {
             query?: never;
@@ -905,6 +945,11 @@ export interface components {
             description?: string | null;
             /** Folder Id */
             folder_id?: string | null;
+            /**
+             * Decimation Ratio
+             * @default 0.05
+             */
+            decimation_ratio: number;
             /** File */
             file: string;
         };
@@ -1263,6 +1308,11 @@ export interface components {
             file_path: string;
             /** Folder Id */
             folder_id?: string | null;
+            /**
+             * Decimation Ratio
+             * @default 0.05
+             */
+            decimation_ratio: number;
         };
         /** GeometryResponse */
         GeometryResponse: {
@@ -1437,7 +1487,7 @@ export interface components {
             triangle_splitting: boolean;
             /**
              * Max Absolute Edge Length
-             * @default 0
+             * @default 3
              */
             max_absolute_edge_length: number;
             /**
@@ -2772,7 +2822,7 @@ export interface components {
             active: boolean;
             /**
              * Max Absolute Edge Length
-             * @default 0
+             * @default 3
              */
             max_absolute_edge_length: number;
             /**
@@ -3758,6 +3808,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GeometryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_geometry_file_api_v1_geometries__geometry_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                geometry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_geometry_glb_api_v1_geometries__geometry_id__glb_get: {
+        parameters: {
+            query?: {
+                /** @description Keep ratio (0.01–1.0). e.g. 0.5 = keep 50% */
+                ratio?: number;
+            };
+            header?: never;
+            path: {
+                geometry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

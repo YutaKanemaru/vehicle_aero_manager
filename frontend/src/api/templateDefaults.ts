@@ -10,7 +10,7 @@ export const templateDefaults = {
     },
     meshing: {
       triangle_splitting: true,
-      max_absolute_edge_length: 0,
+      max_absolute_edge_length: 3,
       max_relative_edge_length: 9,
       refinement_level_transition_layers: 8,
       domain_bounding_box_relative: true,

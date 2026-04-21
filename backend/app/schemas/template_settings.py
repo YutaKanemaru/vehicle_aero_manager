@@ -39,14 +39,14 @@ class SimulationOption(BaseModel):
 class TriangleSplittingInstanceConfig(BaseModel):
     name: str
     active: bool = True
-    max_absolute_edge_length: float = 0.0
+    max_absolute_edge_length: float = 3.0
     max_relative_edge_length: float = 9.0
     parts: list[str] = Field(default_factory=list)
 
 
 class MeshingOption(BaseModel):
     triangle_splitting: bool = True
-    max_absolute_edge_length: float = 0.0
+    max_absolute_edge_length: float = 3.0
     max_relative_edge_length: float = 9.0
     refinement_level_transition_layers: int = 8
     domain_bounding_box_relative: bool = True  # bbox multipliers relative to car dimensions
