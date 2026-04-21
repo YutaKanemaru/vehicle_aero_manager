@@ -82,6 +82,7 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | 2A-5 | Ride Height / Yaw Transform — `System` model + `ride_height_service.py` + Template Builder UI | ✅ Complete |
 | 2A-6 | 3D viewer enhancements: 3-panel layout, Ortho/Persp, FlatShading, Edges, ContextMenu, Probe/PV/SC overlays | ✅ Complete |
 | 2A-7 | Case/Run UX: `case_number`/`run_number`, Duplicate, `CaseCreateModal` Copy tab, `CaseCompareModal`, `Run.stl_path` | ✅ Complete |
+| 2A-8 | Launch Assembly Builder button in TemplateBuilderPage — `IconPackage` ActionIcon beside Assembly Select opens `AssemblyGeometriesDrawer`; `handleBuilderClose` double-invalidates queries for live 3D refresh | ✅ Complete |
 | 2B | Post-processing EnSight viewer (PyVista backend) | 🔲 Planned |
 
 ---
@@ -1798,7 +1799,7 @@ showEdges: boolean                   // default false; THREE.EdgesGeometry overl
 - **3-column layout**: 275px `ControlPanel` | 255px `PartListPanel` | flex-1 `<SceneCanvas>`
 - **`ViewerToolbar`** (floating, top-right of 3D panel, `position:absolute`): `SegmentedControl` Persp/Ortho → `setCameraProjection()` · `Switch` Flat → `setFlatShading()` · `Switch` Edges → `setShowEdges()`
 - `ControlPanel` sections (275px left, scrollable):
-  1. Assembly `Select` → Template `Select`
+  1. Assembly `Select` (in `Group` with `IconPackage` ActionIcon — opens `AssemblyGeometriesDrawer` when clicked; `handleBuilderClose` double-invalidates `["assemblies"]` + `["assembly", id]` queries for live 3D refresh) → Template `Select`
   2. **Axis Visualisation (Run)** — Case `Select` (filtered to selected Assembly's cases) + Run `Select` (only `status=ready` runs shown); `useEffect` revokes/fetches axes GLB
   3. **Ride Height Transform** — Condition Map → Condition → Geometry selects → "Apply Ride Height Transform" `Button`; verification table (front/rear error mm, teal/orange)
   4. **Overlays** — `Switch` group (domainBox / refinementBoxes / wheelAxes / landmarks / probeSpheres / partialVolumes / groundPlane)

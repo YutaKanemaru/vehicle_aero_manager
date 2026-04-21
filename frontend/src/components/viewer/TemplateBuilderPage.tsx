@@ -16,8 +16,8 @@ import {
   Tooltip,
   SegmentedControl,
 } from "@mantine/core";
-import { IconArrowDown, IconSun, IconMoon, IconCamera } from "@tabler/icons-react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { IconArrowDown, IconSun, IconMoon, IconCamera, IconPackage } from "@tabler/icons-react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { assembliesApi, type AssemblyResponse, type GeometryResponse } from "../../api/geometries";
 import { templatesApi, type TemplateResponse } from "../../api/templates";
@@ -27,6 +27,7 @@ import { useViewerStore } from "../../stores/viewerStore";
 import { useJobsStore } from "../../stores/jobs";
 import { SceneCanvas } from "./SceneCanvas";
 import { PartListPanel } from "./PartListPanel";
+import { AssemblyGeometriesDrawer } from "../assemblies/AssemblyGeometriesDrawer";
 
 // ─── Left panel ──────────────────────────────────────────────────────────────
 
@@ -46,6 +47,24 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
   } = useViewerStore();
   const addJob = useJobsStore((s) => s.addJob);
   const updateJob = useJobsStore((s) => s.updateJob);
+  const queryClient = useQueryClient();
+
+  // Assembly builder drawer state
+  const [assemblyBuilderOpen, setAssemblyBuilderOpen] = useState(false);
+
+  // Full assembly (with up-to-date geometries list) for the Drawer
+  const { data: fullAssembly = null } = useQuery<AssemblyResponse | null>({
+    queryKey: ["assembly", selectedAssemblyId],
+    queryFn: () => assembliesApi.get(selectedAssemblyId!),
+    enabled: !!selectedAssemblyId,
+  });
+
+  function handleBuilderClose() {
+    setAssemblyBuilderOpen(false);
+    // Refresh both the flat assemblies list and the full assembly detail
+    queryClient.invalidateQueries({ queryKey: ["assemblies"] });
+    queryClient.invalidateQueries({ queryKey: ["assembly", selectedAssemblyId] });
+  }
 
   const { data: assemblies = [] } = useQuery<AssemblyResponse[]>({
     queryKey: ["assemblies"],
@@ -174,15 +193,31 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
     <Stack gap="sm" style={{ height: "100%" }}>
       <Title order={5}>Template Builder</Title>
 
-      <Select
-        label="Assembly"
-        placeholder="Select assembly..."
-        data={assemblyOptions}
-        value={selectedAssemblyId}
-        onChange={(v) => setSelectedAssemblyId(v)}
-        clearable
-        size="sm"
-      />
+      {/* Assembly selector + Launch Assembly Builder button */}
+      <Group gap="xs" align="flex-end" wrap="nowrap">
+        <Select
+          label="Assembly"
+          placeholder="Select assembly..."
+          data={assemblyOptions}
+          value={selectedAssemblyId}
+          onChange={(v) => setSelectedAssemblyId(v)}
+          clearable
+          size="sm"
+          style={{ flex: 1 }}
+        />
+        <Tooltip label="Launch Assembly Builder" position="right">
+          <ActionIcon
+            size="md"
+            variant="light"
+            color="teal"
+            disabled={!selectedAssemblyId}
+            onClick={() => setAssemblyBuilderOpen(true)}
+            mb={2}
+          >
+            <IconPackage size={15} />
+          </ActionIcon>
+        </Tooltip>
+      </Group>
 
       <Select
         label="Template overlay"
@@ -373,6 +408,11 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
         </ActionIcon>
       </Group>
 
+      <AssemblyGeometriesDrawer
+        assembly={fullAssembly}
+        opened={assemblyBuilderOpen}
+        onClose={handleBuilderClose}
+      />
     </Stack>
   );
 }

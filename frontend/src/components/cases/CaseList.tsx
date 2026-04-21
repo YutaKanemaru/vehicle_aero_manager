@@ -216,11 +216,6 @@ export function CaseList() {
                     )}
                   </Group>
                 </Table.Td>
-                        </ActionIcon>
-                      </Tooltip>
-                    )}
-                  </Group>
-                </Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>
