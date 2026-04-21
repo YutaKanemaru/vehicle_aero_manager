@@ -483,7 +483,7 @@ The root element is `<uFX_solver_deck>`. Key sub-structures:
   <output>
     <general>                     # file_format, output_coarsening, output_variables_full/surface,
                                   # avg_start/window_size/frequency, bounding_box
-    <moment_reference_system>     # Type, origin, roll/pitch/yaw axis
+    <moment_reference_system>     # origin, roll/pitch/yaw axis (no Type field — not in official docs)
     <aero_coefficients>           # reference_area/length, coefficients_along_axis, passive_parts
     <section_cut><section_cut_instance>[]  # GHN specific — high-frequency transient output
     <probe_file><probe_file_instance>[]    # optional — probe locations loaded from CSV
@@ -976,8 +976,8 @@ The Compute Engine derives `Computed` fields from STL geometry. Key calculations
 | Output | Method | Library |
 |---|---|---|
 | `domain_bounding_box` | Vehicle bbox × relative multipliers from template | `trimesh` or `numpy` |
-| `meshing.overset.rotating` (wheel center/axis) | PCA on rim vertices → axis = 3rd principal component | `trimesh` + `numpy` |
-| `sources.porous.porous_axis` | PCA on porous media vertices → face normal direction | `trimesh` + `numpy` |
+| `meshing.overset.rotating` (wheel center/axis) | PCA on rim vertices via `extract_pca_axes()` → axis = `vt[2]` (min variance = rotation axis) | `numpy` |
+| `sources.porous.porous_axis` | PCA on porous vertices via `extract_pca_axes()` → `vt[2]` (min variance = face normal = flow direction) | `numpy` |
 | `boundary_conditions.wall` (rotating) | Linked to wheel center/axis/rpm | derived from above |
 
 **Additional Compute Engine calculations (Step 4):**
@@ -998,6 +998,10 @@ The Compute Engine derives `Computed` fields from STL geometry. Key calculations
 - Wheel grouping: classify FR-LH / FR-RH / RR-LH / RR-RH by comparing part centroid to vehicle COG (x, y)
 - RPM calculation: `rpm = (inflow_velocity / wheel_circumference) × 60` — needs wheel radius from bbox
 - `analyze_stl(file_path, verbose=False)` — pass `verbose=True` to print step-by-step progress logs (used by `backend/scripts/test_compute_engine.py`)
+- **`extract_pca_axes()` is a separate STL re-scan** — `analyze_stl` intentionally discards vertices for memory efficiency; `extract_pca_axes` streams the STL a second time collecting only the vertices of matched parts
+- **Porous axis PCA**: uses `vt[2]` (min variance direction = face normal = flow direction through the flat porous surface). `vt[0]` was wrong and has been corrected.
+- **Rim axis PCA**: uses `vt[2]` (min variance = rotation axis of the flat rim disk); if `y < 0`, flip sign.
+- **Porous matching**: `porous_coefficients[].part_name` is a glob pattern — `_matches_any` is used so `HX_Rad_*` can match multiple parts (e.g. inlet + outlet). All matched parts are grouped into a single `PorousInstance` with their combined vertices used for PCA.
 
 **Test script**: `backend/scripts/test_compute_engine.py` — runs `analyze_stl()` standalone and prints vehicle bbox, dimensions, and per-part summary. Run with `uv run python scripts/test_compute_engine.py [<stl_path>]`. Auto-detects first STL in `data/uploads/geometries/` if no argument given. Saves full result to `test_compute_engine_result.json`.
 
@@ -1236,11 +1240,33 @@ def assemble_ufx_solver_deck(
     yaw_angle: float,
     source_file: str | None = None,
     source_files: list[str] | None = None,
+    pca_axes: dict | None = None,   # from extract_pca_axes()
 ) -> UfxSolverDeck:
     """Top-level orchestrator — assembles all 7 UfxSolverDeck sections.
     Multi-STL: if source_files provided, sets geometry.source_files list.
     Probe instances: builds ProbeFileInstance per probe_files config.
     Partial surface/volume: builds instances dynamically from template output config.
+    pca_axes: {"porous": {part_name: ndarray}, "rim": {part_name: ndarray}} from extract_pca_axes().
+    """
+
+def extract_pca_axes(
+    stl_paths: list[Path],
+    porous_patterns: list[str],
+    rim_patterns: list[str],
+) -> dict:
+    """Re-scan ASCII STL files to collect vertices for parts matching the given patterns.
+    Binary STL files are skipped (graceful fallback to bbox axis).
+    Returns: {"porous": {part_name: np.ndarray[N,3]}, "rim": {part_name: np.ndarray[N,3]}}
+    Memory-efficient: only collects vertices for matching parts.
+    Called from configuration_service._generate_xml_task() before assemble_ufx_solver_deck().
+    """
+
+def _find_rim_vertices_for_wheel(
+    wheel_info: dict,
+    rim_vertices_map: dict[str, np.ndarray],
+) -> np.ndarray | None:
+    """Returns vertices of the rim part whose centroid is closest to the wheel centroid.
+    Used to pass the correct rim vertices to compute_wheel_kinematics() per wheel.
     """
 
 def build_probe_csv_files(template_settings: TemplateSettings) -> dict[str, bytes]:
@@ -1265,18 +1291,19 @@ def compute_domain_bbox(vehicle_bbox: dict, multipliers: list[float]) -> dict:
 def classify_wheels(analysis_result: dict, target_names: TargetNames) -> dict:
     """Sort wheel parts into FR_LH/FR_RH/RR_LH/RR_RH by centroid vs COG."""
 
-def compute_wheel_kinematics(wheel_parts: dict, inflow_velocity: float) -> list[dict]:
-    """PCA on rim vertices → axis; rpm = inflow_velocity / (2π×radius) × 60."""
+def compute_wheel_kinematics(wheel_info: dict, inflow_velocity: float, rim_vertices: np.ndarray | None = None) -> dict:
+    """PCA on rim vertices (vt[2] = min variance = rotation axis) → axis; rpm = inflow_velocity / (2π×radius) × 60.
+    Falls back to Y-axis (0,1,0) when rim_vertices is None."""
 
-def compute_porous_axis(part_info: dict) -> dict:
-    """PCA on porous part vertices → face normal → PorousAxis xyz."""
+def compute_porous_axis(part_info: dict, vertices: np.ndarray | None = None) -> dict:
+    """PCA on porous part vertices: vt[2] (min variance = face normal = flow direction) → PorousAxis xyz.
+    Falls back to bbox thinnest-axis when vertices is None."""
 
 def _build_belt5_wall_instances(
     wheel_kin_map, belt5_cfg, vbbox, velocity_dir,
     FluidBCMoving, XYZDir, WallInstance,
     DomainPartInstance, BoundingRange,
 ) -> tuple[list, float, list]:
-    """Returns (wall_instances, center_xmin, domain_part_instances).
     Builds 5 moving WallInstances (FR_LH/FR_RH/RR_LH/RR_RH + Belt_Center) and
     corresponding DomainPartInstances (location="z_min", export_mesh=True) with
     computed bounding_range per belt from wheel kinematics and belt5 config.

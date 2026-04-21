@@ -560,7 +560,6 @@ def _ser_output(parent: etree._Element, o: Output) -> None:
     _ser_bounding_box(gen, "bounding_box", o.general.bounding_box)
 
     mrs = etree.SubElement(el, "moment_reference_system")
-    _sub_str(mrs, "Type", o.moment_reference_system.type)
     _ser_xyz_pos(mrs, "origin", o.moment_reference_system.origin)
     _ser_xyz_dir(mrs, "roll_axis", o.moment_reference_system.roll_axis)
     _ser_xyz_dir(mrs, "pitch_axis", o.moment_reference_system.pitch_axis)

@@ -648,7 +648,6 @@ def _parse_output(el: etree._Element) -> Output:
 
     mrs_el = el.find("moment_reference_system")
     moment_ref = MomentReferenceSystem(
-        type=_text(mrs_el, "Type"),
         origin=_parse_xyz_pos(mrs_el.find("origin")),
         roll_axis=_parse_xyz_dir(mrs_el.find("roll_axis")),
         pitch_axis=_parse_xyz_dir(mrs_el.find("pitch_axis")),

@@ -1689,7 +1689,6 @@ def assemble_ufx_solver_deck(
                 bounding_box=out_bb,
             ),
             moment_reference_system=MomentReferenceSystem(
-                **{"Type": "SAE"},
                 origin=XYZPos(**moment_origin),
                 roll_axis=XYZDir(x_dir=1.0, y_dir=0.0, z_dir=0.0),
                 pitch_axis=XYZDir(x_dir=0.0, y_dir=1.0, z_dir=0.0),

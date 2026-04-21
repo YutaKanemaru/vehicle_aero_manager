@@ -432,13 +432,10 @@ class OutputGeneral(BaseModel):
 
 
 class MomentReferenceSystem(BaseModel):
-    type: str = Field(alias="Type")             # XML tag is <Type> (capital T)
     origin: XYZPos
     roll_axis: XYZDir
     pitch_axis: XYZDir
     yaw_axis: XYZDir
-
-    model_config = {"populate_by_name": True}
 
 
 class ExportBounds(BaseModel):
