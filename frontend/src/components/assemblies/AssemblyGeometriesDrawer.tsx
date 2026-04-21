@@ -263,15 +263,22 @@ function AddPanel({ available, folders, selected, onToggle, onAdd, isPending }: 
 // ── Main drawer ───────────────────────────────────────────────────────────────
 
 interface Props {
-  assembly: AssemblyResponse | null;
+  assemblyId: string | null;
   opened: boolean;
   onClose: () => void;
 }
 
-export function AssemblyGeometriesDrawer({ assembly, opened, onClose }: Props) {
+export function AssemblyGeometriesDrawer({ assemblyId, opened, onClose }: Props) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<string>("current");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Always fetch fresh assembly data — this is the single source of truth
+  const { data: assembly = null } = useQuery<AssemblyResponse | null>({
+    queryKey: ["assembly", assemblyId],
+    queryFn: () => assembliesApi.get(assemblyId!),
+    enabled: !!assemblyId && opened,
+  });
 
   const { data: allGeometries = [] } = useQuery({
     queryKey: ["geometries"],
@@ -290,16 +297,25 @@ export function AssemblyGeometriesDrawer({ assembly, opened, onClose }: Props) {
     (g) => !assemblyGeometryIds.has(g.id) && g.status === "ready"
   );
 
+  function invalidateAssembly() {
+    queryClient.invalidateQueries({ queryKey: ["assembly", assemblyId] });
+    queryClient.invalidateQueries({ queryKey: ["assemblies"] });
+  }
+
   const addMutation = useMutation({
-    mutationFn: (geometryId: string) => assembliesApi.addGeometry(assembly!.id, geometryId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["assemblies"] }),
+    mutationFn: (geometryId: string) => assembliesApi.addGeometry(assemblyId!, geometryId),
+    onSuccess: () => {
+      invalidateAssembly();
+      setSelected(new Set());
+      notifications.show({ message: "Geometry added", color: "green" });
+    },
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
 
   const removeMutation = useMutation({
-    mutationFn: (geometryId: string) => assembliesApi.removeGeometry(assembly!.id, geometryId),
+    mutationFn: (geometryId: string) => assembliesApi.removeGeometry(assemblyId!, geometryId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["assemblies"] });
+      invalidateAssembly();
       notifications.show({ message: "Geometry removed", color: "green" });
     },
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
@@ -315,32 +331,19 @@ export function AssemblyGeometriesDrawer({ assembly, opened, onClose }: Props) {
 
   function handleAdd() {
     const ids = [...selected];
-    let remaining = ids.length;
-    ids.forEach((id) => {
-      addMutation.mutate(id, {
-        onSuccess: () => {
-          remaining--;
-          if (remaining === 0) {
-            setSelected(new Set());
-            notifications.show({
-              message: `${ids.length} geometry${ids.length > 1 ? " geometries" : ""} added`,
-              color: "green",
-            });
-          }
-        },
-      });
-    });
+    // Fire all in sequence; success is handled by the shared onSuccess above
+    ids.forEach((id) => addMutation.mutate(id));
   }
 
-  if (!assembly) return null;
+  if (!assemblyId) return null;
 
-  const currentCount = (assembly.geometries ?? []).length;
+  const currentCount = (assembly?.geometries ?? []).length;
 
   return (
     <Drawer
       opened={opened}
       onClose={onClose}
-      title={<Text fw={600}>Geometries \u2014 {assembly.name}</Text>}
+      title={<Text fw={600}>Geometries \u2014 {assembly?.name ?? "\u2026"}</Text>}
       position="right"
       size="md"
       styles={{
@@ -365,7 +368,9 @@ export function AssemblyGeometriesDrawer({ assembly, opened, onClose }: Props) {
       />
 
       <Box style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-        {tab === "current" ? (
+        {assembly === null ? (
+          <Text size="sm" c="dimmed">Loading\u2026</Text>
+        ) : tab === "current" ? (
           <ScrollArea style={{ flex: 1 }} type="auto">
             <CurrentPanel assembly={assembly} removeMutation={removeMutation} />
           </ScrollArea>

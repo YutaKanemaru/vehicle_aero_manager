@@ -409,7 +409,7 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
       </Group>
 
       <AssemblyGeometriesDrawer
-        assembly={fullAssembly}
+        assemblyId={selectedAssemblyId}
         opened={assemblyBuilderOpen}
         onClose={handleBuilderClose}
       />

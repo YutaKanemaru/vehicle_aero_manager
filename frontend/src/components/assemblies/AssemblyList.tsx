@@ -265,7 +265,7 @@ export function AssemblyList() {
   const queryClient = useQueryClient();
   const [createOpened, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [folderOpened, { open: openFolder, close: closeFolder }] = useDisclosure(false);
-  const [drawerAssembly, setDrawerAssembly] = useState<AssemblyResponse | null>(null);
+  const [drawerAssemblyId, setDrawerAssemblyId] = useState<string | null>(null);
 
   const { data: assemblies = [], isLoading, refetch } = useQuery({
     queryKey: ["assemblies"],
@@ -305,9 +305,8 @@ export function AssemblyList() {
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
 
-  async function openDrawer(a: AssemblyResponse) {
-    const detail = await assembliesApi.get(a.id);
-    setDrawerAssembly(detail);
+  function openDrawer(a: AssemblyResponse) {
+    setDrawerAssemblyId(a.id);
   }
 
   const canDelete = (a: AssemblyResponse) =>
@@ -386,9 +385,9 @@ export function AssemblyList() {
       <AssemblyCreateModal opened={createOpened} onClose={closeCreate} />
       <NewFolderModal opened={folderOpened} onClose={closeFolder} />
       <AssemblyGeometriesDrawer
-        assembly={drawerAssembly}
-        opened={drawerAssembly !== null}
-        onClose={() => setDrawerAssembly(null)}
+        assemblyId={drawerAssemblyId}
+        opened={drawerAssemblyId !== null}
+        onClose={() => setDrawerAssemblyId(null)}
       />
     </Stack>
   );
