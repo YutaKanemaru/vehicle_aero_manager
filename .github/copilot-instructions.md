@@ -79,6 +79,7 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | 2A-2 | Frontend Three.js setup + `viewerStore` + GLB fetch helper | ✅ Complete |
 | 2A-3 | `SceneCanvas`, `OverlayObjects`, `PartListPanel` components | ✅ Complete |
 | 2A-4 | `TemplateBuilderPage` (`/template-builder`) + AppShell nav | ✅ Complete |
+| 2A-5 | Ride Height / Yaw Transform — `System` model + `ride_height_service.py` + Template Builder UI | ✅ Complete |
 | 2B | Post-processing EnSight viewer (PyVista backend) | 🔲 Planned |
 
 ---
@@ -100,13 +101,19 @@ vehicle_aero_manager/
 │       ├── models/              # SQLAlchemy ORM models only
 │       ├── schemas/             # Pydantic request/response schemas only
 │       ├── services/            # Business logic — DB operations belong here, not in routers
-│       │   ├── viewer_service.py  # GLB generation, decimation, cache management
+│       │   ├── viewer_service.py      # GLB generation, decimation, cache management
+│       │   ├── ride_height_service.py # Ride height / yaw STL transform + System creation
 │       ├── storage/             # StorageBackend abstraction
 │       └── ultrafluid/          # XML schema (Pydantic), parser, serializer — isolated module
 ├── frontend/
 │   └── src/
 │       ├── api/                 # API client — generated schema.d.ts + templateDefaults.ts + typed wrappers
+│       │   ├── systems.ts         # systemsApi + transformApi (Phase 2A-5)
 │       ├── components/          # UI components
+│       │   ├── maps/
+│       │   │   ├── MapList.tsx
+│       │   │   ├── MapCreateModal.tsx
+│       │   │   └── ConditionFormModal.tsx  # create/edit condition with ride height accordion
 │       ├── hooks/               # Custom React hooks (useTemplateSettingsForm, useJobsPoller, etc.)
 │       ├── scripts/             # Build-time Node.js scripts (extract-defaults.mjs)
 │       ├── stores/              # Zustand stores only (auth, jobs, viewerStore)
@@ -1009,62 +1016,97 @@ The Compute Engine derives `Computed` fields from STL geometry. Key calculations
 
 ## Step 5: Case / Configuration / Run — Implementation Details (Complete)
 
-### Data Model (3-layer hierarchy)
+> **Note**: The original `Configuration` model has been refactored into `ConditionMap` + `Condition`. The term "Configuration" no longer exists in the codebase.
 
-| Model | Purpose |
-|---|---|
-| `Case` | Top-level container: bundles Template × 1 + Assembly × 1 + Configurations |
-| `Configuration` | Stores UserInput per test condition (speed, yaw, porous coefficients, compute flags) |
-| `Run` | Execution unit: picks one Configuration → generates XML → links to scheduler job |
+### Data Model (4-layer hierarchy)
 
-**Design decision**: Cases represent geometry/template combos. Cross-geometry comparison = separate Cases with Runs compared via Diff view.
+| Model | File | Purpose |
+|---|---|---|
+| `ConditionMap` | `app/models/configuration.py` | Named collection of run conditions (e.g. "40m/s sweep") |
+| `Condition` | `app/models/configuration.py` | Single run condition: velocity + yaw + ride_height_json + yaw_config_json |
+| `Case` | `app/models/configuration.py` | Bundles Template × Assembly; optionally linked to a ConditionMap |
+| `Run` | `app/models/configuration.py` | Execution unit: links Case + Condition → generates XML |
+| `System` | `app/models/system.py` | STL transform record: source_geometry → result_geometry + transform_snapshot |
+
+**Design decision**: ConditionMaps are independent of Cases — they can be reused across multiple Cases. A Run picks one Condition from any map.
 
 ### Backend
 
 **Models** (`app/models/configuration.py`)
-- `Case`: `id`, `name`, `description`, `template_id` (FK→templates), `assembly_id` (FK→geometry_assemblies), `created_by`, `created_at`, `updated_at`; `configurations` and `runs` relationships
-- `Configuration`: `id`, `name`, `description`, `case_id` (FK→cases), `settings` (JSON Text — `ConfigurationSettings`), `created_by`, `created_at`, `updated_at`
-- `Run`: `id`, `name`, `case_id` (FK→cases), `configuration_id` (FK→configurations), `xml_path` (nullable), `status` (`pending`/`generating`/`ready`/`error`), `error_message` (nullable), `scheduler_job_id` (nullable — PBS/Slurm future), `created_by`, `created_at`, `updated_at`
+- `ConditionMap`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`; `conditions` one-to-many (cascade delete)
+- `Condition`: `id`, `map_id` (FK→condition_maps, index), `name`, `inflow_velocity`, `yaw_angle`, `ride_height_json` (Text, nullable), `yaw_config_json` (Text, nullable), `created_by`, `created_at`, `updated_at`
+  - `@property ride_height` → parses `ride_height_json` or returns `{}`
+  - `@property yaw_config` → parses `yaw_config_json` or returns `{}`
+- `Case`: `id`, `name`, `description`, `template_id` (FK→templates), `assembly_id` (FK→geometry_assemblies), `map_id` (FK→condition_maps, nullable), `created_by`, `created_at`, `updated_at`; `runs` relationship
+- `Run`: `id`, `name`, `case_id` (FK→cases, CASCADE, index), `condition_id` (FK→conditions), `xml_path` (nullable), `status` (`pending`/`generating`/`ready`/`error`), `error_message` (nullable), `scheduler_job_id` (nullable), `created_by`, `created_at`, `updated_at`
+
+**Models** (`app/models/system.py`)
+- `System`: `id`, `name`, `source_geometry_id` (FK→geometries), `result_geometry_id` (FK→geometries, nullable), `condition_id` (FK→conditions, nullable), `transform_snapshot` (Text/JSON), `created_by`, `created_at`
 
 **Schemas** (`app/schemas/configuration.py`)
 
 ```python
-class PorousInput(BaseModel):
-    part_name: str
-    inertial_resistance: float   # 1/m — required per porous part
-    viscous_resistance: float    # 1/s — required per porous part
+class RideHeightConditionConfig(BaseModel):
+    enabled: bool = False
+    target_front_wheel_axis_rh: float | None = None  # m from ground
+    target_rear_wheel_axis_rh: float | None = None
+    adjust_body_wheel_separately: bool = False
+    use_original_wheel_position: bool = False  # True = return wheels to original position
+    target_front_wheel_rh: float | None = None  # used when separately=True, original=False
+    target_rear_wheel_rh: float | None = None
 
-class ComputeOverrides(BaseModel):
-    """Override Template's ComputeOption per Configuration. None = use Template default."""
-    porous_media: bool | None = None
-    turbulence_generator: bool | None = None
-    adjust_ride_height: bool | None = None
+class YawConditionConfig(BaseModel):
+    center_mode: Literal["wheel_center", "user_input"] = "wheel_center"
+    center_x: float = 0.0
+    center_y: float = 0.0
 
-class RideHeightInput(BaseModel):
-    front_wheel_axis_rh: float | None = None   # m — front wheel centre height from ground
-    rear_wheel_axis_rh: float | None = None    # m
-    adjust_body_wheel_separately: bool = True
+class ConditionCreate(BaseModel):
+    name: str
+    inflow_velocity: float
+    yaw_angle: float = 0.0
+    ride_height: RideHeightConditionConfig = Field(default_factory=RideHeightConditionConfig)
+    yaw_config: YawConditionConfig = Field(default_factory=YawConditionConfig)
 
-class ConfigurationSettings(BaseModel):
-    inflow_velocity: float | None = None       # None = use Template default
-    yaw_angle: float = 0.0                     # degrees
-    simulation_time: float | None = None       # None = use Template default
-    porous_coefficients: list[PorousInput] = []
-    compute_overrides: ComputeOverrides = Field(default_factory=ComputeOverrides)
-    ride_height: RideHeightInput = Field(default_factory=RideHeightInput)
+class ConditionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str; map_id: str; name: str; inflow_velocity: float; yaw_angle: float
+    ride_height: RideHeightConditionConfig
+    yaw_config: YawConditionConfig
+    created_by: str; created_at: datetime; updated_at: datetime
+    # @model_validator(mode="before") parses ride_height_json / yaw_config_json from ORM
+
+class ConditionMapResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str; name: str; description: str | None
+    created_by: str; created_at: datetime; updated_at: datetime
+    condition_count: int = 0  # populated in router
+
+class TransformRequest(BaseModel):
+    """POST /geometries/{id}/transform"""
+    name: str  # name for the resulting Geometry
+    condition_id: str | None = None
+    ride_height: RideHeightConditionConfig = Field(default_factory=RideHeightConditionConfig)
+    yaw_angle_deg: float = 0.0
+    yaw_config: YawConditionConfig = Field(default_factory=YawConditionConfig)
+
+class SystemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str; name: str; source_geometry_id: str; result_geometry_id: str | None
+    condition_id: str | None; transform_snapshot: dict | None
+    created_by: str; created_at: datetime
 ```
 
-- `CaseCreate`, `CaseUpdate`, `CaseResponse` (includes `configuration_count`, `run_count`)
-- `ConfigurationCreate`, `ConfigurationUpdate`, `ConfigurationResponse`
+- `CaseCreate`, `CaseUpdate`, `CaseResponse` (includes `run_count`)
 - `RunCreate`, `RunResponse` (includes `xml_path`, `status`)
 - `DiffResult`: list of changed fields between two Runs
 
 **Service** (`app/services/configuration_service.py`)
+- `list_maps`, `get_map`, `create_map`, `update_map`, `delete_map`
+- `list_conditions(map_id)`, `get_condition`, `create_condition`, `update_condition`, `delete_condition` — JSON fields serialized via `json.dumps(data.ride_height.model_dump())`
 - `list_cases`, `get_case`, `create_case`, `update_case`, `delete_case`
-- `list_configurations(case_id)`, `get_configuration`, `create_configuration`, `update_configuration`, `delete_configuration`
-- `create_run(case_id, configuration_id)`, `list_runs(case_id)`
-- `generate_xml(run_id, db, background_tasks)` — background task: `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml`; then `build_probe_csv_files()` writes one CSV per probe_file_instance beside the XML → update `run.status`
-- Multi-STL: if Assembly has 1 geometry → `source_file`; if multiple → `source_files` list passed to `assemble_ufx_solver_deck`
+- `create_run(case_id, condition_id)`, `list_runs(case_id)`
+- `generate_xml(run_id, db, background_tasks)` — background task: resolves Condition → `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml`; then `build_probe_csv_files()` writes one CSV per probe_file_instance beside the XML → update `run.status`
+- `get_axes_glb(db, case_id, run_id) -> bytes`: resolves Run → Condition → Assembly → `viewer_service.build_axes_glb()`; raises 400 on ValueError
 - `get_diff(run_id_a, run_id_b, db)` → `DiffResult`
 - Permission check: `resource.created_by == current_user.id OR current_user.is_admin`
 
@@ -1072,23 +1114,47 @@ class ConfigurationSettings(BaseModel):
 
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/maps/` | List all condition maps |
+| `POST` | `/maps/` | Create condition map |
+| `GET` | `/maps/{map_id}` | Get map (includes condition_count) |
+| `PATCH` | `/maps/{map_id}` | Update map name/description |
+| `DELETE` | `/maps/{map_id}` | Delete map + cascade conditions |
+| `GET` | `/maps/{map_id}/conditions/` | List conditions in map |
+| `POST` | `/maps/{map_id}/conditions/` | Create condition (includes ride_height, yaw_config) |
+| `GET` | `/maps/{map_id}/conditions/{cid}` | Get condition |
+| `PATCH` | `/maps/{map_id}/conditions/{cid}` | Update condition |
+| `DELETE` | `/maps/{map_id}/conditions/{cid}` | Delete condition |
 | `GET` | `/cases/` | List all cases |
 | `POST` | `/cases/` | Create case (template_id + assembly_id required) |
-| `GET` | `/cases/{id}` | Get case with configuration_count + run_count |
+| `GET` | `/cases/{id}` | Get case with run_count |
 | `PATCH` | `/cases/{id}` | Update name/description |
 | `DELETE` | `/cases/{id}` | Delete case + cascade |
-| `GET` | `/cases/{id}/configurations/` | List configurations |
-| `POST` | `/cases/{id}/configurations/` | Create configuration |
-| `GET` | `/cases/{id}/configurations/{cid}` | Get configuration |
-| `PATCH` | `/cases/{id}/configurations/{cid}` | Update configuration |
-| `DELETE` | `/cases/{id}/configurations/{cid}` | Delete configuration |
 | `GET` | `/cases/{id}/runs/` | List runs |
-| `POST` | `/cases/{id}/runs/` | Create run (configuration_id required) |
+| `POST` | `/cases/{id}/runs/` | Create run (condition_id required) |
 | `POST` | `/cases/{id}/runs/{rid}/generate` | Trigger XML generation (background task) |
 | `GET` | `/cases/{id}/runs/{rid}/download` | Download generated XML |
+| `GET` | `/cases/{id}/runs/{rid}/axes-glb` | On-demand axis-visualisation GLB |
 | `GET` | `/runs/diff?a={rid}&b={rid}` | Diff two runs' settings |
 
-**Migration**: new Alembic revision for `cases`, `configurations`, `runs` tables.
+**API Endpoints** (`app/api/v1/systems.py`):
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/systems/` | List all systems |
+| `GET` | `/systems/{id}` | Get system (transform_snapshot parsed from JSON) |
+| `DELETE` | `/systems/{id}` | Delete system (result geometry DB row removed; file kept) |
+| `GET` | `/systems/{id}/landmarks-glb` | GLB with before/after landmark spheres |
+
+**`POST /geometries/{id}/transform`** (in `app/api/v1/geometries.py`):
+- Body: `TransformRequest` — name, condition_id?, ride_height, yaw_angle_deg, yaw_config
+- Validates geometry `status == "ready"` and `analysis_result` exists
+- Calls `ride_height_service.compute_transform()` → snapshot dict
+- Calls `ride_height_service.create_system_and_geometry()` → `(System, Geometry)` in background
+- Returns `{system_id, geometry_id, geometry_name, geometry_status, transform_snapshot}`
+
+**Migrations**:
+- `4a08074381f4_add_condition_maps_conditions_refactor_` — ConditionMap + Condition tables; Run.condition_id replaces configuration_id
+- `8949ff1689b0_add_ride_height_yaw_to_conditions_and_` — systems table; `ride_height_json` + `yaw_config_json` on conditions
 
 ### Template Settings Extensions (`app/schemas/template_settings.py`)
 
@@ -1413,22 +1479,16 @@ turbulence_generator:
 
 ### Frontend Components
 
-- `src/components/cases/CaseList.tsx` — table with Template/Assembly badges, config count, Run button
+- `src/components/maps/MapList.tsx` — Condition Maps table; per-map drawer opens `ConditionSection`; shows ride height badge per condition row + edit button
+- `src/components/maps/MapCreateModal.tsx` — create map (name + description)
+- `src/components/maps/ConditionFormModal.tsx` — create/edit condition; two Accordions:
+  - **Ride Height Transform**: enabled switch → target front/rear wheel axis heights → adjust separately switch → use original position switch → per-wheel RH targets
+  - **Yaw Center Configuration**: `center_mode` Select (`wheel_center` / `user_input`) → center X/Y inputs when `user_input`
+- `src/components/cases/CaseList.tsx` — table with Template/Assembly badges, Run button
 - `src/components/cases/CaseCreateModal.tsx` — Template + Assembly selector
-- `src/components/configurations/ConfigurationList.tsx` — list within Case detail
-- `src/components/configurations/ConfigurationCreateModal.tsx` — multi-section form (below)
 - `src/components/runs/RunList.tsx` — status badge, XML download link, Diff selector
 - `src/components/runs/DiffView.tsx` — side-by-side or diff-list view of two Run settings
-- Navigation: `AppShell.tsx` adds `Cases` (IconCar)
-
-**`ConfigurationCreateModal` sections:**
-
-| Section | Fields |
-|---|---|
-| Conditions | `inflow_velocity` (Template default shown), `yaw_angle`, `simulation_time` (optional override) |
-| Compute Options | Checkbox tree — porous_media, turbulence_generator, adjust_ride_height (rotate_wheels/moving_ground derived from ground_mode) |
-| Porous Coefficients | Auto-generated from Assembly porous parts — `inertial/viscous_resistance` per part (shown only if porous_media=ON) |
-| Ride Height | `front/rear_wheel_axis_rh`, `adjust_body_wheel_separately` (shown only if adjust_ride_height=ON) |
+- Navigation: `AppShell.tsx` adds `Condition Maps` (IconList) and `Cases` (IconCar)
 
 **`TemplateSettingsForm.tsx`** (used inside Create/Edit/View modals):
 
@@ -1541,6 +1601,36 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 
 ### Backend
 
+**`backend/app/services/ride_height_service.py`** (new — Phase 2A-5)
+- `compute_transform(analysis_result, rh_cfg, yaw_angle_deg, yaw_cfg) -> dict` — pure math, no file I/O:
+  - Derives `front_x/z_orig`, `rear_x/z_orig` from `part_info` centroids matching `wheel` patterns
+  - Computes `wheelbase`, `pitch_angle_orig/target`, `delta_pitch`, `tz` (Z-translation)
+  - Yaw center: midpoint of FR/RR wheel axes (mode=`wheel_center`) or user XY (mode=`user_input`)
+  - **Transform order**: Yaw (Z-axis) → Pitch (Y-axis, Rodrigues) → Z-translate
+  - Returns `transform_snapshot` dict with keys:
+    - `transform`: `{yaw_angle_deg, yaw_center_xy, pitch_angle_deg, rotation_pivot, translation}`
+    - `wheel_transforms`: per-corner `{translation}` or `null` (when `adjust_body_wheel_separately=False`)
+    - `landmarks`: `{front_wheel_center, rear_wheel_center, wheelbase_center, vehicle_bbox_z_min}` — each has `before`/`after`
+    - `targets`: `{front_wheel_axis_rh, rear_wheel_axis_rh, yaw_angle_deg}`
+    - `verification`: `{front_wheel_z_actual, front_wheel_z_target, front_error_m, rear_...}`
+- `_rodrigues_y(vertices, angle_deg, pivot)` — Y-axis rotation matrix (Rodrigues formula, pure NumPy)
+- `_rotate_z(vertices, angle_deg, center_xy)` — Z-axis rotation
+- `transform_vertices(vertices, tr) -> np.ndarray` — apply yaw→pitch→translate
+- `_transform_stl_buffered(source_path, out_path, body_transform, wheel_part_transforms, wheel_patterns)` — streaming ASCII STL transform; applies per-part transforms when `wheel_part_transforms` is set; other parts use `body_transform`
+- `create_system_and_geometry(db, source_geometry, transform_snapshot, name, current_user, condition_id, background_tasks) -> (System, Geometry)` — creates result `Geometry` row (`is_linked=False`, status=`pending`), creates `System` record, triggers `run_analysis()` background task
+- `adjust_body_wheel_separately` branch: body uses body pitch+translate; each wheel uses its own transform so that wheels land at `target_front/rear_wheel_rh` or are restored to original position (`use_original_wheel_position=True`)
+
+**`backend/app/services/viewer_service.py`** — `build_landmarks_glb(transform_snapshot: dict) -> bytes` (Phase 2A-5 addition)
+- Before: grey translucent spheres `(0.5, 0.5, 0.5, 0.5)` at original positions
+- After front: red `(1.0, 0.15, 0.15, 1.0)` · After rear: blue `(0.15, 0.4, 1.0, 1.0)` · After wheelbase: white
+- Uses `_make_sphere_solid()` + `GLBExporter.export()`
+
+**`backend/scripts/test_ride_height.py`** (new)
+- CLI: `uv run python scripts/test_ride_height.py [<stl_path>] [front_rh] [rear_rh] [yaw_deg]`
+- Runs `analyze_stl()` + `compute_transform()`, prints landmark table + verification errors, saves `test_ride_height_result.json`
+
+---
+
 **`backend/app/services/viewer_service.py`** (new)
 - `DEFAULT_RATIO: float = 0.05` — global default (keep 5% of faces)
 - `build_viewer_glb(geometry, ratio=DEFAULT_RATIO) -> bytes`: (1) `STLReader.read(stl_path)` (ASCII+Binary auto-detect) → (2) `ProcessPoolExecutor` parallel `_decimate_worker` (each part independently with same `ratio`) → (3) `GLBExporter.export(valid_solids, cache_path)` → read bytes → return. **No trimesh or fast-simplification dependency.**
@@ -1607,11 +1697,21 @@ searchMode: "include" | "exclude"
 overlays: { domainBox, refinementBoxes, wheelAxes, groundPlane }
 selectedAssemblyId: string | null
 selectedTemplateId: string | null
-selectedCaseId: string | null      // for axis GLB (Case that owns the Run)
-selectedRunId: string | null       // for axis GLB fetch
-axesGlbUrl: string | null          // blob URL of current axes GLB; null = no axes overlay
-ratio: 0.05  // decimation ratio used for GLB fetch; no UI selector in viewer
+selectedCaseId: string | null        // for axis GLB (Case that owns the Run)
+selectedRunId: string | null         // for axis GLB fetch
+axesGlbUrl: string | null            // blob URL of current axes GLB; null = no axes overlay
+ratio: 0.05                          // decimation ratio used for GLB fetch
+// Phase 2A-5 additions:
+selectedConditionMapId: string | null
+selectedConditionId: string | null
+landmarksGlbUrl: string | null       // blob URL for transform landmarks overlay
 ```
+
+**`src/api/systems.ts`** (new)
+- `systemsApi.list()`, `.get(id)`, `.delete(id)`, `.getLandmarksGlbUrl(id)` — fetch as blob → `createObjectURL()`
+- `transformApi.transform(geometryId, data: TransformRequest) -> TransformResult`
+- `TransformResult`: `{ system_id, geometry_id, geometry_name, geometry_status, transform_snapshot }`
+- `RideHeightConditionConfig`, `YawConditionConfig`, `TransformRequest` re-exported from `schema.d.ts`
 
 **`src/api/geometries.ts`** — helpers:
 - `geometriesApi.getGlbBlobUrl(id, ratio?)`: fetches GLB with auth header → `Blob` → `URL.createObjectURL()`, returns URL string. Caller must `URL.revokeObjectURL()` on cleanup. Default `ratio = 0.05`.
@@ -1660,11 +1760,15 @@ ratio: 0.05  // decimation ratio used for GLB fetch; no UI selector in viewer
   1. Assembly `Select` → Template `Select`
   2. **Axis Visualisation (Run)** — Case `Select` (filtered to selected Assembly's cases) + Run `Select` (only `status=ready` runs shown)
      - `useEffect` on `[selectedCaseId, selectedRunId, overlays.wheelAxes]`: revokes previous blob URL, fetches `runsApi.getAxesGlbUrl()` when all three are set, stores in `viewerStore.axesGlbUrl`
-     - Case list cleared when Assembly selection changes
-  3. Overlay `Switch` group — `wheelAxes` switch is disabled when no Run is selected
-  4. `<PartListPanel>`
+     - Case list cleared / run cleared when Assembly selection changes
+  3. **Ride Height Transform** — Condition Map `Select` → Condition `Select` → Geometry `Select` (only `status=ready` shown, disabled when `ride_height.enabled=false`) → "Apply Ride Height Transform" `Button`
+     - On success: `addJob(result.geometry_id, ...)` + `updateJob(..., "analyzing")` to Jobs Drawer; fetches `systemsApi.getLandmarksGlbUrl(result.system_id)` → `landmarksGlbUrl`
+     - Verification table: front/rear error in mm with 🟢/🟡 colour coding (< 1 mm = teal, else orange)
+  4. Overlay `Switch` group — `wheelAxes` switch disabled when no Run selected
+  5. `<PartListPanel>`
 - Template overlay: fetches `listVersions`, finds active version, passes `settings` to `<OverlayObjects>`
 - `vehicleBbox`: union of `analysis_result.vehicle_bbox` across all geometries in selected assembly
+- `ControlPanel` receives `geometries` prop (passed from `TemplateBuilderPage`)
 
 **`src/components/geometries/GeometryUploadModal.tsx`** — Decimation Ratio Slider:
 - `form.initialValues.decimationRatio: 0.05`
