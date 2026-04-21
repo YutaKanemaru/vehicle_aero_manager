@@ -465,11 +465,14 @@ def compute_wheel_kinematics(
 
 
 def compute_porous_axis(part_info: dict, vertices: "np.ndarray | None" = None) -> dict:
-    """ポーラス部品の主軸方向を PCA / bbox から返す。"""
+    """ポーラス部品の主軸方向を PCA / bbox から返す。
+
+    フラットなポーラス面（ラジエーターなど）の場合、流れ方向 = 面法線 = 最小分散方向 = vt[2]。
+    """
     if vertices is not None and len(vertices) >= 3:
         centered = vertices - vertices.mean(axis=0)
         _, _, vt = np.linalg.svd(centered, full_matrices=False)
-        axis = vt[0]
+        axis = vt[2]  # min variance = face normal = flow direction through porous
         if axis[0] < 0:
             axis = -axis
         return {"x_dir": float(axis[0]), "y_dir": float(axis[1]), "z_dir": float(axis[2])}
@@ -486,6 +489,101 @@ def compute_porous_axis(part_info: dict, vertices: "np.ndarray | None" = None) -
         "y_dir": 1.0 if thinnest == "y" else 0.0,
         "z_dir": 1.0 if thinnest == "z" else 0.0,
     }
+
+
+def extract_pca_axes(
+    stl_paths: "list[Path]",
+    porous_patterns: "list[str]",
+    rim_patterns: "list[str]",
+) -> dict:
+    """ASCII STL ファイルを再スキャンし、指定パターンにマッチする部品の頂点を収集して
+    PCA 用 numpy 配列として返す。
+
+    Returns:
+        {
+            "porous": {part_name: np.ndarray[N, 3]},
+            "rim":    {part_name: np.ndarray[N, 3]},
+        }
+
+    Binary STL はスキップする（呼び出し元でフォールバック）。
+    パターンが空またはマッチなしの場合は空 dict を返す。
+    """
+    all_patterns = list(porous_patterns) + list(rim_patterns)
+    if not all_patterns:
+        return {"porous": {}, "rim": {}}
+
+    vertices_map: dict[str, list] = {}  # part_name -> list of [x, y, z] verts
+
+    for stl_path in stl_paths:
+        try:
+            fmt = _detect_stl_format(stl_path)
+        except Exception:
+            continue
+        if fmt != "ascii":
+            continue
+
+        current_solid: str | None = None
+        collecting: bool = False
+
+        try:
+            with open(stl_path, "r", encoding="utf-8", errors="replace") as fh:
+                for raw_line in fh:
+                    line = raw_line.strip()
+                    if line.startswith("solid "):
+                        current_solid = line[6:].strip() or "<unnamed>"
+                        collecting = _matches_any(current_solid, all_patterns)
+                        if collecting and current_solid not in vertices_map:
+                            vertices_map[current_solid] = []
+                    elif line.startswith("endsolid"):
+                        current_solid = None
+                        collecting = False
+                    elif collecting and line.startswith("vertex "):
+                        parts = line.split()
+                        if len(parts) == 4:
+                            try:
+                                vertices_map[current_solid].append(
+                                    [float(parts[1]), float(parts[2]), float(parts[3])]
+                                )
+                            except ValueError:
+                                pass
+        except Exception:
+            continue
+
+    porous_result: dict[str, "np.ndarray"] = {}
+    rim_result: dict[str, "np.ndarray"] = {}
+
+    for part_name, vlist in vertices_map.items():
+        if not vlist:
+            continue
+        arr = np.array(vlist, dtype=np.float64)
+        if _matches_any(part_name, porous_patterns):
+            porous_result[part_name] = arr
+        if _matches_any(part_name, rim_patterns):
+            rim_result[part_name] = arr
+
+    return {"porous": porous_result, "rim": rim_result}
+
+
+def _find_rim_vertices_for_wheel(
+    wheel_info: dict,
+    rim_vertices_map: "dict[str, np.ndarray]",
+) -> "np.ndarray | None":
+    """ホイール重心に最も近いリム部品の頂点配列を返す。マッチがなければ None。"""
+    if not rim_vertices_map:
+        return None
+
+    wx, wy, wz = wheel_info["centroid"]
+    best_name: str | None = None
+    best_dist = float("inf")
+
+    for rname, rverts in rim_vertices_map.items():
+        rc = rverts.mean(axis=0)
+        dist = float(np.sqrt((rc[0] - wx) ** 2 + (rc[1] - wy) ** 2 + (rc[2] - wz) ** 2))
+        if dist < best_dist:
+            best_dist = dist
+            best_name = rname
+
+    return rim_vertices_map[best_name] if best_name else None
 
 
 # ---------------------------------------------------------------------------
@@ -858,6 +956,7 @@ def assemble_ufx_solver_deck(
     yaw_angle: float = 0.0,
     source_files: list[str] | None = None,
     source_file: str | None = None,
+    pca_axes: dict | None = None,
 ) -> "UfxSolverDeck":
     """
     Template (Fixed) + Geometry analysis_result (Computed) + Config (UserInput)
@@ -947,8 +1046,10 @@ def assemble_ufx_solver_deck(
             "fr_lh": "VREV_Front_Left", "fr_rh": "VREV_Front_Right",
             "rr_lh": "VREV_Rear_Left",  "rr_rh": "VREV_Rear_Right",
         }
+        rim_vertices_map = (pca_axes or {}).get("rim", {})
         for key, winfo in wheel_map.items():
-            kin = compute_wheel_kinematics(winfo, inflow_velocity)
+            rv = _find_rim_vertices_for_wheel(winfo, rim_vertices_map)
+            kin = compute_wheel_kinematics(winfo, inflow_velocity, rim_vertices=rv)
             wheel_kin_map[key] = kin
             if gc.overset_wheels:
                 rotating_instances.append(RotatingInstance(
@@ -1114,18 +1215,25 @@ def assemble_ufx_solver_deck(
     # ── Porous sources ────────────────────────────────────────────────────
     porous_instances: list = []
     if template_settings.porous_coefficients:
-        porous_coeff_map = {p.part_name: p for p in template_settings.porous_coefficients}
-        for pname, pinfo in part_info.items():
-            coeff = porous_coeff_map.get(pname)
-            if coeff is None:
+        porous_verts_map = (pca_axes or {}).get("porous", {})
+        for pc in template_settings.porous_coefficients:
+            # Glob-match: 1 entry → all matched parts → 1 PorousInstance
+            matched_parts = [
+                pname for pname in part_info
+                if _matches_any(pname, [pc.part_name])
+            ]
+            if not matched_parts:
                 continue
-            p_axis = compute_porous_axis(pinfo)
+            # Combine vertices from all matched parts for PCA
+            arrays = [porous_verts_map[p] for p in matched_parts if p in porous_verts_map]
+            combined_vertices = np.vstack(arrays) if arrays else None
+            p_axis = compute_porous_axis(part_info[matched_parts[0]], combined_vertices)
             porous_instances.append(PorousInstance(
-                name=pname,
-                inertial_resistance=coeff.inertial_resistance,
-                viscous_resistance=coeff.viscous_resistance,
+                name=pc.part_name,
+                inertial_resistance=pc.inertial_resistance,
+                viscous_resistance=pc.viscous_resistance,
                 porous_axis=PorousAxis(**p_axis),
-                parts=[pname],
+                parts=matched_parts,
             ))
 
     # ── Iteration counts ──────────────────────────────────────────────────

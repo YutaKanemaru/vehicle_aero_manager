@@ -335,11 +335,24 @@ def _generate_xml_task(run_id: str) -> None:
             else:
                 source_files = geom_names
 
-        from app.services.compute_engine import assemble_ufx_solver_deck, build_probe_csv_files
+        from app.services.compute_engine import assemble_ufx_solver_deck, build_probe_csv_files, extract_pca_axes
         from app.ultrafluid.serializer import serialize_ufx
 
         template = db.get(Template, case.template_id)
         sim_type = template.sim_type if template else "aero"
+
+        # Resolve STL file paths for PCA axis extraction
+        stl_paths: list[Path] = []
+        if assembly and assembly.geometries:
+            for geom in assembly.geometries:
+                if geom.is_linked:
+                    stl_paths.append(Path(geom.file_path))
+                else:
+                    stl_paths.append(settings.upload_dir / geom.file_path)
+
+        porous_patterns = [pc.part_name for pc in template_settings.porous_coefficients]
+        rim_patterns = list(template_settings.target_names.rim)
+        pca_axes = extract_pca_axes(stl_paths, porous_patterns, rim_patterns)
 
         deck = assemble_ufx_solver_deck(
             template_settings=template_settings,
@@ -349,6 +362,7 @@ def _generate_xml_task(run_id: str) -> None:
             yaw_angle=condition.yaw_angle,
             source_file=source_file,
             source_files=source_files if source_files else None,
+            pca_axes=pca_axes,
         )
         xml_bytes = serialize_ufx(deck)
 
