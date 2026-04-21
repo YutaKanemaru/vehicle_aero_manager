@@ -1548,6 +1548,16 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 - `invalidate_cache(geometry_id)`: removes all cache files for a geometry via glob `{id}_*.glb`
 - Cache path: `{viewer_cache_dir}/{geometry_id}_{ratio:.3f}.glb` (e.g. `abc123_0.050.glb`)
 - **No `fast-simplification` or `trimesh` dependency** — `stl_decimator.QEMDecimator` is the sole decimation engine (pure Python + NumPy)
+- `build_axes_glb(template_settings, analysis_result, stl_paths, inflow_velocity) -> bytes` — on-demand GLB of wheel/porous axes (no disk cache — payload is small):
+  - `_rotation_matrix_to_direction(d)` — Rodrigues formula: 3×3 R that maps +Z → unit vector `d` (pure NumPy)
+  - `_make_arrow_solid(name, origin, direction, length, shaft_radius, n_seg=16) -> Solid` — cylinder shaft + cone tip, built along +Z then rotated to `direction` via Rodrigues
+  - `_make_sphere_solid(name, center, radius) -> Solid` — UV sphere (lat/lon grid, pure NumPy)
+  - Per wheel corner (`fr_lh / fr_rh / rr_lh / rr_rh`): coloured arrow + centre sphere
+    - Colors: FR_LH=red, FR_RH=blue, RR_LH=orange, RR_RH=green
+    - `arrow_len = radius * 0.80`, `shaft_r = arrow_len * 0.06`
+  - Per porous part: purple arrow from part centroid in flow-axis direction
+  - Raises `ValueError` if no wheel or porous geometry found
+  - Uses `tempfile.NamedTemporaryFile` → `GLBExporter.export(solids, tmp, colors=colors)` → returns bytes, deletes temp file
 
 **`backend/app/config.py`**: `viewer_cache_dir: Path = _BACKEND_DIR / "data" / "viewer_cache"`
 
@@ -1573,6 +1583,20 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 - Returns `Response(content=glb_bytes, media_type="model/gltf-binary")`
 - 400 if geometry `status != "ready"`
 
+**`backend/app/api/v1/configurations.py`** — new Run endpoint:
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/cases/{case_id}/runs/{run_id}/axes-glb` | On-demand axis-visualisation GLB — no cache, computed every request |
+
+- Calls `configuration_service.get_axes_glb(db, case_id, run_id)` → `Response(content=bytes, media_type="model/gltf-binary")`
+- 400 if `run.status != "ready"`
+
+**`backend/app/services/configuration_service.py`** — `get_axes_glb(db, case_id, run_id) -> bytes`:
+- Resolves Run → Case → active TemplateVersion → Assembly → `_merge_analysis_results()`
+- Resolves `stl_paths` (same logic as `_generate_xml_task`)
+- Calls `viewer_service.build_axes_glb(template_settings, merged_analysis, stl_paths, condition.inflow_velocity)`
+- Raises 400 on `ValueError` (no geometry found)
+
 ### Frontend
 
 **`src/stores/viewerStore.ts`** (new — Zustand)
@@ -1583,6 +1607,9 @@ searchMode: "include" | "exclude"
 overlays: { domainBox, refinementBoxes, wheelAxes, groundPlane }
 selectedAssemblyId: string | null
 selectedTemplateId: string | null
+selectedCaseId: string | null      // for axis GLB (Case that owns the Run)
+selectedRunId: string | null       // for axis GLB fetch
+axesGlbUrl: string | null          // blob URL of current axes GLB; null = no axes overlay
 ratio: 0.05  // decimation ratio used for GLB fetch; no UI selector in viewer
 ```
 
@@ -1590,6 +1617,9 @@ ratio: 0.05  // decimation ratio used for GLB fetch; no UI selector in viewer
 - `geometriesApi.getGlbBlobUrl(id, ratio?)`: fetches GLB with auth header → `Blob` → `URL.createObjectURL()`, returns URL string. Caller must `URL.revokeObjectURL()` on cleanup. Default `ratio = 0.05`.
 - `geometriesApi.upload(..., decimationRatio: number = 0.05)`: appends `decimation_ratio` to FormData before sending.
 - `GeometryLinkRequest` type extended with `decimation_ratio?: number`.
+
+**`src/api/configurations.ts`** — `runsApi` additions:
+- `runsApi.getAxesGlbUrl(caseId, runId) -> Promise<string>`: fetches `/cases/{id}/runs/{id}/axes-glb` with auth header → `createObjectURL(blob)`. Caller must `revokeObjectURL()` on cleanup.
 
 **`src/schemas/geometry.py`** — `GeometryLinkRequest`:
 - Added `decimation_ratio: float = 0.05` — passed to `run_analysis()` background task
@@ -1606,6 +1636,7 @@ ratio: 0.05  // decimation ratio used for GLB fetch; no UI selector in viewer
 - R3F `<Canvas>` + `<OrbitControls>` + lights + `<Grid>`
 - `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → `scene.traverse()` applies `partStates` (visible / color / opacity) to each `Mesh` node
 - `<CameraFitter>`: `Box3.setFromObject(scene)` → positions camera to fit all geometry on first load
+- `<AxesGLBModel>`: loads axes GLB via `useGLTF(blobUrl)` → renders as-is (no part-visibility management); rendered only when `axesGlbUrl && overlays.wheelAxes`
 - Accepts array of `GeometryResponse` (Assembly support) — fetches and overlays all GLBs in parallel
 - Shows `<Loader>` while fetching, error text on failure, placeholder text when no assembly selected
 
@@ -1625,7 +1656,13 @@ ratio: 0.05  // decimation ratio used for GLB fetch; no UI selector in viewer
 **`src/components/viewer/TemplateBuilderPage.tsx`** (new)
 - Route: `/template-builder`
 - Layout: fixed 300px left panel + flex-1 right `<SceneCanvas>`
-- Left panel: Assembly `Select` → Template `Select` → overlay `Switch` group → `<PartListPanel>` (no LOD selector; viewer always fetches with `ratio = 0.05`)
+- Left panel sections:
+  1. Assembly `Select` → Template `Select`
+  2. **Axis Visualisation (Run)** — Case `Select` (filtered to selected Assembly's cases) + Run `Select` (only `status=ready` runs shown)
+     - `useEffect` on `[selectedCaseId, selectedRunId, overlays.wheelAxes]`: revokes previous blob URL, fetches `runsApi.getAxesGlbUrl()` when all three are set, stores in `viewerStore.axesGlbUrl`
+     - Case list cleared when Assembly selection changes
+  3. Overlay `Switch` group — `wheelAxes` switch is disabled when no Run is selected
+  4. `<PartListPanel>`
 - Template overlay: fetches `listVersions`, finds active version, passes `settings` to `<OverlayObjects>`
 - `vehicleBbox`: union of `analysis_result.vehicle_bbox` across all geometries in selected assembly
 
@@ -1648,7 +1685,7 @@ ratio: 0.05  // decimation ratio used for GLB fetch; no UI selector in viewer
 `viewer_service.build_viewer_glb()` pipeline:
 1. **STL read** — `stl_decimator.STLReader.read(stl_path)` auto-detects ASCII vs Binary; no `trimesh.load()`. Returns `list[Solid]` (per-part numpy arrays).
 2. **Parallel pure-Python QEM** — `ProcessPoolExecutor` → `_decimate_worker(idx, solid, ratio)` per solid (top-level function, Windows spawn-safe); each part processed **independently with same `ratio`** (fraction to keep). `QEMDecimator.simplify` uses heap-based edge-collapse QEM; minimum face count = `max(4, int(n_faces * ratio))`.
-3. **GLB export** — `GLBExporter.export(valid_solids, cache_path)` writes a spec-compliant GLB 2.0 with flat normals and PALETTE auto-coloring (pure stdlib, no pygltflib).
+3. **GLB export** — `GLBExporter.export(valid_solids, cache_path, colors=None)` writes a spec-compliant GLB 2.0 with flat normals. Colors: if `colors[i]` (RGBA float tuple) is provided, uses it for solid `i`; otherwise falls back to auto-cycling `PALETTE`.
 4. If decimation fails for a part → logged as error, part excluded from GLB; if all parts fail → `ValueError` raised, geometry remains `status="ready"` (GLB not cached).
 
 **`stl_decimator.py`** lives at `backend/app/services/stl_decimator.py`. It is also a standalone CLI tool (`python stl_decimator.py input.stl output.glb --ratio 0.2`). No `fast-simplification` or `trimesh` dependency — pure Python + NumPy only.
