@@ -104,6 +104,8 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
   const [blobEntries, setBlobEntries] = useState<BlobEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Must be called unconditionally before any early returns
+  const { axesGlbUrl, overlays } = useViewerStore();
 
   const readyGeometries = geometries.filter((g) => g.status === "ready");
 
@@ -175,7 +177,6 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
   }
 
   const allParts = blobEntries.flatMap((e) => e.parts);
-  const { axesGlbUrl, overlays } = useViewerStore();
 
   return (
     <Canvas
