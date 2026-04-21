@@ -1304,6 +1304,7 @@ def _build_belt5_wall_instances(
     FluidBCMoving, XYZDir, WallInstance,
     DomainPartInstance, BoundingRange,
 ) -> tuple[list, float, list]:
+    """Returns (wall_instances, center_xmin, domain_part_instances).
     Builds 5 moving WallInstances (FR_LH/FR_RH/RR_LH/RR_RH + Belt_Center) and
     corresponding DomainPartInstances (location="z_min", export_mesh=True) with
     computed bounding_range per belt from wheel kinematics and belt5 config.
