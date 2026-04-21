@@ -1291,7 +1291,7 @@ def assemble_ufx_solver_deck(
             combined_vertices = np.vstack(arrays) if arrays else None
             p_axis = compute_porous_axis(part_info[matched_parts[0]], combined_vertices)
             porous_instances.append(PorousInstance(
-                name=pc.part_name,
+                name=pc.part_name.replace("*", ""),
                 inertial_resistance=pc.inertial_resistance,
                 viscous_resistance=pc.viscous_resistance,
                 porous_axis=PorousAxis(**p_axis),
