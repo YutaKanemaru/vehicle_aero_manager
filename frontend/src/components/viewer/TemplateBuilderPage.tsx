@@ -29,7 +29,8 @@ import { OverlayPanel } from "./OverlayPanel";
 // ─── Left panel ──────────────────────────────────────────────────────────────
 
 function ControlPanel({
-  geometries,
+  // geometries kept for potential future use
+  geometries: _geometries,
   templateSettings,
 }: {
   geometries: GeometryResponse[];
@@ -38,8 +39,6 @@ function ControlPanel({
   const {
     selectedAssemblyId, setSelectedAssemblyId,
     selectedTemplateId, setSelectedTemplateId,
-    setCameraPreset,
-    viewerTheme, setViewerTheme,
   } = useViewerStore();
   const queryClient = useQueryClient();
 
@@ -159,34 +158,6 @@ function ControlPanel({
       <Divider label="Overlays" labelPosition="left" />
       <OverlayPanel templateSettings={templateSettings} />
 
-      <Divider label="Camera" labelPosition="left" />
-
-      <Group gap="xs" wrap="wrap">
-        {(["iso", "front", "rear", "side", "top"] as const).map((preset) => (
-          <Tooltip key={preset} label={`${preset} view`}>
-            <Button
-              size="xs"
-              variant="light"
-              leftSection={<IconCamera size={12} />}
-              onClick={() => setCameraPreset(preset)}
-            >
-              {preset}
-            </Button>
-          </Tooltip>
-        ))}
-      </Group>
-
-      <Group gap="xs" align="center">
-        <Text size="xs" c="dimmed">Background</Text>
-        <ActionIcon
-          size="sm"
-          variant="light"
-          onClick={() => setViewerTheme(viewerTheme === "dark" ? "light" : "dark")}
-        >
-          {viewerTheme === "dark" ? <IconSun size={14} /> : <IconMoon size={14} />}
-        </ActionIcon>
-      </Group>
-
       <AssemblyGeometriesDrawer
         assemblyId={selectedAssemblyId}
         opened={assemblyBuilderOpen}
@@ -211,6 +182,53 @@ function ControlPanel({
         />
       )}
     </Stack>
+  );
+}
+
+// ─── Floating camera controls (bottom-right of 3D view) ─────────────────────
+
+function CameraOverlay() {
+  const { setCameraPreset, viewerTheme, setViewerTheme } = useViewerStore();
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: 56,
+        right: 8,
+        zIndex: 10,
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        alignItems: "flex-end",
+        pointerEvents: "all",
+      }}
+    >
+      <Group gap={4} wrap="wrap" justify="flex-end">
+        {(["iso", "front", "rear", "side", "top"] as const).map((preset) => (
+          <Tooltip key={preset} label={`${preset} view`}>
+            <Button
+              size="xs"
+              variant="light"
+              style={{ background: "rgba(0,0,0,0.55)", borderColor: "rgba(255,255,255,0.15)" }}
+              leftSection={<IconCamera size={11} />}
+              onClick={() => setCameraPreset(preset)}
+            >
+              {preset}
+            </Button>
+          </Tooltip>
+        ))}
+      </Group>
+      <Tooltip label="Toggle background">
+        <ActionIcon
+          size="sm"
+          variant="light"
+          style={{ background: "rgba(0,0,0,0.55)", borderColor: "rgba(255,255,255,0.15)" }}
+          onClick={() => setViewerTheme(viewerTheme === "dark" ? "light" : "dark")}
+        >
+          {viewerTheme === "dark" ? <IconSun size={14} /> : <IconMoon size={14} />}
+        </ActionIcon>
+      </Tooltip>
+    </div>
   );
 }
 
@@ -345,6 +363,7 @@ export function TemplateBuilderPage() {
         style={{ flex: 1, overflow: "hidden", position: "relative" }}
       >
         <ViewerToolbar />
+        <CameraOverlay />
         <SceneCanvas
           geometries={geometries}
           ratio={ratio}

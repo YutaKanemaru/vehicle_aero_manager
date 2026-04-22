@@ -1,3 +1,4 @@
+import { useMemo, type ReactElement } from "react";
 import * as THREE from "three";
 import { useViewerStore } from "../../stores/viewerStore";
 
@@ -38,16 +39,31 @@ function WireBox({
   const sy = max[1] - min[1];
   const sz = max[2] - min[2];
 
+  const edges = useMemo(() => {
+    const box = new THREE.BoxGeometry(sx, sy, sz);
+    const eg = new THREE.EdgesGeometry(box);
+    box.dispose();
+    return eg;
+  }, [sx, sy, sz]);
+
   return (
-    <mesh position={[cx, cy, cz]}>
-      <boxGeometry args={[sx, sy, sz]} />
-      <meshBasicMaterial
-        color={color}
-        wireframe
-        transparent={opacity < 1}
-        opacity={opacity}
-      />
-    </mesh>
+    <group position={[cx, cy, cz]}>
+      {/* Semi-transparent fill — back-side only to avoid z-fighting with vehicle */}
+      <mesh>
+        <boxGeometry args={[sx, sy, sz]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={opacity * 0.12}
+          depthWrite={false}
+          side={THREE.BackSide}
+        />
+      </mesh>
+      {/* Outline edges */}
+      <lineSegments geometry={edges}>
+        <lineBasicMaterial color={color} transparent opacity={Math.min(opacity * 0.85, 1)} />
+      </lineSegments>
+    </group>
   );
 }
 
@@ -212,7 +228,7 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
       points: Array<{ x_pos: number; y_pos: number; z_pos: number; description?: string }>;
     }> | undefined;
     if (!probeFiles || probeFiles.length === 0) return null;
-    const nodes: JSX.Element[] = [];
+    const nodes: ReactElement[] = [];
     for (const pf of probeFiles) {
       if (!vis(`probe_${pf.name}`)) continue;
       for (let i = 0; i < (pf.points ?? []).length; i++) {

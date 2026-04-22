@@ -1,4 +1,4 @@
-import { Tabs, Stack, Switch, Badge, Text, Group, Tooltip, ScrollArea } from "@mantine/core";
+import { Tabs, Stack, Switch, Badge, Text, Group, Tooltip } from "@mantine/core";
 import { useViewerStore } from "../../stores/viewerStore";
 
 interface OverlayPanelProps {
@@ -334,7 +334,7 @@ export function OverlayPanel({ templateSettings }: OverlayPanelProps) {
         <Tabs.Tab value="probe" fz={10} p={4}>Probe</Tabs.Tab>
       </Tabs.List>
 
-      <ScrollArea style={{ maxHeight: 280 }} type="auto">
+      <div>
         <Tabs.Panel value="parts">
           <PartsTab ts={templateSettings} />
         </Tabs.Panel>
@@ -347,7 +347,7 @@ export function OverlayPanel({ templateSettings }: OverlayPanelProps) {
         <Tabs.Panel value="probe">
           <ProbeTab ts={templateSettings} />
         </Tabs.Panel>
-      </ScrollArea>
+      </div>
     </Tabs>
   );
 }

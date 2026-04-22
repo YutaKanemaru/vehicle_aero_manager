@@ -77,6 +77,14 @@ interface ViewerStore {
   showEdges: boolean;
   setShowEdges: (v: boolean) => void;
 
+  // Part selection (click highlight)
+  selectedPartName: string | null;
+  setSelectedPartName: (name: string | null) => void;
+
+  // Fit camera to part
+  fitToTarget: { center: [number, number, number]; radius: number } | null;
+  setFitToTarget: (t: { center: [number, number, number]; radius: number } | null) => void;
+
   // Ride height transform — condition selection
   selectedConditionMapId: string | null;
   setSelectedConditionMapId: (id: string | null) => void;
@@ -157,6 +165,12 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
   setFlatShading: (v) => set({ flatShading: v }),
   showEdges: false,
   setShowEdges: (v) => set({ showEdges: v }),
+
+  selectedPartName: null,
+  setSelectedPartName: (name) => set({ selectedPartName: name }),
+
+  fitToTarget: null,
+  setFitToTarget: (t) => set({ fitToTarget: t }),
 
   selectedConditionMapId: null,
   setSelectedConditionMapId: (id) => set({ selectedConditionMapId: id }),
