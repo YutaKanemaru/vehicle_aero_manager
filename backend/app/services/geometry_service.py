@@ -33,7 +33,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
-from app.models.geometry import Geometry, GeometryAssembly, GeometryFolder, AssemblyFolder
+from app.models.geometry import Geometry, GeometryAssembly, GeometryFolder, AssemblyFolder, assembly_geometry_link
 from app.models.user import User
 from app.models.configuration import Case
 from app.schemas.geometry import (
@@ -251,6 +251,19 @@ def update_geometry(
 def delete_geometry(db: Session, geometry_id: str, current_user: User) -> None:
     geometry = _geometry_or_404(db, geometry_id)
     _check_owner_or_admin(geometry.uploaded_by, current_user)
+
+    # Assembly に所属している場合は削除不可
+    linked_count = db.scalar(
+        select(func.count()).select_from(assembly_geometry_link).where(
+            assembly_geometry_link.c.geometry_id == geometry_id
+        )
+    ) or 0
+    if linked_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete geometry: it is linked to {linked_count} assembly(ies). "
+                   "Remove it from all assemblies first.",
+        )
 
     # アップロードファイルのみ削除。リンクの場合はリンク元ファイルは触れない。
     if not geometry.is_linked:
