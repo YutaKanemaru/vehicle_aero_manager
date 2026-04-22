@@ -52,6 +52,7 @@ class MeshingOption(BaseModel):
     domain_bounding_box_relative: bool = True  # bbox multipliers relative to car dimensions
     box_offset_relative: bool = True
     box_refinement_porous: bool = True
+    box_refinement_porous_per_part: bool = False  # True = one BoxInstance per matched part; False = union bbox
     triangle_splitting_instances: list[TriangleSplittingInstanceConfig] = Field(default_factory=list)
 
 
@@ -277,13 +278,10 @@ class BoxRefinement(BaseModel):
 class BoxRefinementAroundParts(BaseModel):
     """Box refinement defined relative to matched parts' bounding box.
     Compute Engine resolves this to absolute coordinates at XML generation time.
-    per_part_match=False (default): union bbox of all matched parts → 1 BoxInstance.
-    per_part_match=True: one BoxInstance per matched part → N BoxInstances
-        with name suffix _{part_name}.
+    per_part behaviour is controlled globally via MeshingOption.box_refinement_porous_per_part.
     """
     level: int = 1
     parts: list[str]                    # part name patterns (substring match)
-    per_part_match: bool = False        # False=union box, True=one box per matched part
     offset_xmin: float = 0.5            # m — extend beyond matched bbox in -X direction
     offset_xmax: float = 0.5            # m — extend beyond matched bbox in +X direction
     offset_ymin: float = 0.5            # m — extend beyond matched bbox in -Y direction
@@ -530,7 +528,6 @@ def _aero_setup() -> Setup:
                 "Box_Porous_RL6": BoxRefinementAroundParts(
                     level=6,
                     parts=["Porous_"],
-                    per_part_match=False,
                     offset_xmin=0.5, offset_xmax=0.5,
                     offset_ymin=0.5, offset_ymax=0.5,
                     offset_zmin=0.5, offset_zmax=0.5,

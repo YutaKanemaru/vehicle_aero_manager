@@ -1510,8 +1510,8 @@ def assemble_ufx_solver_deck(
             if not matched:
                 continue  # パターンにマッチするパーツがない場合はスキップ
 
-            if pbr.per_part_match:
-                # per_part_match=True: マッチした各パーツに対して個別の BoxInstance を生成
+            if so.meshing.box_refinement_porous_per_part:
+                # per_part=True: マッチした各パーツに対して個別の BoxInstance を生成
                 for part_name in matched:
                     px_min = part_info[part_name]["bbox"]["x_min"] - pbr.offset_xmin
                     px_max = part_info[part_name]["bbox"]["x_max"] + pbr.offset_xmax
@@ -1529,7 +1529,7 @@ def assemble_ufx_solver_deck(
                         ),
                     ))
             else:
-                # per_part_match=False (デフォルト): 全マッチパーツの union bbox → 1 BoxInstance
+                # per_part=False (デフォルト): 全マッチパーツの union bbox → 1 BoxInstance
                 px_min = min(part_info[p]["bbox"]["x_min"] for p in matched) - pbr.offset_xmin
                 px_max = max(part_info[p]["bbox"]["x_max"] for p in matched) + pbr.offset_xmax
                 py_min = min(part_info[p]["bbox"]["y_min"] for p in matched) - pbr.offset_ymin

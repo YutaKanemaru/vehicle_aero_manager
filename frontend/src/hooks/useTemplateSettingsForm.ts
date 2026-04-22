@@ -246,7 +246,6 @@ export interface BoxRefinementFormItem {
   box_zmax: number;
   // ─── around_parts mode ───────────────────────────────────────────
   parts: string[];             // tag list of part name patterns
-  per_part_match: boolean;     // false=union box, true=one box per matched part
   offset_xmin: number;         // m — extend beyond parts bbox in -X
   offset_xmax: number;         // m — extend beyond parts bbox in +X
   offset_ymin: number;         // m — extend beyond parts bbox in -Y
@@ -347,6 +346,7 @@ export const FORM_DEFAULTS = {
   triangle_splitting_instances: [] as TriangleSplittingInstanceFormItem[],
   refinement_level_transition_layers: D.setup_option.meshing.refinement_level_transition_layers,
   box_refinement_porous: D.setup_option.meshing.box_refinement_porous,
+  box_refinement_porous_per_part: (D.setup_option.meshing as any).box_refinement_porous_per_part ?? false,
   // Domain bounding box multipliers — sourced from D.setup.domain_bounding_box
   bbox_xmin: D.setup.domain_bounding_box[0] as number,
   bbox_xmax: D.setup.domain_bounding_box[1] as number,
@@ -365,20 +365,18 @@ export const FORM_DEFAULTS = {
         box_ymin: v.box[2], box_ymax: v.box[3],
         box_zmin: v.box[4], box_zmax: v.box[5],
         parts: [] as string[],
-        per_part_match: false,
         offset_xmin: 0.5, offset_xmax: 0.5,
         offset_ymin: 0.5, offset_ymax: 0.5,
         offset_zmin: 0.5, offset_zmax: 0.5,
       })
     ),
-    ...Object.entries(D.setup.meshing.part_based_box_refinement as unknown as Record<string, { level: number; parts: string[]; per_part_match: boolean; offset_xmin: number; offset_xmax: number; offset_ymin: number; offset_ymax: number; offset_zmin: number; offset_zmax: number }>).map(
+    ...Object.entries(D.setup.meshing.part_based_box_refinement as unknown as Record<string, { level: number; parts: string[]; offset_xmin: number; offset_xmax: number; offset_ymin: number; offset_ymax: number; offset_zmin: number; offset_zmax: number }>).map(
       ([name, v]) => ({
         name,
         level: v.level,
         box_type: "around_parts" as const,
         box_xmin: 0, box_xmax: 0, box_ymin: 0, box_ymax: 0, box_zmin: 0, box_zmax: 0,
         parts: Array.isArray(v.parts) ? [...v.parts] : [],
-        per_part_match: v.per_part_match ?? false,
         offset_xmin: v.offset_xmin ?? 0.5, offset_xmax: v.offset_xmax ?? 0.5,
         offset_ymin: v.offset_ymin ?? 0.5, offset_ymax: v.offset_ymax ?? 0.5,
         offset_zmin: v.offset_zmin ?? 0.5, offset_zmax: v.offset_zmax ?? 0.5,
@@ -634,7 +632,6 @@ export function valuesFromSettings(settings: any): FormValues {
       box_zmin: v.box?.[4] ?? 0,
       box_zmax: v.box?.[5] ?? 0,
       parts: [] as string[],
-      per_part_match: false,
       offset_xmin: 0.5, offset_xmax: 0.5,
       offset_ymin: 0.5, offset_ymax: 0.5,
       offset_zmin: 0.5, offset_zmax: 0.5,
@@ -647,7 +644,6 @@ export function valuesFromSettings(settings: any): FormValues {
       box_type: "around_parts" as const,
       box_xmin: 0, box_xmax: 0, box_ymin: 0, box_ymax: 0, box_zmin: 0, box_zmax: 0,
       parts: Array.isArray(v.parts) ? [...v.parts] : [],
-      per_part_match: v.per_part_match ?? false,
       offset_xmin: v.offset_xmin ?? 0.5,
       offset_xmax: v.offset_xmax ?? 0.5,
       offset_ymin: v.offset_ymin ?? 0.5,
@@ -790,6 +786,7 @@ export function valuesFromSettings(settings: any): FormValues {
     })) as TriangleSplittingInstanceFormItem[],
     refinement_level_transition_layers: m.refinement_level_transition_layers ?? FORM_DEFAULTS.refinement_level_transition_layers,
     box_refinement_porous: m.box_refinement_porous ?? FORM_DEFAULTS.box_refinement_porous,
+    box_refinement_porous_per_part: (m as any).box_refinement_porous_per_part ?? FORM_DEFAULTS.box_refinement_porous_per_part,
     bbox_xmin: bbox[0] ?? FORM_DEFAULTS.bbox_xmin,
     bbox_xmax: bbox[1] ?? FORM_DEFAULTS.bbox_xmax,
     bbox_ymin: bbox[2] ?? FORM_DEFAULTS.bbox_ymin,
@@ -925,7 +922,6 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
       partBasedBoxRefinementDict[item.name] = {
         level: item.level,
         parts: item.parts,
-        per_part_match: item.per_part_match,
         offset_xmin: item.offset_xmin,
         offset_xmax: item.offset_xmax,
         offset_ymin: item.offset_ymin,
@@ -1040,6 +1036,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
         domain_bounding_box_relative: true,
         box_offset_relative: true,
         box_refinement_porous: values.box_refinement_porous,
+        box_refinement_porous_per_part: values.box_refinement_porous_per_part,
       },
       boundary_condition: {
         ground: {

@@ -16,6 +16,7 @@ export const templateDefaults = {
       domain_bounding_box_relative: true,
       box_offset_relative: true,
       box_refinement_porous: true,
+      box_refinement_porous_per_part: false,
       triangle_splitting_instances: [],
     },
     boundary_condition: {
@@ -169,7 +170,6 @@ export const templateDefaults = {
           parts: [
             "Porous_",
           ],
-          per_part_match: false,
           offset_xmin: 0.5,
           offset_xmax: 0.5,
           offset_ymin: 0.5,

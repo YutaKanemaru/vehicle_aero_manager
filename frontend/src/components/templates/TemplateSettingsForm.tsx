@@ -559,6 +559,14 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
               <Accordion.Control><Text fw={500}>Box Refinement</Text></Accordion.Control>
               <Accordion.Panel><Stack gap="xs">
             <Switch label="Add box refinement for porous media" {...form.getInputProps("box_refinement_porous", { type: "checkbox" })} />
+            {form.values.box_refinement_porous && (
+              <Switch
+                label="Per-part boxes (one box per matched part)"
+                description="Off: all porous parts share one combined box. On: each matched part gets its own box."
+                ml="md"
+                {...form.getInputProps("box_refinement_porous_per_part", { type: "checkbox" })}
+              />
+            )}
             <Group justify="space-between">
               <Text size="sm" fw={500}>Box refinement zones ({form.values.box_refinements.length})</Text>
               <Group gap="xs">
@@ -619,11 +627,6 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                       placeholder="Wheel_"
                       splitChars={[",", " "]}
                       {...form.getInputProps(`box_refinements.${idx}.parts`)}
-                    />
-                    <Switch
-                      label="Per-part boxes (one box per matched part)"
-                      description="Off: all matched parts share one combined box. On: each matched part gets its own box."
-                      {...form.getInputProps(`box_refinements.${idx}.per_part_match`, { type: "checkbox" })}
                     />
                     <Text size="xs" c="dimmed">Offset from parts bounding box (m)</Text>
                     <SimpleGrid cols={3}>

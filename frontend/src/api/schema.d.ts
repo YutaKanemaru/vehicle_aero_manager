@@ -1231,9 +1231,7 @@ export interface components {
          * BoxRefinementAroundParts
          * @description Box refinement defined relative to matched parts' bounding box.
          *     Compute Engine resolves this to absolute coordinates at XML generation time.
-         *     per_part_match=False (default): union bbox of all matched parts → 1 BoxInstance.
-         *     per_part_match=True: one BoxInstance per matched part → N BoxInstances
-         *         with name suffix _{part_name}.
+         *     per_part behaviour is controlled globally via MeshingOption.box_refinement_porous_per_part.
          */
         BoxRefinementAroundParts: {
             /**
@@ -1243,11 +1241,6 @@ export interface components {
             level: number;
             /** Parts */
             parts: string[];
-            /**
-             * Per Part Match
-             * @default false
-             */
-            per_part_match: boolean;
             /**
              * Offset Xmin
              * @default 0.5
@@ -1880,6 +1873,11 @@ export interface components {
              * @default true
              */
             box_refinement_porous: boolean;
+            /**
+             * Box Refinement Porous Per Part
+             * @default false
+             */
+            box_refinement_porous_per_part: boolean;
             /** Triangle Splitting Instances */
             triangle_splitting_instances?: components["schemas"]["TriangleSplittingInstanceConfig"][];
         };
