@@ -346,7 +346,7 @@ export const FORM_DEFAULTS = {
   triangle_splitting_instances: [] as TriangleSplittingInstanceFormItem[],
   refinement_level_transition_layers: D.setup_option.meshing.refinement_level_transition_layers,
   box_refinement_porous: D.setup_option.meshing.box_refinement_porous,
-  box_refinement_porous_per_part: (D.setup_option.meshing as any).box_refinement_porous_per_part ?? false,
+  box_refinement_porous_per_coefficient: (D.setup_option.meshing as any).box_refinement_porous_per_coefficient ?? false,
   // Domain bounding box multipliers — sourced from D.setup.domain_bounding_box
   bbox_xmin: D.setup.domain_bounding_box[0] as number,
   bbox_xmax: D.setup.domain_bounding_box[1] as number,
@@ -786,7 +786,7 @@ export function valuesFromSettings(settings: any): FormValues {
     })) as TriangleSplittingInstanceFormItem[],
     refinement_level_transition_layers: m.refinement_level_transition_layers ?? FORM_DEFAULTS.refinement_level_transition_layers,
     box_refinement_porous: m.box_refinement_porous ?? FORM_DEFAULTS.box_refinement_porous,
-    box_refinement_porous_per_part: (m as any).box_refinement_porous_per_part ?? FORM_DEFAULTS.box_refinement_porous_per_part,
+    box_refinement_porous_per_coefficient: (m as any).box_refinement_porous_per_coefficient ?? FORM_DEFAULTS.box_refinement_porous_per_coefficient,
     bbox_xmin: bbox[0] ?? FORM_DEFAULTS.bbox_xmin,
     bbox_xmax: bbox[1] ?? FORM_DEFAULTS.bbox_xmax,
     bbox_ymin: bbox[2] ?? FORM_DEFAULTS.bbox_ymin,
@@ -1036,7 +1036,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
         domain_bounding_box_relative: true,
         box_offset_relative: true,
         box_refinement_porous: values.box_refinement_porous,
-        box_refinement_porous_per_part: values.box_refinement_porous_per_part,
+        box_refinement_porous_per_coefficient: values.box_refinement_porous_per_coefficient,
       },
       boundary_condition: {
         ground: {

@@ -1231,7 +1231,9 @@ export interface components {
          * BoxRefinementAroundParts
          * @description Box refinement defined relative to matched parts' bounding box.
          *     Compute Engine resolves this to absolute coordinates at XML generation time.
-         *     per_part behaviour is controlled globally via MeshingOption.box_refinement_porous_per_part.
+         *     per-coefficient behaviour is controlled globally via MeshingOption.box_refinement_porous_per_coefficient.
+         *     (False = union bbox of all matched parts → 1 BoxInstance per entry;
+         *      True  = one BoxInstance per porous_coefficients entry, name suffix: {entry_name}_{coeff.part_name})
          */
         BoxRefinementAroundParts: {
             /**
@@ -1874,10 +1876,10 @@ export interface components {
              */
             box_refinement_porous: boolean;
             /**
-             * Box Refinement Porous Per Part
+             * Box Refinement Porous Per Coefficient
              * @default false
              */
-            box_refinement_porous_per_part: boolean;
+            box_refinement_porous_per_coefficient: boolean;
             /** Triangle Splitting Instances */
             triangle_splitting_instances?: components["schemas"]["TriangleSplittingInstanceConfig"][];
         };

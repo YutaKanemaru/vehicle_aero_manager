@@ -677,7 +677,7 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
       "domain_bounding_box_relative": true,  // always true — UI switch removed, hardcoded in buildSettings()
       "box_offset_relative": true,            // always true — UI switch removed, hardcoded in buildSettings()
       "box_refinement_porous": true,
-      "box_refinement_porous_per_part": false,  // true = one BoxInstance per matched porous part
+      "box_refinement_porous_per_coefficient": false,  // true = one BoxInstance per porous_coefficient entry (union of matched parts)
       "triangle_splitting_instances": [       // optional per-part overrides
         { "name": "TS_Body", "active": true, "max_absolute_edge_length": 0.0, "max_relative_edge_length": 5.0, "parts": ["Body_"] }
       ]
@@ -733,7 +733,8 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
       "part_box_refinement": {},     // legacy (unused in current presets)
       "part_based_box_refinement": { // box defined by parts + per-axis offset factors
         "Box_Porous_RL6": {"level": 6, "parts": ["Porous_"], "offset_xmin": 0.5, "offset_xmax": 0.5, ...}
-        // per-part behaviour controlled globally by setup_option.meshing.box_refinement_porous_per_part
+        // per-coefficient behaviour controlled globally by setup_option.meshing.box_refinement_porous_per_coefficient
+        // (False = union bbox of all matched parts → 1 BoxInstance; True = one BoxInstance per porous_coefficients entry, name: {entry_name}_{coeff.part_name})
       },
       "offset_refinement": {
         "Body_Offset_ALL_RL7": {"level": 7, "normal_distance": 0.012, "parts": []},
@@ -1250,9 +1251,9 @@ class MeshingSetup(BaseModel):
 class BoxRefinementAroundParts(BaseModel):
     level: int
     parts: list[str]
-    # per-part behaviour is controlled globally via MeshingOption.box_refinement_porous_per_part
-    # (False = union bbox of all matched parts → 1 BoxInstance;
-    #  True  = one BoxInstance per matched part, name suffix: {entry_name}_{part_name})
+    # per-coefficient behaviour is controlled globally via MeshingOption.box_refinement_porous_per_coefficient
+    # (False = union bbox of all matched parts → 1 BoxInstance per entry;
+    #  True  = one BoxInstance per porous_coefficients entry, name suffix: {entry_name}_{coeff.part_name})
     offset_xmin: float = 0.5   # m — absolute distance beyond matched parts bbox in -X
     offset_xmax: float = 0.5   # m — absolute distance beyond matched parts bbox in +X
     offset_ymin: float = 0.5   # m — absolute distance beyond matched parts bbox in -Y

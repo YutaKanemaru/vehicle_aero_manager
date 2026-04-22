@@ -12,7 +12,7 @@
       "domain_bounding_box_relative": true,
       "box_offset_relative": true,
       "box_refinement_porous": true,
-      "box_refinement_porous_per_part": false,
+      "box_refinement_porous_per_coefficient": false,
       "triangle_splitting_instances": []
     },
     "boundary_condition": {

@@ -52,7 +52,7 @@ class MeshingOption(BaseModel):
     domain_bounding_box_relative: bool = True  # bbox multipliers relative to car dimensions
     box_offset_relative: bool = True
     box_refinement_porous: bool = True
-    box_refinement_porous_per_part: bool = False  # True = one BoxInstance per matched part; False = union bbox
+    box_refinement_porous_per_coefficient: bool = False  # True = one BoxInstance per porous_coefficient entry; False = union bbox of all matched parts
     triangle_splitting_instances: list[TriangleSplittingInstanceConfig] = Field(default_factory=list)
 
 
@@ -278,7 +278,9 @@ class BoxRefinement(BaseModel):
 class BoxRefinementAroundParts(BaseModel):
     """Box refinement defined relative to matched parts' bounding box.
     Compute Engine resolves this to absolute coordinates at XML generation time.
-    per_part behaviour is controlled globally via MeshingOption.box_refinement_porous_per_part.
+    per-coefficient behaviour is controlled globally via MeshingOption.box_refinement_porous_per_coefficient.
+    (False = union bbox of all matched parts → 1 BoxInstance per entry;
+     True  = one BoxInstance per porous_coefficients entry, name suffix: {entry_name}_{coeff.part_name})
     """
     level: int = 1
     parts: list[str]                    # part name patterns (substring match)

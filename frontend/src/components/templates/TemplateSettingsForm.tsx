@@ -561,10 +561,10 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
             <Switch label="Add box refinement for porous media" {...form.getInputProps("box_refinement_porous", { type: "checkbox" })} />
             {form.values.box_refinement_porous && (
               <Switch
-                label="Per-part boxes (one box per matched part)"
-                description="Off: all porous parts share one combined box. On: each matched part gets its own box."
+                label="Per-coefficient boxes (one box per heat exchanger)"
+                description="Off: all matched porous parts share one combined box. On: each porous coefficient entry gets its own box (union of its matched parts)."
                 ml="md"
-                {...form.getInputProps("box_refinement_porous_per_part", { type: "checkbox" })}
+                {...form.getInputProps("box_refinement_porous_per_coefficient", { type: "checkbox" })}
               />
             )}
             <Group justify="space-between">

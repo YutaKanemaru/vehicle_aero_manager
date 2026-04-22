@@ -1510,17 +1510,23 @@ def assemble_ufx_solver_deck(
             if not matched:
                 continue  # パターンにマッチするパーツがない場合はスキップ
 
-            if so.meshing.box_refinement_porous_per_part:
-                # per_part=True: マッチした各パーツに対して個別の BoxInstance を生成
-                for part_name in matched:
-                    px_min = part_info[part_name]["bbox"]["x_min"] - pbr.offset_xmin
-                    px_max = part_info[part_name]["bbox"]["x_max"] + pbr.offset_xmax
-                    py_min = part_info[part_name]["bbox"]["y_min"] - pbr.offset_ymin
-                    py_max = part_info[part_name]["bbox"]["y_max"] + pbr.offset_ymax
-                    pz_min = part_info[part_name]["bbox"]["z_min"] - pbr.offset_zmin
-                    pz_max = part_info[part_name]["bbox"]["z_max"] + pbr.offset_zmax
+            if so.meshing.box_refinement_porous_per_coefficient:
+                # per_coefficient=True: porous_coefficients エントリ単位で BoxInstance を生成
+                # 各係数エントリの part_name にマッチするパーツを収集し union bbox → 1 BoxInstance
+                for coeff in template_settings.porous_coefficients:
+                    coeff_matched = [
+                        p for p in matched if _matches_any(p, [coeff.part_name])
+                    ]
+                    if not coeff_matched:
+                        continue
+                    px_min = min(part_info[p]["bbox"]["x_min"] for p in coeff_matched) - pbr.offset_xmin
+                    px_max = max(part_info[p]["bbox"]["x_max"] for p in coeff_matched) + pbr.offset_xmax
+                    py_min = min(part_info[p]["bbox"]["y_min"] for p in coeff_matched) - pbr.offset_ymin
+                    py_max = max(part_info[p]["bbox"]["y_max"] for p in coeff_matched) + pbr.offset_ymax
+                    pz_min = min(part_info[p]["bbox"]["z_min"] for p in coeff_matched) - pbr.offset_zmin
+                    pz_max = max(part_info[p]["bbox"]["z_max"] for p in coeff_matched) + pbr.offset_zmax
                     box_instances.append(BoxInstance(
-                        name=f"{name}_{part_name}",
+                        name=f"{name}_{coeff.part_name}",
                         refinement_level=pbr.level,
                         bounding_box=BoundingBox(
                             x_min=px_min, x_max=px_max,
@@ -1529,7 +1535,7 @@ def assemble_ufx_solver_deck(
                         ),
                     ))
             else:
-                # per_part=False (デフォルト): 全マッチパーツの union bbox → 1 BoxInstance
+                # per_coefficient=False (デフォルト): 全マッチパーツの union bbox → 1 BoxInstance
                 px_min = min(part_info[p]["bbox"]["x_min"] for p in matched) - pbr.offset_xmin
                 px_max = max(part_info[p]["bbox"]["x_max"] for p in matched) + pbr.offset_xmax
                 py_min = min(part_info[p]["bbox"]["y_min"] for p in matched) - pbr.offset_ymin
