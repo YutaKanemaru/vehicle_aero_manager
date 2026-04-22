@@ -1526,7 +1526,7 @@ def assemble_ufx_solver_deck(
                     pz_min = min(part_info[p]["bbox"]["z_min"] for p in coeff_matched) - pbr.offset_zmin
                     pz_max = max(part_info[p]["bbox"]["z_max"] for p in coeff_matched) + pbr.offset_zmax
                     box_instances.append(BoxInstance(
-                        name=f"{name}_{coeff.part_name}",
+                        name=f"{name}_{coeff.part_name.replace('*', '')}",
                         refinement_level=pbr.level,
                         bounding_box=BoundingBox(
                             x_min=px_min, x_max=px_max,
