@@ -1023,6 +1023,7 @@ The Compute Engine derives `Computed` fields from STL geometry. Key calculations
 - STL files may be multi-solid ASCII format — streaming parser handles `solid`/`endsolid` blocks sequentially
 - `analyze_stl` never allocates vertex arrays — peak memory during analysis is O(number of parts), not O(file size)
 - Centroid = bounding box center `(min+max)/2` per axis — NOT vertex average
+- **Part name normalization**: `_normalize_stl_part_name(name)` strips `COMMENT: ...` suffixes injected by CAD exporters (e.g. Altair Inspire). Applied in `_parse_stl_ascii_streaming` (analysis) and `STLReader._read_ascii` (decimator/GLB). Both sites must stay in sync so `analysis_result.parts` keys match GLB node names for Three.js part-state lookup.
 - Wheel grouping: classify FR-LH / FR-RH / RR-LH / RR-RH by comparing part centroid to vehicle COG (x, y)
 - RPM calculation: `rpm = (inflow_velocity / wheel_circumference) × 60` — needs wheel radius from bbox
 - `analyze_stl(file_path, verbose=False)` — pass `verbose=True` to print step-by-step progress logs (used by `backend/scripts/test_compute_engine.py`)

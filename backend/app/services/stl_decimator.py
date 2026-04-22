@@ -117,8 +117,11 @@ class STLReader:
                 s = line.strip()
                 sl = s.lower()
                 if sl.startswith('solid'):
-                    candidate = s[5:].strip()
-                    name = candidate if candidate else f'Part_{len(solids) + 1}'
+                    raw = s[5:].strip()
+                    # Strip 'COMMENT: ...' suffix injected by some CAD exporters
+                    if 'COMMENT:' in raw:
+                        raw = raw.split('COMMENT:')[0].strip()
+                    name = raw if raw else f'Part_{len(solids) + 1}'
                     verts_list, faces_list, vi = [], [], 0
                 elif sl.startswith('vertex '):
                     parts = sl.split()

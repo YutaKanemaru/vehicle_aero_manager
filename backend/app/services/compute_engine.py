@@ -57,6 +57,18 @@ def _detect_stl_format(file_path: Path) -> str:
     return "ascii"
 
 
+def _normalize_stl_part_name(name: str) -> str:
+    """Strip 'COMMENT: ...' suffix from STL solid names.
+
+    Many CAD exporters append metadata after 'COMMENT:' in the solid line,
+    e.g. 'Body_Hood COMMENT: Exported from Inspire HWVERSION_2024.0.0.24...'.
+    Returns the trimmed name before the first 'COMMENT:' occurrence.
+    """
+    if "COMMENT:" in name:
+        name = name.split("COMMENT:")[0].strip()
+    return name
+
+
 def _parse_stl_ascii_streaming(
     file_path: Path,
     verbose: bool = False,
@@ -89,7 +101,7 @@ def _parse_stl_ascii_streaming(
             lower = line.lower()
 
             if lower.startswith("solid"):
-                name_part = line[5:].strip()
+                name_part = _normalize_stl_part_name(line[5:].strip())
                 current_name = name_part if name_part else file_path.stem
                 # 同名パーツが既にある場合はサフィックスを付与
                 base_name = current_name
