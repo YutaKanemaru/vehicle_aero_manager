@@ -422,6 +422,7 @@ interface SceneCanvasProps {
   ratio: number;
   templateSettings?: Record<string, unknown> | null;
   vehicleBbox?: VehicleBbox | null;
+  partInfo?: Record<string, unknown> | null;
 }
 
 interface BlobEntry {
@@ -430,7 +431,7 @@ interface BlobEntry {
   parts: string[];
 }
 
-export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }: SceneCanvasProps) {
+export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, partInfo }: SceneCanvasProps) {
   const [blobEntries, setBlobEntries] = useState<BlobEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -560,6 +561,7 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox }
         <OverlayObjects
           templateSettings={templateSettings}
           vehicleBbox={vehicleBbox}
+          partInfo={partInfo}
         />
 
         <Grid

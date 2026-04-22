@@ -327,6 +327,17 @@ export function TemplateBuilderPage() {
 
   const templateSettings = activeVersion?.settings ?? null;
 
+  // part_info: 全ジオメトリの analysis_result.part_info をマージ
+  const partInfo = useMemo(() => {
+    const merged: Record<string, unknown> = {};
+    for (const g of geometries) {
+      const ar = g.analysis_result as { part_info?: Record<string, unknown> } | null;
+      if (!ar?.part_info) continue;
+      Object.assign(merged, ar.part_info);
+    }
+    return Object.keys(merged).length > 0 ? merged : null;
+  }, [geometries]);
+
   // All parts across all geometries in the assembly
   const allParts = useMemo(() => {
     return geometries.flatMap(
@@ -369,6 +380,7 @@ export function TemplateBuilderPage() {
           ratio={ratio}
           templateSettings={templateSettings as Record<string, unknown> | null}
           vehicleBbox={vehicleBbox}
+          partInfo={partInfo}
         />
       </Paper>
     </div>

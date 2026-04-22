@@ -17,6 +17,29 @@ export interface VehicleBbox {
 interface OverlayObjectsProps {
   templateSettings?: Record<string, unknown> | null;
   vehicleBbox?: VehicleBbox | null;
+  partInfo?: Record<string, unknown> | null;
+}
+
+// Part name pattern matching — mirrors backend _matches_pattern logic
+function matchesPattern(partName: string, pattern: string): boolean {
+  const pn = partName.toLowerCase();
+  const pt = pattern.toLowerCase();
+  if (pt.includes("*")) {
+    // Simple glob: split on * and require each segment to appear in order
+    const parts = pt.split("*").filter(Boolean);
+    let idx = 0;
+    for (const seg of parts) {
+      const found = pn.indexOf(seg, idx);
+      if (found === -1) return false;
+      idx = found + seg.length;
+    }
+    return true;
+  }
+  return pn.startsWith(pt) || pn.endsWith(pt);
+}
+
+function matchesAny(partName: string, patterns: string[]): boolean {
+  return patterns.some((p) => matchesPattern(partName, p));
 }
 
 // ─── Wireframe box helper ────────────────────────────────────────────────────
@@ -84,7 +107,7 @@ function rlColor(level: number): string {
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjectsProps) {
+export function OverlayObjects({ templateSettings, vehicleBbox, partInfo }: OverlayObjectsProps) {
   const { overlayVisibility } = useViewerStore();
   // Helper: key absent = visible by default
   const vis = (key: string) => overlayVisibility[key] !== false;
@@ -160,6 +183,74 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
         <WireBox key={name} min={bMin} max={bMax} color={rlColor(level)} opacity={0.5} />
       );
     });
+  })();
+
+  // ─── Porous / part-based box refinement ───────────────────────────────────
+  const porousBoxNodes = (() => {
+    if (!partInfo || !setup) return null;
+    const soMeshing = asRec(asRec(setupOption)?.meshing);
+    if (!soMeshing?.box_refinement_porous) return null;
+    const perCoeff = !!soMeshing.box_refinement_porous_per_coefficient;
+    const meshing = asRec(setup.meshing);
+    const pbDict = asRec(meshing?.part_based_box_refinement);
+    if (!pbDict) return null;
+    const porousCoeffs = Array.isArray(templateSettings?.porous_coefficients)
+      ? (templateSettings.porous_coefficients as Array<{ part_name: string }>)
+      : [];
+
+    type PartBbox = { x_min: number; x_max: number; y_min: number; y_max: number; z_min: number; z_max: number };
+    function getPartBbox(pname: string): PartBbox | null {
+      const pr = asRec(asRec(partInfo![pname])?.bbox);
+      if (!pr) return null;
+      return pr as unknown as PartBbox;
+    }
+
+const nodes: ReactElement[] = [];
+
+    for (const [entryName, pbRaw] of Object.entries(pbDict)) {
+      if (!vis(`box_${entryName}`)) continue;
+      const pbr = asRec(pbRaw);
+      if (!pbr) continue;
+      const level = (pbr.level as number) ?? 6;
+      const patterns = Array.isArray(pbr.parts) ? (pbr.parts as string[]) : [];
+      const offXmin = (pbr.offset_xmin as number) ?? 0.5;
+      const offXmax = (pbr.offset_xmax as number) ?? 0.5;
+      const offYmin = (pbr.offset_ymin as number) ?? 0.5;
+      const offYmax = (pbr.offset_ymax as number) ?? 0.5;
+      const offZmin = (pbr.offset_zmin as number) ?? 0.5;
+      const offZmax = (pbr.offset_zmax as number) ?? 0.5;
+
+      // All part names in partInfo that match pbr.parts patterns
+      const allMatched = Object.keys(partInfo).filter((p) => matchesAny(p, patterns));
+      if (allMatched.length === 0) continue;
+
+      function makeBox(key: string, matched: string[]): ReactElement | null {
+        const bboxes = matched.map(getPartBbox).filter(Boolean) as PartBbox[];
+        if (bboxes.length === 0) return null;
+        const xMin = Math.min(...bboxes.map((b) => b.x_min)) - offXmin;
+        const xMax = Math.max(...bboxes.map((b) => b.x_max)) + offXmax;
+        const yMin = Math.min(...bboxes.map((b) => b.y_min)) - offYmin;
+        const yMax = Math.max(...bboxes.map((b) => b.y_max)) + offYmax;
+        const zMin = Math.min(...bboxes.map((b) => b.z_min)) - offZmin;
+        const zMax = Math.max(...bboxes.map((b) => b.z_max)) + offZmax;
+        return <WireBox key={key} min={[xMin, yMin, zMin]} max={[xMax, yMax, zMax]} color={rlColor(level)} opacity={0.6} />;
+      }
+
+      if (!perCoeff) {
+        const box = makeBox(entryName, allMatched);
+        if (box) nodes.push(box);
+      } else {
+        for (const coeff of porousCoeffs) {
+          const coeffMatched = allMatched.filter((p) => matchesPattern(p, coeff.part_name));
+          if (coeffMatched.length === 0) continue;
+          const key = `${entryName}_${coeff.part_name.replace(/\*/g, "")}`;
+          const box = makeBox(key, coeffMatched);
+          if (box) nodes.push(box);
+        }
+      }
+    }
+
+    return nodes.length > 0 ? nodes : null;
   })();
 
   // ─── TG ground plane (YZ plane at x_pos) ────────────────────────────────
@@ -322,6 +413,7 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
     <>
       {domainBoxNode}
       {refinementNodes}
+      {porousBoxNodes}
       {tgGroundNode}
       {tgBodyNode}
       {probeNodes}

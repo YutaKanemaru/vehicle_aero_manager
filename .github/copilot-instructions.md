@@ -677,7 +677,7 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
       "domain_bounding_box_relative": true,  // always true — UI switch removed, hardcoded in buildSettings()
       "box_offset_relative": true,            // always true — UI switch removed, hardcoded in buildSettings()
       "box_refinement_porous": true,
-      "box_refinement_porous_per_coefficient": false,  // true = one BoxInstance per porous_coefficient entry (union of matched parts)
+      "box_refinement_porous_per_coefficient": false,  // true = one BoxInstance per porous_coefficient entry (union of matched parts); UI label: "Box per porous media"
       "triangle_splitting_instances": [       // optional per-part overrides
         { "name": "TS_Body", "active": true, "max_absolute_edge_length": 0.0, "max_relative_edge_length": 5.0, "parts": ["Body_"] }
       ]
@@ -1821,16 +1821,20 @@ overlays: ViewerOverlays  // wheelAxes, landmarks remain here
 - Shows `<Loader>` while fetching, error text on failure, placeholder text when no assembly selected
 
 **`src/components/viewer/OverlayObjects.tsx`**
-- Renders Three.js overlays from `templateSettings` + `vehicleBbox`
+- Renders Three.js overlays from `templateSettings` + `vehicleBbox` + `partInfo`
+- `partInfo` prop: merged `analysis_result.part_info` from all assembly geometries (passed from `TemplateBuilderPage` via `SceneCanvas`)
+- `matchesPattern(partName, pattern)`: TS helper mirroring backend `_matches_pattern` — `*` in pattern → ordered-segment wildcard; no `*` → `startsWith OR endsWith`; case-insensitive. `matchesAny(partName, patterns[])` checks any match.
 - Visibility controlled per-item via `overlayVisibility` store (key absent = visible by default):
   - **Domain Box** (key `"domain_box"`): `setup.domain_bounding_box` × vehicle bbox → white wireframe `<boxGeometry>`
   - **Refinement Boxes** (key `"box_{name}"`): `setup.meshing.box_refinement` — per-level color (RL1=light blue → RL7=red) wireframe boxes; each box individually toggleable
+  - **Porous Boxes** (key `"box_{entryName}"`): `setup.meshing.part_based_box_refinement` — rendered only when `setup_option.meshing.box_refinement_porous=true` and `partInfo` available; per-level color; per-coefficient=false → 1 box (union of all matched parts); per-coefficient=true → 1 box per `porous_coefficients` entry (parts matching both `pbr.parts` AND `coeff.part_name`); offsets `pbr.offset_x/y/zmin/max` applied; all sub-boxes share one toggle per template entry
   - **TG Ground** (key `"tg_ground"`): cyan semi-transparent YZ plane at `x_pos = noSlipXminPos − 0.01` (or `vb.x_min − 0.01` as fallback), extents `y ≈ ±42.5% vehicle width`, `z = [groundZ, groundZ + coarsest/8]`; shown only when `enable_ground_tg = true`. Matches `TurbulenceInstance.point.x_pos` in XML.
   - **TG Body** (key `"tg_body"`): cyan semi-transparent YZ plane at `x_pos = vb.x_min − 5%`, extents `y = car_center ± 45%`, `z = vb.z_min + 10%…65%`; shown only when `enable_body_tg = true`. Both TG overlays are **YZ planes only** (not 3D boxes) — matches the ultraFluidX spec where `<point><x_pos>` defines the x-position and `<bounding_box>` contains only y/z extents.
   - **Probe Spheres** (key `"probe_{name}"`): `output.probe_files[].points[]` → yellow sphere (r=0.04) per point; per-probe-file toggle
   - **Partial Volume Boxes** (key `"pv_{name}"`): `output.partial_volumes[]` → orange wireframe boxes; `bbox_mode` selects coordinates (`user_defined`: `[xm,xp,ym,yp,zm,zp]` vehicle-relative multipliers applied as `bMin=vb_min+m*vLen`, `bMax=vb_max+p*vLen`; `from_meshing_box`: looks up `bbox_source_box_name` key in `setup.meshing.box_refinement` dict, applies same multiplier formula; `around_parts`: not rendered in 3D viewer); per-volume toggle; **field name**: `bbox_source_box_name` (not `bbox_source_box`)
   - **Section Cuts** (key `"sc_{name}"`): `output.section_cuts[]` → magenta semi-transparent `PlaneGeometry` (10×10 m); per-cut toggle
 - `vehicleBbox` is union of all geometries in the assembly (computed in `TemplateBuilderPage`)
+- `partInfo` is merged `part_info` from all assembly geometries (computed in `TemplateBuilderPage`)
 
 **`src/components/viewer/PartListPanel.tsx`**
 - Full part list from `analysis_result.parts`, with count badge
