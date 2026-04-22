@@ -74,7 +74,9 @@ function rlColor(level: number): string {
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjectsProps) {
-  const { overlays } = useViewerStore();
+  const { overlayVisibility } = useViewerStore();
+  // Helper: key absent = visible by default
+  const vis = (key: string) => overlayVisibility[key] !== false;
 
   if (!templateSettings || !vehicleBbox) return null;
 
@@ -107,13 +109,14 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
 
   // ─── Refinement boxes ────────────────────────────────────────────────────
   const refinementNodes = (() => {
-    if (!overlays.refinementBoxes || !setup) return null;
+    if (!setup) return null;
     const meshing = setup.meshing as Record<string, unknown> | undefined;
     if (!meshing) return null;
     const boxRefinement = meshing.box_refinement as Record<string, { level: number; box: number[] }> | undefined;
     if (!boxRefinement) return null;
 
     return Object.entries(boxRefinement).map(([name, br]) => {
+      if (!vis(`box_${name}`)) return null;
       const { level, box } = br;
       if (!Array.isArray(box) || box.length < 6) return null;
       const [xm, xp, ym, yp, zm, zp] = box;
@@ -136,7 +139,7 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
 
   // ─── Ground plane ────────────────────────────────────────────────────────
   const groundNode = (() => {
-    if (!overlays.groundPlane) return null;
+    if (!vis("ground_plane")) return null;
     return <GroundPlane z={vb.z_min} />;
   })();
 
@@ -145,7 +148,7 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
 
   // ─── Probe point spheres ─────────────────────────────────────────────────
   const probeNodes = (() => {
-    if (!overlays.probeSpheres || !output) return null;
+    if (!output) return null;
     const probeFiles = output.probe_files as Array<{
       name: string;
       points: Array<{ x_pos: number; y_pos: number; z_pos: number; description?: string }>;
@@ -153,6 +156,7 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
     if (!probeFiles || probeFiles.length === 0) return null;
     const nodes: JSX.Element[] = [];
     for (const pf of probeFiles) {
+      if (!vis(`probe_${pf.name}`)) continue;
       for (let i = 0; i < (pf.points ?? []).length; i++) {
         const pt = pf.points[i];
         nodes.push(
@@ -168,7 +172,7 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
 
   // ─── Partial volume boxes ────────────────────────────────────────────────
   const pvNodes = (() => {
-    if (!overlays.partialVolumes || !output) return null;
+    if (!output) return null;
     const pvs = output.partial_volumes as Array<{
       name: string;
       bbox_mode?: string;
@@ -181,6 +185,7 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
     const boxRefinement = meshing?.box_refinement as Record<string, { level: number; box: number[] }> | undefined;
 
     return pvs.map((pv, idx) => {
+      if (!vis(`pv_${pv.name}`)) return null;
       let bMin: [number, number, number] | null = null;
       let bMax: [number, number, number] | null = null;
 
@@ -209,7 +214,7 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
 
   // ─── Section cuts ────────────────────────────────────────────────────────
   const scNodes = (() => {
-    if (!overlays.sectionCuts || !output) return null;
+    if (!output) return null;
     const scs = output.section_cuts as Array<{
       name: string;
       axis_x: number; axis_y: number; axis_z: number;
@@ -218,6 +223,7 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
     if (!scs || scs.length === 0) return null;
 
     return scs.map((sc, idx) => {
+      if (!vis(`sc_${sc.name}`)) return null;
       const normal = new THREE.Vector3(sc.axis_x, sc.axis_y, sc.axis_z).normalize();
       const up = new THREE.Vector3(0, 0, 1);
       const quat = new THREE.Quaternion();

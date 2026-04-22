@@ -56,6 +56,11 @@ interface ViewerStore {
   overlays: ViewerOverlays;
   setOverlay: (key: keyof ViewerOverlays, value: boolean) => void;
 
+  // Per-item overlay visibility — key: "domain_box" | "ground_plane" | "box_{name}" | "pv_{name}" | "sc_{name}" | "probe_{name}"
+  // Default: true (visible) when key is absent
+  overlayVisibility: Record<string, boolean>;
+  setOverlayVisibility: (key: string, value: boolean) => void;
+
   // Camera
   cameraProjection: "perspective" | "orthographic";
   setCameraProjection: (p: "perspective" | "orthographic") => void;
@@ -135,6 +140,10 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
   },
   setOverlay: (key, value) =>
     set((s) => ({ overlays: { ...s.overlays, [key]: value } })),
+
+  overlayVisibility: {},
+  setOverlayVisibility: (key, value) =>
+    set((s) => ({ overlayVisibility: { ...s.overlayVisibility, [key]: value } })),
 
   cameraProjection: "perspective",
   setCameraProjection: (p) => set({ cameraProjection: p }),

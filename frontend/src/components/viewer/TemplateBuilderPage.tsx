@@ -24,14 +24,20 @@ import { PartListPanel } from "./PartListPanel";
 import { AssemblyGeometriesDrawer } from "../assemblies/AssemblyGeometriesDrawer";
 import { CreateCaseFromBuilderModal } from "../cases/CreateCaseFromBuilderModal";
 import { TemplateVersionEditModal } from "../templates/TemplateVersionEditModal";
+import { OverlayPanel } from "./OverlayPanel";
 
 // ─── Left panel ──────────────────────────────────────────────────────────────
 
-function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
+function ControlPanel({
+  geometries,
+  templateSettings,
+}: {
+  geometries: GeometryResponse[];
+  templateSettings: Record<string, unknown> | null;
+}) {
   const {
     selectedAssemblyId, setSelectedAssemblyId,
     selectedTemplateId, setSelectedTemplateId,
-    overlays, setOverlay,
     setCameraPreset,
     viewerTheme, setViewerTheme,
   } = useViewerStore();
@@ -151,39 +157,7 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
       </Button>
 
       <Divider label="Overlays" labelPosition="left" />
-
-      <Stack gap={6}>
-        <Switch
-          size="xs"
-          label="Domain bounding box"
-          checked={overlays.domainBox}
-          onChange={(e) => setOverlay("domainBox", e.currentTarget.checked)}
-        />
-        <Switch
-          size="xs"
-          label="Refinement boxes"
-          checked={overlays.refinementBoxes}
-          onChange={(e) => setOverlay("refinementBoxes", e.currentTarget.checked)}
-        />
-        <Switch
-          size="xs"
-          label="Probe point spheres"
-          checked={overlays.probeSpheres}
-          onChange={(e) => setOverlay("probeSpheres", e.currentTarget.checked)}
-        />
-        <Switch
-          size="xs"
-          label="Partial volume boxes"
-          checked={overlays.partialVolumes}
-          onChange={(e) => setOverlay("partialVolumes", e.currentTarget.checked)}
-        />
-        <Switch
-          size="xs"
-          label="Ground plane"
-          checked={overlays.groundPlane}
-          onChange={(e) => setOverlay("groundPlane", e.currentTarget.checked)}
-        />
-      </Stack>
+      <OverlayPanel templateSettings={templateSettings} />
 
       <Divider label="Camera" labelPosition="left" />
 
@@ -228,7 +202,7 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
         />
       )}
 
-      {templateDetail && activeVersion && (
+      {editTemplateOpen && templateDetail && activeVersion && (
         <TemplateVersionEditModal
           opened={editTemplateOpen}
           onClose={() => setEditTemplateOpen(false)}
@@ -351,7 +325,7 @@ export function TemplateBuilderPage() {
         style={{ width: 275, flexShrink: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
       >
         <ScrollArea style={{ flex: 1 }} type="auto">
-          <ControlPanel geometries={geometries} />
+          <ControlPanel geometries={geometries} templateSettings={templateSettings as Record<string, unknown> | null} />
         </ScrollArea>
       </Paper>
 
