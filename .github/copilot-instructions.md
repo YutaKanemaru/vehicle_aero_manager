@@ -732,7 +732,7 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
       },
       "part_box_refinement": {},     // legacy (unused in current presets)
       "part_based_box_refinement": { // box defined by parts + per-axis offset factors
-        "Box_Porous_RL6": {"level": 6, "parts": ["Porous_"], "offset_xmin": 0.5, "offset_xmax": 0.5, ...}
+        "Box_Porous_RL7": {"level": 7, "parts": ["Porous_"], "offset_xmin": 0.0, "offset_xmax": 0.0, ...}
         // per-coefficient behaviour controlled globally by setup_option.meshing.box_refinement_porous_per_coefficient
         // (False = union bbox of all matched parts → 1 BoxInstance; True = one BoxInstance per porous_coefficients entry, name: {entry_name}_{coeff.part_name})
       },
@@ -1255,12 +1255,12 @@ class BoxRefinementAroundParts(BaseModel):
     # per-coefficient behaviour is controlled globally via MeshingOption.box_refinement_porous_per_coefficient
     # (False = union bbox of all matched parts → 1 BoxInstance per entry;
     #  True  = one BoxInstance per porous_coefficients entry, name suffix: {entry_name}_{coeff.part_name})
-    offset_xmin: float = 0.5   # m — absolute distance beyond matched parts bbox in -X
-    offset_xmax: float = 0.5   # m — absolute distance beyond matched parts bbox in +X
-    offset_ymin: float = 0.5   # m — absolute distance beyond matched parts bbox in -Y
-    offset_ymax: float = 0.5   # m — absolute distance beyond matched parts bbox in +Y
-    offset_zmin: float = 0.5   # m — absolute distance beyond matched parts bbox in -Z
-    offset_zmax: float = 0.5   # m — absolute distance beyond matched parts bbox in +Z
+    offset_xmin: float = 0.0   # m — absolute distance beyond matched parts bbox in -X (0 = tight fit, matches old setup script)
+    offset_xmax: float = 0.0   # m — absolute distance beyond matched parts bbox in +X
+    offset_ymin: float = 0.0   # m — absolute distance beyond matched parts bbox in -Y
+    offset_ymax: float = 0.0   # m — absolute distance beyond matched parts bbox in +Y
+    offset_zmin: float = 0.0   # m — absolute distance beyond matched parts bbox in -Z
+    offset_zmax: float = 0.0   # m — absolute distance beyond matched parts bbox in +Z
 ```
 
 

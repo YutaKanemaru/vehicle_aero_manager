@@ -284,12 +284,12 @@ class BoxRefinementAroundParts(BaseModel):
     """
     level: int = 1
     parts: list[str]                    # part name patterns (substring match)
-    offset_xmin: float = 0.5            # m — extend beyond matched bbox in -X direction
-    offset_xmax: float = 0.5            # m — extend beyond matched bbox in +X direction
-    offset_ymin: float = 0.5            # m — extend beyond matched bbox in -Y direction
-    offset_ymax: float = 0.5            # m — extend beyond matched bbox in +Y direction
-    offset_zmin: float = 0.5            # m — extend beyond matched bbox in -Z direction
-    offset_zmax: float = 0.5            # m — extend beyond matched bbox in +Z direction
+    offset_xmin: float = 0.0            # m — extend beyond matched bbox in -X direction (0 = tight fit)
+    offset_xmax: float = 0.0            # m — extend beyond matched bbox in +X direction
+    offset_ymin: float = 0.0            # m — extend beyond matched bbox in -Y direction
+    offset_ymax: float = 0.0            # m — extend beyond matched bbox in +Y direction
+    offset_zmin: float = 0.0            # m — extend beyond matched bbox in -Z direction
+    offset_zmax: float = 0.0            # m — extend beyond matched bbox in +Z direction
 
 
 class OffsetRefinement(BaseModel):
@@ -527,12 +527,12 @@ def _aero_setup() -> Setup:
                 "Box_RL5": BoxRefinement(level=5, box=[-0.1,  0.3,   -0.15,  0.15,  -0.2, 0.25]),
             },
             part_based_box_refinement={
-                "Box_Porous_RL6": BoxRefinementAroundParts(
-                    level=6,
+                "Box_Porous_RL7": BoxRefinementAroundParts(
+                    level=7,
                     parts=["Porous_"],
-                    offset_xmin=0.5, offset_xmax=0.5,
-                    offset_ymin=0.5, offset_ymax=0.5,
-                    offset_zmin=0.5, offset_zmax=0.5,
+                    offset_xmin=0.0, offset_xmax=0.0,
+                    offset_ymin=0.0, offset_ymax=0.0,
+                    offset_zmin=0.0, offset_zmax=0.0,
                 ),
             },
             offset_refinement={

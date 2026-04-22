@@ -165,17 +165,17 @@ export const templateDefaults = {
       },
       part_box_refinement: {},
       part_based_box_refinement: {
-        Box_Porous_RL6: {
-          level: 6,
+        Box_Porous_RL7: {
+          level: 7,
           parts: [
             "Porous_",
           ],
-          offset_xmin: 0.5,
-          offset_xmax: 0.5,
-          offset_ymin: 0.5,
-          offset_ymax: 0.5,
-          offset_zmin: 0.5,
-          offset_zmax: 0.5,
+          offset_xmin: 0,
+          offset_xmax: 0,
+          offset_ymin: 0,
+          offset_ymax: 0,
+          offset_zmin: 0,
+          offset_zmax: 0,
         },
       },
       offset_refinement: {

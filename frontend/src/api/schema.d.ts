@@ -1245,32 +1245,32 @@ export interface components {
             parts: string[];
             /**
              * Offset Xmin
-             * @default 0.5
+             * @default 0
              */
             offset_xmin: number;
             /**
              * Offset Xmax
-             * @default 0.5
+             * @default 0
              */
             offset_xmax: number;
             /**
              * Offset Ymin
-             * @default 0.5
+             * @default 0
              */
             offset_ymin: number;
             /**
              * Offset Ymax
-             * @default 0.5
+             * @default 0
              */
             offset_ymax: number;
             /**
              * Offset Zmin
-             * @default 0.5
+             * @default 0
              */
             offset_zmin: number;
             /**
              * Offset Zmax
-             * @default 0.5
+             * @default 0
              */
             offset_zmax: number;
         };
