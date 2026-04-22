@@ -263,10 +263,9 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
       let bMax: [number, number, number] | null = null;
 
       if (pv.bbox_mode === "user_defined" && Array.isArray(pv.bbox) && pv.bbox.length >= 6) {
-        // absolute coordinates
-        const [x0, x1, y0, y1, z0, z1] = pv.bbox;
-        bMin = [vb.x_min + x0 * vLen, vb.y_min + y0 * vWid, vb.z_min + z0 * vHgt];
-        bMax = [vb.x_min + x1 * vLen, vb.y_min + y1 * vWid, vb.z_min + z1 * vHgt];
+        const [xm, xp, ym, yp, zm, zp] = pv.bbox;
+        bMin = [vb.x_min + xm * vLen, vb.y_min + ym * vWid, vb.z_min + zm * vHgt];
+        bMax = [vb.x_max + xp * vLen, vb.y_max + yp * vWid, vb.z_max + zp * vHgt];
       } else if (pv.bbox_mode === "from_meshing_box" && pv.bbox_source_box && boxRefinement) {
         const br = boxRefinement[pv.bbox_source_box];
         if (br && Array.isArray(br.box) && br.box.length >= 6) {
@@ -274,11 +273,9 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
           bMin = [vb.x_min + xm * vLen, vb.y_min + ym * vWid, vb.z_min + zm * vHgt];
           bMax = [vb.x_max + xp * vLen, vb.y_max + yp * vWid, vb.z_max + zp * vHgt];
         }
-      } else {
-        // fallback: show vehicle bbox
-        bMin = [vb.x_min, vb.y_min, vb.z_min];
-        bMax = [vb.x_max, vb.y_max, vb.z_max];
+        // No fallback — unresolved source box = skip
       }
+      // around_parts and unknown modes: skip (no 3D approximation)
 
       if (!bMin || !bMax) return null;
       return <WireBox key={`pv-${idx}`} min={bMin} max={bMax} color="#ff8800" opacity={0.5} />;
