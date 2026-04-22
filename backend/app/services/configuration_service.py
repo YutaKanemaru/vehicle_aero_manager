@@ -5,6 +5,7 @@ XML generation background task + Diff logic
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 from pathlib import Path
 
@@ -18,6 +19,8 @@ from app.models.geometry import GeometryAssembly
 from app.models.template import Template, TemplateVersion
 from app.models.user import User
 from app.schemas.configuration import CaseResponse, RunResponse
+
+logger = logging.getLogger(__name__)
 from app.schemas.configuration import (
     CaseCreate, CaseUpdate, CaseDuplicateRequest,
     CaseFolderCreate, CaseFolderUpdate,
@@ -310,8 +313,23 @@ def update_case(db: Session, case_id: str, data: CaseUpdate, current_user: User)
 def delete_case(db: Session, case_id: str, current_user: User) -> None:
     case = _get_case_or_404(db, case_id)
     _check_owner_or_admin(case, current_user)
+
+    # Collect run IDs before cascade delete
+    run_ids = [run.id for run in case.runs]
+
     db.delete(case)
     db.commit()
+
+    # Delete run output directories from filesystem
+    from app.services.geometry_service import _rmtree_force  # avoid circular import at module level
+    for run_id in run_ids:
+        run_dir = settings.runs_dir / run_id
+        try:
+            if run_dir.exists() and run_dir != settings.runs_dir:
+                _rmtree_force(run_dir)
+                logger.info("Deleted run directory: %s", run_dir)
+        except Exception as e:
+            logger.warning("Failed to delete run directory %s: %s", run_dir, e)
 
 
 # ---------------------------------------------------------------------------

@@ -1136,6 +1136,7 @@ class SystemResponse(BaseModel):
 - `list_conditions(map_id)`, `get_condition`, `create_condition`, `update_condition`, `delete_condition` — JSON fields serialized via `json.dumps(data.ride_height.model_dump())`
 - `delete_condition()`: raises HTTP 400 if any `Run.condition_id` references this condition — delete those runs first
 - `list_cases`, `get_case`, `create_case`, `update_case`, `delete_case`
+- `delete_case()`: cascades DB delete to Runs; also deletes `data/runs/{run_id}/` output directories from filesystem for each Run (uses `_rmtree_force` imported from `geometry_service`; deletion failures are logged as `WARNING` and do not abort the request)
 - `create_run(case_id, condition_id)`, `list_runs(case_id)`
 - `update_run(db, case_id, run_id, data: RunUpdate, current_user)` — updates `geometry_override_id` on a Run (PATCH)
 - `generate_xml(run_id, db, background_tasks)` — background task: resolves Condition → if `run.geometry_override_id` set, uses override geometry instead of assembly first STL → `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml`; then `build_probe_csv_files()` writes one CSV per probe_file_instance beside the XML; copies STL to `data/runs/{run_id}/input.stl` and stores path in `run.stl_path` → update `run.status`
