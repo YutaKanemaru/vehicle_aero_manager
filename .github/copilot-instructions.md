@@ -757,7 +757,10 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
     "partial_volumes": [
       { "name": "PV_Wake", "output_start_time": 1.5, "output_interval": 0.3, "file_format": "h3d",
         "bbox_mode": "user_defined",
-        "bbox": [-1, 5, -1.5, 1.5, 0, 1.5], "output_variables": {...} }
+        "bbox": [-1, 5, -1.5, 1.5, 0, 1.5], "output_variables": {...} },
+      { "name": "PV_RL5", "output_start_time": 1.5, "output_interval": 0.3, "file_format": "h3d",
+        "bbox_mode": "from_meshing_box",
+        "bbox_source_box_name": "Box_RL5", "output_variables": {...} }
     ],
     "section_cuts": [
       { "name": "SC_Center", "output_start_time": 1.5, "output_interval": 0.3, "file_format": "h3d",
@@ -1554,7 +1557,7 @@ interface CustomRefinementFormItem          { name, level, parts: string[] }    
 interface PorousCoeffFormItem               { part_name, inertial_resistance, viscous_resistance }
 interface TriangleSplittingInstanceFormItem { name, active, max_absolute_edge_length, max_relative_edge_length, parts: string[] }  // TagsInput
 interface PartialSurfaceFormItem    { name, output_start_time, output_interval, file_format, include_parts: string[], exclude_parts: string[], baffle_export_option, output_variables, ... }
-interface PartialVolumeFormItem     { name, bbox_mode, bbox_source_box, bbox, bbox_source_parts: string[], bbox_offset_xmin/xmax/ymin/ymax/zmin/zmax, output_variables, ... }
+interface PartialVolumeFormItem     { name, bbox_mode, bbox_source_box_name, bbox, bbox_source_parts: string[], bbox_offset_xmin/xmax/ymin/ymax/zmin/zmax, output_variables, ... }
 interface SectionCutFormItem        { name, output_start_time, output_interval, file_format, axis_x/y/z, point_x/y/z, bbox, output_variables, ... }
 interface ProbeFileFormItem         { name, probe_type, radius, output_frequency, output_variables, points: ProbePointFormItem[] }
 interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
@@ -1816,7 +1819,7 @@ overlays: ViewerOverlays  // wheelAxes, landmarks remain here
   - **Refinement Boxes** (key `"box_{name}"`): `setup.meshing.box_refinement` — per-level color (RL1=light blue → RL7=red) wireframe boxes; each box individually toggleable
   - **Ground Plane** (key `"ground_plane"`): semi-transparent green plane at `z = vehicle_bbox.z_min`
   - **Probe Spheres** (key `"probe_{name}"`): `output.probe_files[].points[]` → yellow sphere (r=0.04) per point; per-probe-file toggle
-  - **Partial Volume Boxes** (key `"pv_{name}"`): `output.partial_volumes[]` → orange wireframe boxes; `bbox_mode` selects coordinates; per-volume toggle
+  - **Partial Volume Boxes** (key `"pv_{name}"`): `output.partial_volumes[]` → orange wireframe boxes; `bbox_mode` selects coordinates (`user_defined`: `[xm,xp,ym,yp,zm,zp]` vehicle-relative multipliers applied as `bMin=vb_min+m*vLen`, `bMax=vb_max+p*vLen`; `from_meshing_box`: looks up `bbox_source_box_name` key in `setup.meshing.box_refinement` dict, applies same multiplier formula; `around_parts`: not rendered in 3D viewer); per-volume toggle; **field name**: `bbox_source_box_name` (not `bbox_source_box`)
   - **Section Cuts** (key `"sc_{name}"`): `output.section_cuts[]` → magenta semi-transparent `PlaneGeometry` (10×10 m); per-cut toggle
 - `vehicleBbox` is union of all geometries in the assembly (computed in `TemplateBuilderPage`)
 
