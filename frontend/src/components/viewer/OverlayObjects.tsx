@@ -163,33 +163,37 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
     return <GroundPlane z={groundZ} />;
   })();
 
-  // ─── TG ground box ───────────────────────────────────────────────────────
+  // ─── TG ground plane (YZ plane at x_pos) ────────────────────────────────
   const tgGroundNode = (() => {
     if (!vis("tg_ground") || !tgCfg?.enable_ground_tg) return null;
-    // h_rl6 = coarsest × (0.5^6) × 8 = coarsest / 8
+    // h_rl6 = coarsest / 8  (= coarsest × 0.5^6 × 8)
     const h_rl6 = coarsest / 8;
-    const xStart = noSlipXminPos ?? vb.x_min;
+    // x_pos: backend uses noSlipXminPos - 0.01; fallback to vb.x_min - 0.01
+    const xPos = (noSlipXminPos ?? vb.x_min) - 0.01;
+    // y/z extents mirror backend floor_dims ≈ vehicle body width ×85%
     const floorY = vWid * 0.85;
     const centerY = (vb.y_min + vb.y_max) / 2;
     const yMin = centerY - floorY / 2;
     const yMax = centerY + floorY / 2;
+    const zMin = groundZ;
+    const zMax = groundZ + h_rl6;
+    const planeH = zMax - zMin;   // z extent
+    const planeW = yMax - yMin;   // y extent
+    const centerZ = zMin + planeH / 2;
     return (
       <>
-        <WireBox
-          min={[xStart, yMin, groundZ]}
-          max={[vb.x_max, yMax, groundZ + h_rl6]}
-          color="#00ffff"
-          opacity={0.7}
-        />
-        <mesh position={[xStart, centerY, groundZ + h_rl6 / 2]} rotation={[0, Math.PI / 2, 0]}>
-          <planeGeometry args={[h_rl6, floorY]} />
+        {/* Filled semi-transparent YZ plane */}
+        <mesh position={[xPos, centerY, centerZ]} rotation={[0, Math.PI / 2, 0]}>
+          <planeGeometry args={[planeH, planeW]} />
           <meshBasicMaterial color="#00ffff" transparent opacity={0.25} side={THREE.DoubleSide} />
         </mesh>
+        {/* Wireframe outline of the plane */}
+        <WireBox min={[xPos, yMin, zMin]} max={[xPos + 0.001, yMax, zMax]} color="#00ffff" opacity={0.9} />
       </>
     );
   })();
 
-  // ─── TG body box ─────────────────────────────────────────────────────────
+  // ─── TG body plane (YZ plane at x_pos) ───────────────────────────────────
   const tgBodyNode = (() => {
     if (!vis("tg_body") || !tgCfg?.enable_body_tg) return null;
     const tgX = vb.x_min - vLen * 0.05;
@@ -198,20 +202,18 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
     const yMax = carYCenter + vWid * 0.45;
     const zMin = vb.z_min + vHgt * 0.10;
     const zMax = vb.z_min + vHgt * 0.65;
-    const boxH = zMax - zMin;
-    const boxW = yMax - yMin;
+    const planeH = zMax - zMin;
+    const planeW = yMax - yMin;
+    const centerZ = zMin + planeH / 2;
     return (
       <>
-        <WireBox
-          min={[tgX, yMin, zMin]}
-          max={[vb.x_max, yMax, zMax]}
-          color="#00ffff"
-          opacity={0.7}
-        />
-        <mesh position={[tgX, carYCenter, zMin + boxH / 2]} rotation={[0, Math.PI / 2, 0]}>
-          <planeGeometry args={[boxH, boxW]} />
+        {/* Filled semi-transparent YZ plane */}
+        <mesh position={[tgX, carYCenter, centerZ]} rotation={[0, Math.PI / 2, 0]}>
+          <planeGeometry args={[planeH, planeW]} />
           <meshBasicMaterial color="#00ffff" transparent opacity={0.25} side={THREE.DoubleSide} />
         </mesh>
+        {/* Wireframe outline of the plane */}
+        <WireBox min={[tgX, yMin, zMin]} max={[tgX + 0.001, yMax, zMax]} color="#00ffff" opacity={0.9} />
       </>
     );
   })();

@@ -229,8 +229,8 @@ function PlaneTab({ ts }: { ts: AnyRecord }) {
   const blSuction = asRecord(gc?.bl_suction);
   const noSlipXminPos = blSuction?.no_slip_xmin_pos;
   const tgGroundSub = noSlipXminPos != null
-    ? `x_start = ${(noSlipXminPos as number).toFixed(3)} m`
-    : "x_start = vehicle x_min (auto)";
+    ? `x_pos = ${((noSlipXminPos as number) - 0.01).toFixed(3)} m`
+    : "x_pos = vehicle x_min − 0.01 m (auto)";
   const simParam = asRecord(ts.simulation_parameter);
   const coarsest = (simParam?.coarsest_voxel_size as number) ?? 0.192;
   const h_rl6 = coarsest / 8;
