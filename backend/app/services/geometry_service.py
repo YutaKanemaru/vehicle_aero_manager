@@ -29,7 +29,7 @@ def _rmtree_force(path: Path) -> None:
 
 
 from fastapi import HTTPException, UploadFile
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
