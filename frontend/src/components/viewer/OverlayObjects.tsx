@@ -208,7 +208,6 @@ export function OverlayObjects({ templateSettings, vehicleBbox, partInfo }: Over
 const nodes: ReactElement[] = [];
 
     for (const [entryName, pbRaw] of Object.entries(pbDict)) {
-      if (!vis(`box_${entryName}`)) continue;
       const pbr = asRec(pbRaw);
       if (!pbr) continue;
       const level = (pbr.level as number) ?? 6;
@@ -224,7 +223,8 @@ const nodes: ReactElement[] = [];
       const allMatched = Object.keys(partInfo).filter((p) => matchesAny(p, patterns));
       if (allMatched.length === 0) continue;
 
-      function makeBox(key: string, matched: string[]): ReactElement | null {
+      function makeBox(visKey: string, renderKey: string, matched: string[]): ReactElement | null {
+        if (!vis(visKey)) return null;
         const bboxes = matched.map(getPartBbox).filter(Boolean) as PartBbox[];
         if (bboxes.length === 0) return null;
         const xMin = Math.min(...bboxes.map((b) => b.x_min)) - offXmin;
@@ -233,18 +233,22 @@ const nodes: ReactElement[] = [];
         const yMax = Math.max(...bboxes.map((b) => b.y_max)) + offYmax;
         const zMin = Math.min(...bboxes.map((b) => b.z_min)) - offZmin;
         const zMax = Math.max(...bboxes.map((b) => b.z_max)) + offZmax;
-        return <WireBox key={key} min={[xMin, yMin, zMin]} max={[xMax, yMax, zMax]} color={rlColor(level)} opacity={0.6} />;
+        return <WireBox key={renderKey} min={[xMin, yMin, zMin]} max={[xMax, yMax, zMax]} color={rlColor(level)} opacity={0.6} />;
       }
 
       if (!perCoeff) {
-        const box = makeBox(entryName, allMatched);
+        // per_coefficient=False: single toggle box_{entryName}
+        const box = makeBox(`box_${entryName}`, entryName, allMatched);
         if (box) nodes.push(box);
       } else {
+        // per_coefficient=True: one toggle per coefficient box_{entryName}_{coeff_part_name}
         for (const coeff of porousCoeffs) {
           const coeffMatched = allMatched.filter((p) => matchesPattern(p, coeff.part_name));
           if (coeffMatched.length === 0) continue;
-          const key = `${entryName}_${coeff.part_name.replace(/\*/g, "")}`;
-          const box = makeBox(key, coeffMatched);
+          const suffix = coeff.part_name.replace(/\*/g, "");
+          const visKey = `box_${entryName}_${suffix}`;
+          const renderKey = `${entryName}_${suffix}`;
+          const box = makeBox(visKey, renderKey, coeffMatched);
           if (box) nodes.push(box);
         }
       }

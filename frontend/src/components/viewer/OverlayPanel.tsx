@@ -175,23 +175,46 @@ function BoxTab({ ts }: { ts: AnyRecord }) {
       )}
 
       {/* Part-based box refinements */}
-      {Object.keys(partBasedBox).length > 0 && (
-        <>
-          <Text size="xs" fw={600} c="dimmed">Part-based Boxes</Text>
-          {Object.entries(partBasedBox).map(([name, v]) => {
-            const br = asRecord(v);
-            const level = br?.level as number | undefined;
-            return (
-              <OverlaySwitch
-                key={name}
-                label={name}
-                sub={level !== undefined ? `RL${level}` : undefined}
-                visKey={`box_${name}`}
-              />
-            );
-          })}
-        </>
-      )}
+      {Object.keys(partBasedBox).length > 0 && (() => {
+        const soMeshing = asRecord(asRecord(ts.setup_option)?.meshing);
+        const perCoeff = !!soMeshing?.box_refinement_porous_per_coefficient;
+        const porousCoeffs = asArray<AnyRecord>(ts.porous_coefficients);
+        return (
+          <>
+            <Text size="xs" fw={600} c="dimmed">Part-based Boxes</Text>
+            {Object.entries(partBasedBox).map(([name, v]) => {
+              const br = asRecord(v);
+              const level = br?.level as number | undefined;
+              const sub = level !== undefined ? `RL${level}` : undefined;
+              if (perCoeff && porousCoeffs.length > 0) {
+                // One toggle per porous coefficient
+                return porousCoeffs.map((pc) => {
+                  const partName = pc.part_name as string | undefined;
+                  if (!partName) return null;
+                  const suffix = partName.replace(/\*/g, "");
+                  const visKey = `box_${name}_${suffix}`;
+                  return (
+                    <OverlaySwitch
+                      key={visKey}
+                      label={`${name} / ${partName}`}
+                      sub={sub}
+                      visKey={visKey}
+                    />
+                  );
+                });
+              }
+              return (
+                <OverlaySwitch
+                  key={name}
+                  label={name}
+                  sub={sub}
+                  visKey={`box_${name}`}
+                />
+              );
+            })}
+          </>
+        );
+      })()}
 
       {/* Partial volumes */}
       {pvs.length > 0 && (
