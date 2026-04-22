@@ -51,17 +51,6 @@ function WireBox({
   );
 }
 
-// ─── Ground plane ────────────────────────────────────────────────────────────
-
-function GroundPlane({ z = 0 }: { z: number }) {
-  return (
-    <mesh position={[0, 0, z]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[100, 100]} />
-      <meshBasicMaterial color="#336633" transparent opacity={0.15} side={THREE.DoubleSide} />
-    </mesh>
-  );
-}
-
 // ─── Level-based color for refinement boxes ──────────────────────────────────
 
 const RL_COLORS: Record<number, string> = {
@@ -155,12 +144,6 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
         <WireBox key={name} min={bMin} max={bMax} color={rlColor(level)} opacity={0.5} />
       );
     });
-  })();
-
-  // ─── Ground plane ────────────────────────────────────────────────────────
-  const groundNode = (() => {
-    if (!vis("ground_plane")) return null;
-    return <GroundPlane z={groundZ} />;
   })();
 
   // ─── TG ground plane (YZ plane at x_pos) ────────────────────────────────
@@ -323,7 +306,6 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
     <>
       {domainBoxNode}
       {refinementNodes}
-      {groundNode}
       {tgGroundNode}
       {tgBodyNode}
       {probeNodes}

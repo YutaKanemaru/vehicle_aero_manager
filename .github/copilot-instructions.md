@@ -1817,9 +1817,6 @@ overlays: ViewerOverlays  // wheelAxes, landmarks remain here
 - Visibility controlled per-item via `overlayVisibility` store (key absent = visible by default):
   - **Domain Box** (key `"domain_box"`): `setup.domain_bounding_box` × vehicle bbox → white wireframe `<boxGeometry>`
   - **Refinement Boxes** (key `"box_{name}"`): `setup.meshing.box_refinement` — per-level color (RL1=light blue → RL7=red) wireframe boxes; each box individually toggleable
-  - **Ground Plane** (key `"ground_plane"`): semi-transparent green plane at computed `groundZ`:
-    - `ground_height_mode === "absolute"` → `ground_height_absolute`
-    - `ground_height_mode === "from_geometry"` (default) → `vb.z_min + ground_height_offset_from_geom_zMin`
   - **TG Ground** (key `"tg_ground"`): cyan semi-transparent YZ plane at `x_pos = noSlipXminPos − 0.01` (or `vb.x_min − 0.01` as fallback), extents `y ≈ ±42.5% vehicle width`, `z = [groundZ, groundZ + coarsest/8]`; shown only when `enable_ground_tg = true`. Matches `TurbulenceInstance.point.x_pos` in XML.
   - **TG Body** (key `"tg_body"`): cyan semi-transparent YZ plane at `x_pos = vb.x_min − 5%`, extents `y = car_center ± 45%`, `z = vb.z_min + 10%…65%`; shown only when `enable_body_tg = true`. Both TG overlays are **YZ planes only** (not 3D boxes) — matches the ultraFluidX spec where `<point><x_pos>` defines the x-position and `<bounding_box>` contains only y/z extents.
   - **Probe Spheres** (key `"probe_{name}"`): `output.probe_files[].points[]` → yellow sphere (r=0.04) per point; per-probe-file toggle
@@ -1837,7 +1834,7 @@ overlays: ViewerOverlays  // wheelAxes, landmarks remain here
 - 4-tab `Tabs` component (`pills` variant) rendered inside `ControlPanel`; replaces old flat Switch list
 - **Parts tab**: reads `setup.meshing.offset_refinement[].parts`, `setup.meshing.custom_refinement[].parts`, `target_names.wheel/rim/baffle/windtunnel`, `setup_option.ride_height.reference_parts` → groups of pattern `Badge` elements. Click any badge → `setSearchQuery(pattern)` → `PartListPanel` search bar filters to matching parts.
 - **Box tab**: `OverlaySwitch` rows for Domain Bounding Box (key `"domain_box"`), each `box_refinement` item (key `"box_{name}"`), each `part_based_box_refinement` item (key `"box_{name}"`), each `partial_volumes` item (key `"pv_{name}"`).
-- **Plane tab**: `OverlaySwitch` for Ground Plane (key `"ground_plane"`, sub-text shows `ground_height_mode` + computed z), TG Ground (key `"tg_ground"`, sub-text shows `x_pos = noSlipXminPos − 0.01`, shown when `enable_ground_tg=true`), TG Body (key `"tg_body"`, shown when `enable_body_tg=true`), each `section_cuts` item (key `"sc_{name}"`).
+- **Plane tab**: `OverlaySwitch` for TG Ground (key `"tg_ground"`, sub-text shows `x_pos = noSlipXminPos − 0.01`, shown when `enable_ground_tg=true`), TG Body (key `"tg_body"`, shown when `enable_body_tg=true`), each `section_cuts` item (key `"sc_{name}"`). Ground Plane removed — domain bounding box in Box tab is sufficient for ground height reference.
 - **Probe tab**: `OverlaySwitch` per `probe_files` item (key `"probe_{name}"`) — sub-text shows point count.
 - `OverlaySwitch` reads/writes `overlayVisibility` store directly; key-absent → default visible.
 - No template selected → placeholder text shown.

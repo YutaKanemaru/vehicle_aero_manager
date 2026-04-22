@@ -207,20 +207,9 @@ function PlaneTab({ ts }: { ts: AnyRecord }) {
   const output = asRecord(ts.output);
   const scs = asArray<AnyRecord>(output?.section_cuts);
 
-  // Ground height config
+  // Ground / TG config
   const setupOption = asRecord(ts.setup_option);
   const gc = asRecord(asRecord(setupOption?.boundary_condition)?.ground);
-  const groundMode = gc?.ground_height_mode as string | undefined;
-  const groundOffset = gc?.ground_height_offset_from_geom_zMin as number | undefined;
-  const groundAbsolute = gc?.ground_height_absolute as number | undefined;
-  let groundSub: string;
-  if (groundMode === "absolute") {
-    groundSub = `absolute z = ${(groundAbsolute ?? 0).toFixed(3)} m`;
-  } else if (groundOffset && groundOffset !== 0) {
-    groundSub = `from geometry z_min + ${groundOffset.toFixed(3)} m`;
-  } else {
-    groundSub = "from geometry z_min";
-  }
 
   // TG config
   const tgCfg = asRecord(asRecord(setupOption?.boundary_condition)?.turbulence_generator);
@@ -237,8 +226,6 @@ function PlaneTab({ ts }: { ts: AnyRecord }) {
 
   return (
     <Stack gap="sm">
-      <OverlaySwitch label="Ground plane" sub={groundSub} visKey="ground_plane" />
-
       {(enableGroundTg || enableBodyTg) && (
         <>
           <Text size="xs" fw={600} c="dimmed">Turbulence Generators</Text>
