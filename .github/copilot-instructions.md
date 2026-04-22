@@ -731,7 +731,8 @@ A Template's `settings` JSON field follows a **5-section + 1 top-level** structu
       },
       "part_box_refinement": {},     // legacy (unused in current presets)
       "part_based_box_refinement": { // box defined by parts + per-axis offset factors
-        "Box_Porous_RL6": {"level": 6, "parts": ["Porous_"], "offset_xmin": 0.5, "offset_xmax": 0.5, ...}
+        "Box_Porous_RL6": {"level": 6, "parts": ["Porous_"], "per_part_match": false, "offset_xmin": 0.5, "offset_xmax": 0.5, ...}
+        // per_part_match=true → one BoxInstance per matched part, named Box_Porous_RL6_{part_name}
       },
       "offset_refinement": {
         "Body_Offset_ALL_RL7": {"level": 7, "normal_distance": 0.012, "parts": []},
@@ -1248,6 +1249,9 @@ class MeshingSetup(BaseModel):
 class BoxRefinementAroundParts(BaseModel):
     level: int
     parts: list[str]
+    per_part_match: bool = False   # False: union bbox of all matched parts → 1 BoxInstance
+                                   # True:  one BoxInstance per matched part → N BoxInstances
+                                   #        name suffix: {entry_name}_{part_name}
     offset_xmin: float = 0.5   # m — absolute distance beyond matched parts bbox in -X
     offset_xmax: float = 0.5   # m — absolute distance beyond matched parts bbox in +X
     offset_ymin: float = 0.5   # m — absolute distance beyond matched parts bbox in -Y

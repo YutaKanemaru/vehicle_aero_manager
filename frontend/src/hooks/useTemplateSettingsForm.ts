@@ -246,6 +246,7 @@ export interface BoxRefinementFormItem {
   box_zmax: number;
   // ─── around_parts mode ───────────────────────────────────────────
   parts: string[];             // tag list of part name patterns
+  per_part_match: boolean;     // false=union box, true=one box per matched part
   offset_xmin: number;         // m — extend beyond parts bbox in -X
   offset_xmax: number;         // m — extend beyond parts bbox in +X
   offset_ymin: number;         // m — extend beyond parts bbox in -Y
@@ -353,21 +354,37 @@ export const FORM_DEFAULTS = {
   bbox_ymax: D.setup.domain_bounding_box[3] as number,
   bbox_zmin: D.setup.domain_bounding_box[4] as number,
   bbox_zmax: D.setup.domain_bounding_box[5] as number,
-  // Box refinement dynamic list — sourced from D.setup.meshing.box_refinement
-  box_refinements: Object.entries(D.setup.meshing.box_refinement as unknown as Record<string, { level: number; box: number[] }>).map(
-    ([name, v]) => ({
-      name,
-      level: v.level,
-      box_type: "vehicle_bbox_factors" as const,
-      box_xmin: v.box[0], box_xmax: v.box[1],
-      box_ymin: v.box[2], box_ymax: v.box[3],
-      box_zmin: v.box[4], box_zmax: v.box[5],
-      parts: [] as string[],
-      offset_xmin: 0.5, offset_xmax: 0.5,
-      offset_ymin: 0.5, offset_ymax: 0.5,
-      offset_zmin: 0.5, offset_zmax: 0.5,
-    })
-  ) as BoxRefinementFormItem[],
+  // Box refinement dynamic list — sourced from D.setup.meshing.box_refinement + part_based_box_refinement
+  box_refinements: [
+    ...Object.entries(D.setup.meshing.box_refinement as unknown as Record<string, { level: number; box: number[] }>).map(
+      ([name, v]) => ({
+        name,
+        level: v.level,
+        box_type: "vehicle_bbox_factors" as const,
+        box_xmin: v.box[0], box_xmax: v.box[1],
+        box_ymin: v.box[2], box_ymax: v.box[3],
+        box_zmin: v.box[4], box_zmax: v.box[5],
+        parts: [] as string[],
+        per_part_match: false,
+        offset_xmin: 0.5, offset_xmax: 0.5,
+        offset_ymin: 0.5, offset_ymax: 0.5,
+        offset_zmin: 0.5, offset_zmax: 0.5,
+      })
+    ),
+    ...Object.entries(D.setup.meshing.part_based_box_refinement as unknown as Record<string, { level: number; parts: string[]; per_part_match: boolean; offset_xmin: number; offset_xmax: number; offset_ymin: number; offset_ymax: number; offset_zmin: number; offset_zmax: number }>).map(
+      ([name, v]) => ({
+        name,
+        level: v.level,
+        box_type: "around_parts" as const,
+        box_xmin: 0, box_xmax: 0, box_ymin: 0, box_ymax: 0, box_zmin: 0, box_zmax: 0,
+        parts: Array.isArray(v.parts) ? [...v.parts] : [],
+        per_part_match: v.per_part_match ?? false,
+        offset_xmin: v.offset_xmin ?? 0.5, offset_xmax: v.offset_xmax ?? 0.5,
+        offset_ymin: v.offset_ymin ?? 0.5, offset_ymax: v.offset_ymax ?? 0.5,
+        offset_zmin: v.offset_zmin ?? 0.5, offset_zmax: v.offset_zmax ?? 0.5,
+      })
+    ),
+  ] as BoxRefinementFormItem[],
   // Offset refinement dynamic list — sourced from D.setup.meshing.offset_refinement
   offset_refinements: Object.entries(D.setup.meshing.offset_refinement as unknown as Record<string, { level: number; normal_distance: number; parts: string[] }>).map(
     ([name, v]) => ({
@@ -617,6 +634,7 @@ export function valuesFromSettings(settings: any): FormValues {
       box_zmin: v.box?.[4] ?? 0,
       box_zmax: v.box?.[5] ?? 0,
       parts: [] as string[],
+      per_part_match: false,
       offset_xmin: 0.5, offset_xmax: 0.5,
       offset_ymin: 0.5, offset_ymax: 0.5,
       offset_zmin: 0.5, offset_zmax: 0.5,
@@ -629,7 +647,7 @@ export function valuesFromSettings(settings: any): FormValues {
       box_type: "around_parts" as const,
       box_xmin: 0, box_xmax: 0, box_ymin: 0, box_ymax: 0, box_zmin: 0, box_zmax: 0,
       parts: Array.isArray(v.parts) ? [...v.parts] : [],
-
+      per_part_match: v.per_part_match ?? false,
       offset_xmin: v.offset_xmin ?? 0.5,
       offset_xmax: v.offset_xmax ?? 0.5,
       offset_ymin: v.offset_ymin ?? 0.5,
@@ -907,6 +925,7 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
       partBasedBoxRefinementDict[item.name] = {
         level: item.level,
         parts: item.parts,
+        per_part_match: item.per_part_match,
         offset_xmin: item.offset_xmin,
         offset_xmax: item.offset_xmax,
         offset_ymin: item.offset_ymin,

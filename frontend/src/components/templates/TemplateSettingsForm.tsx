@@ -620,6 +620,11 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                       splitChars={[",", " "]}
                       {...form.getInputProps(`box_refinements.${idx}.parts`)}
                     />
+                    <Switch
+                      label="Per-part boxes (one box per matched part)"
+                      description="Off: all matched parts share one combined box. On: each matched part gets its own box."
+                      {...form.getInputProps(`box_refinements.${idx}.per_part_match`, { type: "checkbox" })}
+                    />
                     <Text size="xs" c="dimmed">Offset from parts bounding box (m)</Text>
                     <SimpleGrid cols={3}>
                       <NumberInput label="-X offset" decimalScale={3} step={0.05} {...form.getInputProps(`box_refinements.${idx}.offset_xmin`)} />

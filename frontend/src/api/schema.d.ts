@@ -1231,6 +1231,9 @@ export interface components {
          * BoxRefinementAroundParts
          * @description Box refinement defined relative to matched parts' bounding box.
          *     Compute Engine resolves this to absolute coordinates at XML generation time.
+         *     per_part_match=False (default): union bbox of all matched parts → 1 BoxInstance.
+         *     per_part_match=True: one BoxInstance per matched part → N BoxInstances
+         *         with name suffix _{part_name}.
          */
         BoxRefinementAroundParts: {
             /**
@@ -1240,6 +1243,11 @@ export interface components {
             level: number;
             /** Parts */
             parts: string[];
+            /**
+             * Per Part Match
+             * @default false
+             */
+            per_part_match: boolean;
             /**
              * Offset Xmin
              * @default 0.5
