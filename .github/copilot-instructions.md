@@ -85,6 +85,7 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | 2A-8 | Launch Assembly Builder button in TemplateBuilderPage — `IconPackage` ActionIcon beside Assembly Select opens `AssemblyGeometriesDrawer`; `handleBuilderClose` double-invalidates queries for live 3D refresh | ✅ Complete |
 | 2A-9 | Folder structure + sort for all 5 list views — `TemplateFolder`, `ConditionMapFolder`, `CaseFolder` DB tables + migration; folder CRUD endpoints (`/folders/` routes before `/{id}`); `useSortedItems` hook (name/created_at, asc/desc); `FolderSection` (Paper+Collapse) + `SortTh` headers in TemplateList, MapList, CaseList (new folders) + sort-only in existing GeometryList and AssemblyList | ✅ Complete |
 | 2A-10 | `AssemblyGeometriesDrawer` redesign — `SegmentedControl` tab switching (Current / Add geometries); Add panel shows folder-grouped collapsible `FolderBlock` sections (Paper + Collapse) with per-folder select-all checkbox; flat fallback when no folders exist; fetches `foldersApi.list()` + `geometriesApi.list()` on open | ✅ Complete |
+| 2A-11 | Template Builder redesign — `RideHeightTemplateConfig` in Template schema; `Run.geometry_override_id`; remove Axis Visualisation + Ride Height Transform sections from Template Builder; add `CreateCaseFromBuilderModal`; Ride Height tab in `TemplateSettingsForm` | ✅ Complete |
 | 2B | Post-processing EnSight viewer (PyVista backend) | 🔲 Planned |
 
 ---
@@ -1050,7 +1051,7 @@ The Compute Engine derives `Computed` fields from STL geometry. Key calculations
   - `@property ride_height` → parses `ride_height_json` or returns `{}`
   - `@property yaw_config` → parses `yaw_config_json` or returns `{}`
 - `Case`: `id`, `name`, `description`, `template_id` (FK→templates), `assembly_id` (FK→geometry_assemblies), `map_id` (FK→condition_maps, nullable), `created_by`, `created_at`, `updated_at`; `runs` relationship
-- `Run`: `id`, `name`, `case_id` (FK→cases, CASCADE, index), `condition_id` (FK→conditions), `xml_path` (nullable), `status` (`pending`/`generating`/`ready`/`error`), `error_message` (nullable), `scheduler_job_id` (nullable), `created_by`, `created_at`, `updated_at`
+- `Run`: `id`, `name`, `case_id` (FK→cases, CASCADE, index), `condition_id` (FK→conditions), `xml_path` (nullable), `geometry_override_id` (nullable FK→geometries, ondelete SET NULL — overrides assembly geometry for XML generation), `status` (`pending`/`generating`/`ready`/`error`), `error_message` (nullable), `scheduler_job_id` (nullable), `created_by`, `created_at`, `updated_at`
 
 **Models** (`app/models/system.py`)
 - `System`: `id`, `name`, `source_geometry_id` (FK→geometries), `result_geometry_id` (FK→geometries, nullable), `condition_id` (FK→conditions, nullable), `transform_snapshot` (Text/JSON), `created_by`, `created_at`
@@ -1062,10 +1063,11 @@ class RideHeightConditionConfig(BaseModel):
     enabled: bool = False
     target_front_wheel_axis_rh: float | None = None  # m from ground
     target_rear_wheel_axis_rh: float | None = None
-    adjust_body_wheel_separately: bool = False
-    use_original_wheel_position: bool = False  # True = return wheels to original position
-    target_front_wheel_rh: float | None = None  # used when separately=True, original=False
+    # used when template.ride_height.adjust_body_wheel_separately=True and use_original_wheel_position=False
+    target_front_wheel_rh: float | None = None
     target_rear_wheel_rh: float | None = None
+
+# NOTE: adjust_body_wheel_separately / use_original_wheel_position moved to RideHeightTemplateConfig (template_settings.py)
 
 class YawConditionConfig(BaseModel):
     center_mode: Literal["wheel_center", "user_input"] = "wheel_center"
@@ -1106,6 +1108,7 @@ class TransformRequest(BaseModel):
     name: str  # name for the resulting Geometry
     condition_id: str | None = None
     ride_height: RideHeightConditionConfig = Field(default_factory=RideHeightConditionConfig)
+    rh_template: RideHeightTemplateConfig = Field(default_factory=RideHeightTemplateConfig)  # "how" config (separate/original-pos)
     yaw_angle_deg: float = 0.0
     yaw_config: YawConditionConfig = Field(default_factory=YawConditionConfig)
 
@@ -1118,7 +1121,8 @@ class SystemResponse(BaseModel):
 
 - `CaseCreate`, `CaseUpdate`, `CaseResponse` (includes `run_count`, `case_number`, `template_name`, `assembly_name`, `map_name`)
 - `CaseDuplicateRequest`: `{ name, description }` — copies active template/assembly/map from source case
-- `RunCreate`, `RunResponse` (includes `xml_path`, `stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`)
+- `RunCreate`, `RunResponse` (includes `xml_path`, `stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`, `geometry_override_id`)
+- `RunUpdate`: `{ geometry_override_id: str | None }` — used to set geometry override after ride-height transform
 - `DiffResult`: list of changed fields between two Runs
 
 **Service** (`app/services/configuration_service.py`)
@@ -1128,7 +1132,8 @@ class SystemResponse(BaseModel):
 - `delete_condition()`: raises HTTP 400 if any `Run.condition_id` references this condition — delete those runs first
 - `list_cases`, `get_case`, `create_case`, `update_case`, `delete_case`
 - `create_run(case_id, condition_id)`, `list_runs(case_id)`
-- `generate_xml(run_id, db, background_tasks)` — background task: resolves Condition → `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml`; then `build_probe_csv_files()` writes one CSV per probe_file_instance beside the XML; copies first STL to `data/runs/{run_id}/input.stl` and stores path in `run.stl_path` → update `run.status`
+- `update_run(db, case_id, run_id, data: RunUpdate, current_user)` — updates `geometry_override_id` on a Run (PATCH)
+- `generate_xml(run_id, db, background_tasks)` — background task: resolves Condition → if `run.geometry_override_id` set, uses override geometry instead of assembly first STL → `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml`; then `build_probe_csv_files()` writes one CSV per probe_file_instance beside the XML; copies STL to `data/runs/{run_id}/input.stl` and stores path in `run.stl_path` → update `run.status`
 - `duplicate_case(db, source_case_id, data: CaseDuplicateRequest, current_user)` — copies Case row (same template/assembly/map); does NOT copy Runs
 - `create_case_with_runs(db, case_data, condition_ids, current_user)` — creates Case + one Run per Condition
 - `get_axes_glb(db, case_id, run_id) -> bytes`: resolves Run → Condition → Assembly → `viewer_service.build_axes_glb()`; raises 400 on ValueError
@@ -1157,6 +1162,7 @@ class SystemResponse(BaseModel):
 | `GET` | `/cases/{id}/runs/` | List runs |
 | `POST` | `/cases/{id}/runs/` | Create run (condition_id required) |
 | `POST` | `/cases/{id}/runs/{rid}/generate` | Trigger XML generation (background task) |
+| `PATCH` | `/cases/{id}/runs/{rid}` | Update run (set `geometry_override_id`) |
 | `GET` | `/cases/{id}/runs/{rid}/download` | Download generated XML |
 | `GET` | `/cases/{id}/runs/{rid}/download-stl` | Download input STL used for XML generation |
 | `GET` | `/cases/{id}/runs/{rid}/axes-glb` | On-demand axis-visualisation GLB |
@@ -1173,7 +1179,7 @@ class SystemResponse(BaseModel):
 | `GET` | `/systems/{id}/landmarks-glb` | GLB with before/after landmark spheres |
 
 **`POST /geometries/{id}/transform`** (in `app/api/v1/geometries.py`):
-- Body: `TransformRequest` — name, condition_id?, ride_height, yaw_angle_deg, yaw_config
+- Body: `TransformRequest` — name, condition_id?, ride_height, rh_template, yaw_angle_deg, yaw_config
 - Validates geometry `status == "ready"` and `analysis_result` exists
 - Calls `ride_height_service.compute_transform()` → snapshot dict
 - Calls `ride_height_service.create_system_and_geometry()` → `(System, Geometry)` in background
@@ -1183,6 +1189,7 @@ class SystemResponse(BaseModel):
 - `4a08074381f4_add_condition_maps_conditions_refactor_` — ConditionMap + Condition tables; Run.condition_id replaces configuration_id
 - `8949ff1689b0_add_ride_height_yaw_to_conditions_and_` — systems table; `ride_height_json` + `yaw_config_json` on conditions
 - `ff0265eeeb01_add_stl_path_to_runs` — adds nullable `stl_path` Text column to `runs`
+- `0601bb149381_add_geometry_override_id_to_runs` — adds nullable `geometry_override_id` FK column to `runs` (ondelete SET NULL); uses `batch_alter_table` for SQLite
 
 ### Template Settings Extensions (`app/schemas/template_settings.py`)
 
@@ -1244,14 +1251,24 @@ class BoxRefinementAroundParts(BaseModel):
 ```
 
 
+**`RideHeightTemplateConfig`** (new — template-level "how" config for ride height transforms):
+```python
+class RideHeightTemplateConfig(BaseModel):
+    reference_parts: list[str] = []         # part-name patterns used to derive wheel positions for transform
+    adjust_body_wheel_separately: bool = False  # True = body and wheels transformed independently
+    use_original_wheel_position: bool = False   # True = restore wheels to original Z when separately=True
+```
+
+**`SetupOption`** now includes `ride_height: RideHeightTemplateConfig = Field(default_factory=RideHeightTemplateConfig)`.
+
 **`SetupOption.compute`** (ComputeOption):
 ```python
 class ComputeOption(BaseModel):
-    # All other flags removed — auto-derived in compute_engine:
-    #   rotate_wheels / moving_ground → from ground_mode
-    #   porous_media → from bool(template_settings.porous_coefficients)
-    #   turbulence_generator → from tg_cfg.enable_ground_tg | enable_body_tg
-    adjust_ride_height: bool = False
+    pass  # All flags auto-derived in compute_engine:
+          #   rotate_wheels / moving_ground → from ground_mode
+          #   porous_media → from bool(template_settings.porous_coefficients)
+          #   turbulence_generator → from tg_cfg.enable_ground_tg | enable_body_tg
+          # adjust_ride_height removed — ride height is triggered per-condition in CreateCaseFromBuilderModal
 ```
 
 **`SimulationParameter`** key fields:
@@ -1468,7 +1485,7 @@ rotating_belt_5:                   passive_parts.append("Belt_Center")
 ### Compute Flag Dependency Rules
 
 ```
-All flags except adjust_ride_height are auto-derived in compute_engine:
+All flags are auto-derived in compute_engine (ComputeOption is now empty):
 
 rotate_wheels / moving_ground:
   → derived from ground_mode: static → False, otherwise → True
@@ -1480,6 +1497,10 @@ porous_media:
 turbulence_generator:
   → derived from tg_cfg.enable_ground_tg or tg_cfg.enable_body_tg
   → both off → no TG instances
+
+adjust_ride_height:
+  → NOT a compute flag anymore — triggered per-condition in CreateCaseFromBuilderModal
+  → uses Template's RideHeightTemplateConfig ("how") + Condition's RideHeightConditionConfig ("targets")
 ```
 
 ### Excel Settings Classification (from AUR_v1.2_EXT.xlsx / CX1_v1.2_GHN.xlsx)
@@ -1489,7 +1510,7 @@ turbulence_generator:
 | General | `DATA_FOLDER`, `list_stl_files`, `simulationName` | VAM managed |
 | General | `inflow_velocity`, `yaw_angle_vehicle`, `ground_height` | **Configuration** |
 | General | `simulation_time`, `output_start_time`, `output_interval_time` | Config (optional override) |
-| General | `opt_moving_floor`, `osm_wheels`, `activate_body_tg`, `adjust_ride_height` | Config `compute_overrides` |
+| General | `opt_moving_floor`, `osm_wheels`, `activate_body_tg` | Config `compute_overrides` |
 | General | `opt_belt_system`, `wall_model`, `solution_type`, `output_format` | **Template** |
 | General | `density`, `dynamic_viscosity`, `temperature` | **Template** |
 | Wheels_baffles | `WheelPartsNames`, `RimPartsNames`, `BafflePartsName` | Template `target_names` |
@@ -1499,7 +1520,8 @@ turbulence_generator:
 | Belts | `belt_size_*`, `belt_center_position_*` | Template `setup.boundary_condition_input` |
 | Heat_exchangers | part `name` | Template `target_names.porous` |
 | Heat_exchangers | `coeffs_inertia`, `coeffs_viscous` | **Configuration** `porous_coefficients` |
-| Ride_Height | `front/rear_wheel_axis_RH`, `adjust_body_wheel_separately` | Configuration `ride_height` |
+| Ride_Height | `front/rear_wheel_axis_RH` | Configuration `ride_height` (target values) |
+| Ride_Height | `adjust_body_wheel_separately`, `use_original_wheel_position`, `reference_parts` | Template `setup_option.ride_height` (how-to config) |
 | Mesh_Control | `triangleSplitting`, `coarsest_voxel_size`, `transitionLayers` | **Template** |
 | Additional_offset_refinement | all rows | Template `setup.meshing.offset_refinement` |
 | Custom_refinement | all rows (GHN only) | Template `setup.meshing.custom_refinement` |
@@ -1510,12 +1532,13 @@ turbulence_generator:
 - `src/components/maps/MapList.tsx` — Condition Maps table; per-map drawer opens `ConditionSection`; shows ride height badge per condition row + edit button
 - `src/components/maps/MapCreateModal.tsx` — create map (name + description)
 - `src/components/maps/ConditionFormModal.tsx` — create/edit condition; two Accordions:
-  - **Ride Height Transform**: enabled switch → target front/rear wheel axis heights → adjust separately switch → use original position switch → per-wheel RH targets
+  - **Ride Height Transform**: enabled switch → target front/rear wheel axis heights → optional per-wheel RH targets (only active when Template's `adjust_body_wheel_separately=True`; note shown in UI)
   - **Yaw Center Configuration**: `center_mode` Select (`wheel_center` / `user_input`) → center X/Y inputs when `user_input`
 - `src/components/cases/CaseList.tsx` — table with `case_number` badge, Template/Assembly/Map badges, Run button, Duplicate button; **Compare mode**: toggle button activates row-selection mode (highlight up to 2 rows), "Compare" button opens `CaseCompareModal`
 - `src/components/cases/CaseCreateModal.tsx` — Two-tab modal: **New Case** (Template + Assembly + optional Map + `withRuns` Switch) / **Copy from Case** (source Case select + auto-fill name → `casesApi.duplicate()`)
 - `src/components/cases/CaseDuplicateModal.tsx` — standalone duplicate form (also opened from Duplicate icon in CaseList row)
 - `src/components/cases/CaseCompareModal.tsx` — 2-column `Grid` showing `CaseColumn` per selected case; each column: case info badges + scrollable Run list table (`run_number` / `condition_name` / velocity / yaw / status badge)
+- `src/components/cases/CreateCaseFromBuilderModal.tsx` — Modal opened from Template Builder to bulk-create a Case + Runs from a Condition Map; auto-generates case name; for `ride_height.enabled=True` conditions, fires `transformApi.transform()` using Template's `RideHeightTemplateConfig` then patches `Run.geometry_override_id` via `runsApi.update()`; navigates to `/cases` on success
 - `src/components/runs/RunList.tsx` — status badge, XML download link, Diff selector
 - `src/components/runs/DiffView.tsx` — side-by-side or diff-list view of two Run settings
 - Navigation: `AppShell.tsx` adds `Condition Maps` (IconList) and `Cases` (IconCar)
@@ -1552,7 +1575,7 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 | *(Belt size label convention)* | x = vehicle longitudinal = **Length (x)**; y = vehicle lateral = **Width (y)**. Applied to all 3 belt size inputs (wheel belt, center belt, belt_1). |
 | Output | **Accordion**: Full Data Output (time fields, format, merge, coarsening [Coarsest RL max=number_of_resolution, Coarsen by SegmentedControl "1"|"2"], bbox select/coords, output vars 24+15 checkboxes) · Aero Coefficients (aero only; ref area/length auto, along-axis) · Partial Surfaces · Partial Volumes (coarsening same SegmentedControl) · Section Cuts · Probe Files |
 | Part Specification | `tn_baffle` + `tn_windtunnel` only |
-| Ride Height | `compute_adjust_ride_height` Switch only (placeholder) |
+| Ride Height | `rh_reference_parts` TagsInput · `rh_adjust_body_wheel_separately` Switch · `rh_use_original_wheel_position` Switch (disabled when `adjust_body_wheel_separately=false`) |
 
 **Key notes:**
 - Modal `size="95%"` for all 3 create/edit modals
@@ -1562,7 +1585,7 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 - `tn_wheel` / `tn_rim` moved to BC tab > Ground Condition accordion (aero only)
 - `tn_wt_*` tire parts moved to BC tab > Belt Configuration accordion (isBelt5, marked `required`)
 - `tn_osm_*` OSM parts moved to BC tab > Ground Condition, shown when `overset_wheels` is ON
-- `compute_adjust_ride_height` moved from BC tab to Ride Height tab
+- Ride Height tab: `rh_reference_parts` (TagsInput) + `rh_adjust_body_wheel_separately` + `rh_use_original_wheel_position` — maps to `setup_option.ride_height` in Template settings
 - **Part name list fields use `TagsInput`** (not `TextInput`) — `tn_wheel`, `tn_rim`, `tn_baffle`, `tn_windtunnel`, `offset_refinements[].parts`, `custom_refinements[].parts`, `box_refinements[].parts` (around_parts mode), `triangle_splitting_instances[].parts`, `partial_surfaces[].include_parts/exclude_parts`, `partial_volumes[].bbox_source_parts`. All backed by `string[]` — no `joinList`/`splitList` needed.
 - **Part name pattern matching** (`compute_engine._matches_pattern`): `*` あり → `fnmatch` glob (`Body_*` = starts-with, `*_Body_*` = contains, `*_Body` = ends-with); `*` なし → `startswith OR endswith`; case-insensitive。`offset_refinement[]`, `custom_refinement[]`, `triangle_splitting_instances[]` の `parts` は `part_info` に対して展開済み実パーツ名を XML に書き出す（B案）。
 
@@ -1726,29 +1749,26 @@ searchQuery: string
 searchMode: "include" | "exclude"
 overlays: {
   domainBox, refinementBoxes, wheelAxes, groundPlane,
-  landmarks, probeSpheres, partialVolumes, sectionCuts  // all boolean
+  probeSpheres, partialVolumes, sectionCuts  // all boolean
 }
 selectedAssemblyId: string | null
 selectedTemplateId: string | null
-selectedCaseId: string | null        // for axis GLB (Case that owns the Run)
-selectedRunId: string | null         // for axis GLB fetch
-axesGlbUrl: string | null            // blob URL of current axes GLB; null = no axes overlay
 ratio: 0.05                          // decimation ratio used for GLB fetch
-selectedConditionMapId: string | null
-selectedConditionId: string | null
-landmarksGlbUrl: string | null       // blob URL for transform landmarks overlay
 cameraProjection: "perspective" | "orthographic"  // toggled by floating toolbar
 cameraPreset: string | null          // trigger: "top" | "front" | "side" | "iso" | "rear" | null
 viewerTheme: "dark" | "light"
 flatShading: boolean                 // default false; MeshStandardMaterial.flatShading
 showEdges: boolean                   // default false; THREE.EdgesGeometry overlay
+// NOTE: selectedCaseId, selectedRunId, axesGlbUrl, selectedConditionMapId,
+//       selectedConditionId, landmarksGlbUrl removed — no longer used by Template Builder
+//       (kept in store only if Case UI 3D step is implemented later)
 ```
 
 **`src/api/systems.ts`** (new)
 - `systemsApi.list()`, `.get(id)`, `.delete(id)`, `.getLandmarksGlbUrl(id)` — fetch as blob → `createObjectURL()`
 - `transformApi.transform(geometryId, data: TransformRequest) -> TransformResult`
 - `TransformResult`: `{ system_id, geometry_id, geometry_name, geometry_status, transform_snapshot }`
-- `RideHeightConditionConfig`, `YawConditionConfig`, `TransformRequest` re-exported from `schema.d.ts`
+- `RideHeightConditionConfig`, `RideHeightTemplateConfig`, `YawConditionConfig`, `TransformRequest` re-exported from `schema.d.ts`
 
 **`src/api/geometries.ts`** — helpers:
 - `geometriesApi.getGlbBlobUrl(id, ratio?)`: fetches GLB with auth header → `Blob` → `URL.createObjectURL()`, returns URL string. Caller must `URL.revokeObjectURL()` on cleanup. Default `ratio = 0.05`.
@@ -1756,6 +1776,7 @@ showEdges: boolean                   // default false; THREE.EdgesGeometry overl
 - `GeometryLinkRequest` type extended with `decimation_ratio?: number`.
 
 **`src/api/configurations.ts`** — `runsApi` additions:
+- `runsApi.update(caseId, runId, data: RunUpdate) -> Promise<RunResponse>`: `PATCH /cases/{id}/runs/{id}` — used to set `geometry_override_id` after ride-height transform
 - `runsApi.getAxesGlbUrl(caseId, runId) -> Promise<string>`: fetches `/cases/{id}/runs/{id}/axes-glb` with auth header → `createObjectURL(blob)`. Caller must `revokeObjectURL()` on cleanup.
 
 **`src/schemas/geometry.py`** — `GeometryLinkRequest`:
@@ -1806,8 +1827,7 @@ showEdges: boolean                   // default false; THREE.EdgesGeometry overl
 - **`ViewerToolbar`** (floating, top-right of 3D panel, `position:absolute`): `SegmentedControl` Persp/Ortho → `setCameraProjection()` · `Switch` Flat → `setFlatShading()` · `Switch` Edges → `setShowEdges()`
 - `ControlPanel` sections (275px left, scrollable):
   1. Assembly `Select` (in `Group` with `IconPackage` ActionIcon — opens `AssemblyGeometriesDrawer` when clicked; `handleBuilderClose` double-invalidates `["assemblies"]` + `["assembly", id]` queries for live 3D refresh) → Template `Select`
-  2. **Axis Visualisation (Run)** — Case `Select` (filtered to selected Assembly's cases) + Run `Select` (only `status=ready` runs shown); `useEffect` revokes/fetches axes GLB
-  3. **Ride Height Transform** — Condition Map → Condition → Geometry selects → "Apply Ride Height Transform" `Button`; verification table (front/rear error mm, teal/orange)
+  2. **Create Case** button (`IconPlus`, enabled when both assembly + template selected) → opens `CreateCaseFromBuilderModal`
   4. **Overlays** — `Switch` group (domainBox / refinementBoxes / wheelAxes / landmarks / probeSpheres / partialVolumes / groundPlane)
   5. **Camera** — preset buttons (iso / front / rear / side / top) + theme toggle
 - `PartListPanel` receives `allParts` (all part names from assembly geometries)
