@@ -1833,7 +1833,7 @@ overlays: ViewerOverlays  // wheelAxes, landmarks remain here
 
 **`src/components/viewer/OverlayPanel.tsx`** (new — 2A-13)
 - 4-tab `Tabs` component (`pills` variant) rendered inside `ControlPanel`; replaces old flat Switch list
-- **Parts tab**: reads `setup.meshing.offset_refinement[].parts`, `setup.meshing.custom_refinement[].parts`, `target_names.wheel/rim/baffle/windtunnel`, `setup_option.ride_height.reference_parts` → groups of pattern `Badge` elements. Click any badge → `setSearchQuery(pattern)` → `PartListPanel` search bar filters to matching parts.
+- **Parts tab**: reads `setup.meshing.offset_refinement[].parts`, `setup.meshing.custom_refinement[].parts`, `target_names.wheel/rim/baffle/windtunnel`, `setup_option.ride_height.reference_parts`, `porous_coefficients[].part_name`, `setup_option.meshing.triangle_splitting_instances[].parts` → groups of pattern `Badge` elements. Click any badge → `setSearchQuery(pattern)` → `PartListPanel` search bar filters to matching parts.
 - **Box tab**: `OverlaySwitch` rows for Domain Bounding Box (key `"domain_box"`), each `box_refinement` item (key `"box_{name}"`), each `part_based_box_refinement` item (key `"box_{name}"`), each `partial_volumes` item (key `"pv_{name}"`).
 - **Plane tab**: `OverlaySwitch` for TG Ground (key `"tg_ground"`, sub-text shows `x_pos = noSlipXminPos − 0.01`, shown when `enable_ground_tg=true`), TG Body (key `"tg_body"`, shown when `enable_body_tg=true`), each `section_cuts` item (key `"sc_{name}"`). Ground Plane removed — domain bounding box in Box tab is sufficient for ground height reference.
 - **Probe tab**: `OverlaySwitch` per `probe_files` item (key `"probe_{name}"`) — sub-text shows point count.

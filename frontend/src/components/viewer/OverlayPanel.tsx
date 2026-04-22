@@ -91,6 +91,23 @@ function PartsTab({ ts }: { ts: AnyRecord }) {
   // Ride height reference parts
   if (rhParts.length > 0) groups.push({ label: "RH Reference", patterns: rhParts });
 
+  // Porous coefficients — part_name can be a glob pattern e.g. "Porous_Media_*"
+  const porousCoeffs = asArray<AnyRecord>(ts.porous_coefficients);
+  for (const pc of porousCoeffs) {
+    const partName = pc.part_name as string | undefined;
+    if (partName) groups.push({ label: `Porous: ${partName}`, patterns: [partName] });
+  }
+
+  // Triangle splitting per-part instances
+  const triInstances = asArray<AnyRecord>(
+    asRecord(setupOption?.meshing)?.triangle_splitting_instances
+  );
+  for (const inst of triInstances) {
+    const name = (inst.name as string | undefined) ?? "instance";
+    const parts = asStringArray(inst.parts);
+    if (parts.length > 0) groups.push({ label: `TS: ${name}`, patterns: parts });
+  }
+
   if (groups.length === 0) {
     return <Text size="xs" c="dimmed">No part patterns defined in template.</Text>;
   }
