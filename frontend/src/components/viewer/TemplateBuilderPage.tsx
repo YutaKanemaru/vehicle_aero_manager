@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Stack,
   Select,
@@ -14,7 +14,7 @@ import {
   Tooltip,
   SegmentedControl,
 } from "@mantine/core";
-import { IconSun, IconMoon, IconCamera, IconPackage, IconPlus } from "@tabler/icons-react";
+import { IconSun, IconMoon, IconCamera, IconPackage, IconPlus, IconPencil } from "@tabler/icons-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { assembliesApi, type AssemblyResponse, type GeometryResponse } from "../../api/geometries";
 import { templatesApi, type TemplateResponse } from "../../api/templates";
@@ -23,6 +23,7 @@ import { SceneCanvas } from "./SceneCanvas";
 import { PartListPanel } from "./PartListPanel";
 import { AssemblyGeometriesDrawer } from "../assemblies/AssemblyGeometriesDrawer";
 import { CreateCaseFromBuilderModal } from "../cases/CreateCaseFromBuilderModal";
+import { TemplateVersionEditModal } from "../templates/TemplateVersionEditModal";
 
 // ─── Left panel ──────────────────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
   // Assembly builder drawer state
   const [assemblyBuilderOpen, setAssemblyBuilderOpen] = useState(false);
   const [createCaseOpen, setCreateCaseOpen] = useState(false);
+  const [editTemplateOpen, setEditTemplateOpen] = useState(false);
 
   function handleBuilderClose() {
     setAssemblyBuilderOpen(false);
@@ -56,6 +58,23 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
     queryKey: ["templates"],
     queryFn: () => templatesApi.list(),
   });
+
+  const { data: templateDetail } = useQuery({
+    queryKey: ["templates", selectedTemplateId],
+    queryFn: () => templatesApi.get(selectedTemplateId!),
+    enabled: !!selectedTemplateId,
+  });
+
+  const { data: templateVersions } = useQuery({
+    queryKey: ["templates", selectedTemplateId, "versions"],
+    queryFn: () => templatesApi.listVersions(selectedTemplateId!),
+    enabled: !!selectedTemplateId,
+  });
+
+  const activeVersion = useMemo(() => {
+    if (!templateVersions || templateVersions.length === 0) return null;
+    return templateVersions.find((v) => v.is_active) ?? templateVersions[templateVersions.length - 1];
+  }, [templateVersions]);
 
   const assemblyOptions = assemblies.map((a) => ({ value: a.id, label: a.name }));
   const templateOptions = [
@@ -93,14 +112,31 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
         </Tooltip>
       </Group>
 
-      <Select
-        label="Template overlay"
-        placeholder="Select template..."
-        data={templateOptions}
-        value={selectedTemplateId ?? ""}
-        onChange={(v) => setSelectedTemplateId(v || null)}
-        size="sm"
-      />
+      {/* Template selector + Edit Template button */}
+      <Group gap="xs" align="flex-end" wrap="nowrap">
+        <Select
+          label="Template overlay"
+          placeholder="Select template..."
+          data={templateOptions}
+          value={selectedTemplateId ?? ""}
+          onChange={(v) => setSelectedTemplateId(v || null)}
+          clearable
+          size="sm"
+          style={{ flex: 1 }}
+        />
+        <Tooltip label="Edit template settings" position="right">
+          <ActionIcon
+            size="md"
+            variant="light"
+            color="violet"
+            disabled={!selectedTemplateId || !activeVersion || !templateDetail}
+            onClick={() => setEditTemplateOpen(true)}
+            mb={2}
+          >
+            <IconPencil size={15} />
+          </ActionIcon>
+        </Tooltip>
+      </Group>
 
       {/* Create Case button — enabled only when both assembly + template are selected */}
       <Button
@@ -191,6 +227,15 @@ function ControlPanel({ geometries }: { geometries: GeometryResponse[] }) {
           templateId={selectedTemplateId}
         />
       )}
+
+      {templateDetail && activeVersion && (
+        <TemplateVersionEditModal
+          opened={editTemplateOpen}
+          onClose={() => setEditTemplateOpen(false)}
+          template={templateDetail}
+          version={activeVersion}
+        />
+      )}
     </Stack>
   );
 }
@@ -255,7 +300,7 @@ export function TemplateBuilderPage() {
   });
 
   const { data: templateVersions } = useQuery({
-    queryKey: ["template-versions", selectedTemplateId],
+    queryKey: ["templates", selectedTemplateId, "versions"],
     queryFn: () =>
       selectedTemplateId ? templatesApi.listVersions(selectedTemplateId) : Promise.resolve([]),
     enabled: !!selectedTemplateId,
