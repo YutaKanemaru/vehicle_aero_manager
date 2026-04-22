@@ -90,7 +90,7 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
 
   // ─── Domain box ──────────────────────────────────────────────────────────
   const domainBoxNode = (() => {
-    if (!overlays.domainBox || !setup) return null;
+    if (!vis("domain_box") || !setup) return null;
     const mults = setup.domain_bounding_box as number[] | undefined;
     if (!Array.isArray(mults) || mults.length < 6) return null;
     const [xm, xp, ym, yp, zm, zp] = mults;
