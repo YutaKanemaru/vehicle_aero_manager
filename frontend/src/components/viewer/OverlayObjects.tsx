@@ -250,7 +250,7 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
       name: string;
       bbox_mode?: string;
       bbox?: number[];
-      bbox_source_box?: string;
+      bbox_source_box_name?: string;
     }> | undefined;
     if (!pvs || pvs.length === 0) return null;
 
@@ -266,8 +266,8 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
         const [xm, xp, ym, yp, zm, zp] = pv.bbox;
         bMin = [vb.x_min + xm * vLen, vb.y_min + ym * vWid, vb.z_min + zm * vHgt];
         bMax = [vb.x_max + xp * vLen, vb.y_max + yp * vWid, vb.z_max + zp * vHgt];
-      } else if (pv.bbox_mode === "from_meshing_box" && pv.bbox_source_box && boxRefinement) {
-        const br = boxRefinement[pv.bbox_source_box];
+      } else if (pv.bbox_mode === "from_meshing_box" && pv.bbox_source_box_name && boxRefinement) {
+        const br = boxRefinement[pv.bbox_source_box_name];
         if (br && Array.isArray(br.box) && br.box.length >= 6) {
           const [xm, xp, ym, yp, zm, zp] = br.box;
           bMin = [vb.x_min + xm * vLen, vb.y_min + ym * vWid, vb.z_min + zm * vHgt];
