@@ -86,6 +86,8 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | 2A-9 | Folder structure + sort for all 5 list views — `TemplateFolder`, `ConditionMapFolder`, `CaseFolder` DB tables + migration; folder CRUD endpoints (`/folders/` routes before `/{id}`); `useSortedItems` hook (name/created_at, asc/desc); `FolderSection` (Paper+Collapse) + `SortTh` headers in TemplateList, MapList, CaseList (new folders) + sort-only in existing GeometryList and AssemblyList | ✅ Complete |
 | 2A-10 | `AssemblyGeometriesDrawer` redesign — `SegmentedControl` tab switching (Current / Add geometries); Add panel shows folder-grouped collapsible `FolderBlock` sections (Paper + Collapse) with per-folder select-all checkbox; flat fallback when no folders exist; fetches `foldersApi.list()` + `geometriesApi.list()` on open | ✅ Complete |
 | 2A-11 | Template Builder redesign — `RideHeightTemplateConfig` in Template schema; `Run.geometry_override_id`; remove Axis Visualisation + Ride Height Transform sections from Template Builder; add `CreateCaseFromBuilderModal`; Ride Height tab in `TemplateSettingsForm` | ✅ Complete |
+| 2A-12 | Edit Template button in Template Builder — `IconPencil` ActionIcon beside Template Select opens `TemplateVersionEditModal` for active version; query key unified to `["templates", id, "versions"]` so edits auto-refresh 3D overlays | ✅ Complete |
+| 2A-13 | Tabbed Overlay Panel — `OverlayPanel.tsx` replaces flat Switch list; 4 tabs (Parts / Box / Plane / Probe); `overlayVisibility: Record<string, boolean>` in `viewerStore`; per-item visibility keys; Parts tab badges click-to-filter `PartListPanel` | ✅ Complete |
 | 2B | Post-processing EnSight viewer (PyVista backend) | 🔲 Planned |
 
 ---
@@ -1747,10 +1749,6 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 partStates: Record<string, { visible, color, opacity }>  // per-part 3D state
 searchQuery: string
 searchMode: "include" | "exclude"
-overlays: {
-  domainBox, refinementBoxes, wheelAxes, groundPlane,
-  probeSpheres, partialVolumes, sectionCuts  // all boolean
-}
 selectedAssemblyId: string | null
 selectedTemplateId: string | null
 ratio: 0.05                          // decimation ratio used for GLB fetch
@@ -1759,6 +1757,12 @@ cameraPreset: string | null          // trigger: "top" | "front" | "side" | "iso
 viewerTheme: "dark" | "light"
 flatShading: boolean                 // default false; MeshStandardMaterial.flatShading
 showEdges: boolean                   // default false; THREE.EdgesGeometry overlay
+// Per-item overlay visibility — key absent = visible (true) by default
+// Key naming: "domain_box" | "ground_plane" | "box_{name}" | "pv_{name}" | "sc_{name}" | "probe_{name}"
+overlayVisibility: Record<string, boolean>;
+setOverlayVisibility: (key: string, value: boolean) => void;
+// Legacy overlay object kept for axesGlbUrl / landmarksGlbUrl feature flags
+overlays: ViewerOverlays  // wheelAxes, landmarks remain here
 // NOTE: selectedCaseId, selectedRunId, axesGlbUrl, selectedConditionMapId,
 //       selectedConditionId, landmarksGlbUrl removed — no longer used by Template Builder
 //       (kept in store only if Case UI 3D step is implemented later)
@@ -1806,13 +1810,14 @@ showEdges: boolean                   // default false; THREE.EdgesGeometry overl
 - Shows `<Loader>` while fetching, error text on failure, placeholder text when no assembly selected
 
 **`src/components/viewer/OverlayObjects.tsx`**
-- Renders Three.js overlays from `templateSettings` + `vehicleBbox`:
-  - **Domain Box** (`overlays.domainBox`): `setup.domain_bounding_box` × vehicle bbox → white wireframe `<boxGeometry>`
-  - **Refinement Boxes** (`overlays.refinementBoxes`): `setup.meshing.box_refinement` — per-level color (RL1=light blue → RL7=red) wireframe boxes
-  - **Ground Plane** (`overlays.groundPlane`): semi-transparent green plane at `z = vehicle_bbox.z_min`
-  - **Probe Spheres** (`overlays.probeSpheres`): `output.probe_files[].points[]` → yellow sphere (r=0.04) per point
-  - **Partial Volume Boxes** (`overlays.partialVolumes`): `output.partial_volumes[]` → orange wireframe boxes; `bbox_mode` selects coordinates: `user_defined` (bbox values as vehicle-relative multipliers), `from_meshing_box` (looks up matching box_refinement key), fallback = vehicle bbox
-  - **Section Cuts** (`overlays.sectionCuts`): `output.section_cuts[]` → magenta semi-transparent `PlaneGeometry` (10×10 m); quaternion computed via `THREE.Quaternion.setFromUnitVectors(Z_UP, normal)`
+- Renders Three.js overlays from `templateSettings` + `vehicleBbox`
+- Visibility controlled per-item via `overlayVisibility` store (key absent = visible by default):
+  - **Domain Box** (key `"domain_box"`): `setup.domain_bounding_box` × vehicle bbox → white wireframe `<boxGeometry>`
+  - **Refinement Boxes** (key `"box_{name}"`): `setup.meshing.box_refinement` — per-level color (RL1=light blue → RL7=red) wireframe boxes; each box individually toggleable
+  - **Ground Plane** (key `"ground_plane"`): semi-transparent green plane at `z = vehicle_bbox.z_min`
+  - **Probe Spheres** (key `"probe_{name}"`): `output.probe_files[].points[]` → yellow sphere (r=0.04) per point; per-probe-file toggle
+  - **Partial Volume Boxes** (key `"pv_{name}"`): `output.partial_volumes[]` → orange wireframe boxes; `bbox_mode` selects coordinates; per-volume toggle
+  - **Section Cuts** (key `"sc_{name}"`): `output.section_cuts[]` → magenta semi-transparent `PlaneGeometry` (10×10 m); per-cut toggle
 - `vehicleBbox` is union of all geometries in the assembly (computed in `TemplateBuilderPage`)
 
 **`src/components/viewer/PartListPanel.tsx`**
@@ -1821,19 +1826,29 @@ showEdges: boolean                   // default false; THREE.EdgesGeometry overl
 - Search bar + `SegmentedControl` (Include / Exclude) — filters visible list
 - Toolbar buttons: **Toggle all filtered** (eye/eye-off) · **Show Only** (`IconEyeCheck` — hide everything except filtered parts) · **Invert** (`IconArrowsExchange` — flip visibility of all parts) · **Reset all** (`IconRefresh`)
 
+**`src/components/viewer/OverlayPanel.tsx`** (new — 2A-13)
+- 4-tab `Tabs` component (`pills` variant) rendered inside `ControlPanel`; replaces old flat Switch list
+- **Parts tab**: reads `setup.meshing.offset_refinement[].parts`, `setup.meshing.custom_refinement[].parts`, `target_names.wheel/rim/baffle/windtunnel`, `setup_option.ride_height.reference_parts` → groups of pattern `Badge` elements. Click any badge → `setSearchQuery(pattern)` → `PartListPanel` search bar filters to matching parts.
+- **Box tab**: `OverlaySwitch` rows for Domain Bounding Box (key `"domain_box"`), each `box_refinement` item (key `"box_{name}"`), each `part_based_box_refinement` item (key `"box_{name}"`), each `partial_volumes` item (key `"pv_{name}"`).
+- **Plane tab**: `OverlaySwitch` for Ground Plane (key `"ground_plane"`), each `section_cuts` item (key `"sc_{name}"`).
+- **Probe tab**: `OverlaySwitch` per `probe_files` item (key `"probe_{name}"`) — sub-text shows point count.
+- `OverlaySwitch` reads/writes `overlayVisibility` store directly; key-absent → default visible.
+- No template selected → placeholder text shown.
+
 **`src/components/viewer/TemplateBuilderPage.tsx`**
 - Route: `/template-builder`
 - **3-column layout**: 275px `ControlPanel` | 255px `PartListPanel` | flex-1 `<SceneCanvas>`
 - **`ViewerToolbar`** (floating, top-right of 3D panel, `position:absolute`): `SegmentedControl` Persp/Ortho → `setCameraProjection()` · `Switch` Flat → `setFlatShading()` · `Switch` Edges → `setShowEdges()`
-- `ControlPanel` sections (275px left, scrollable):
-  1. Assembly `Select` (in `Group` with `IconPackage` ActionIcon — opens `AssemblyGeometriesDrawer` when clicked; `handleBuilderClose` double-invalidates `["assemblies"]` + `["assembly", id]` queries for live 3D refresh) → Template `Select`
-  2. **Create Case** button (`IconPlus`, enabled when both assembly + template selected) → opens `CreateCaseFromBuilderModal`
-  4. **Overlays** — `Switch` group (domainBox / refinementBoxes / wheelAxes / landmarks / probeSpheres / partialVolumes / groundPlane)
-  5. **Camera** — preset buttons (iso / front / rear / side / top) + theme toggle
+- `ControlPanel` sections (275px left, scrollable) — receives `geometries` + `templateSettings` props:
+  1. Assembly `Select` (+ `IconPackage` ActionIcon → `AssemblyGeometriesDrawer`) → Template `Select` (+ `IconPencil` ActionIcon → `TemplateVersionEditModal` for active version; enabled only when template + version loaded)
+  2. **Create Case** button (`IconPlus`, enabled when both assembly + template selected) → `CreateCaseFromBuilderModal`
+  3. **Overlays** `Divider` → `<OverlayPanel templateSettings={templateSettings} />`
+  4. **Camera** — preset buttons (iso / front / rear / side / top) + theme toggle
 - `PartListPanel` receives `allParts` (all part names from assembly geometries)
-- `ControlPanel` receives `geometries` prop
-- Template overlay: fetches `listVersions`, finds active version, passes `settings` to `<OverlayObjects>`
+- Template overlay: fetches `["templates", id, "versions"]`, finds active version, passes `settings` (as `templateSettings`) to `ControlPanel` and `<OverlayObjects>`
 - `vehicleBbox`: union of `analysis_result.vehicle_bbox` across all geometries in selected assembly
+- `TemplateVersionEditModal` gated on `editTemplateOpen` (mounted only when open) to avoid TagsInput `_value.map` error
+- Query key for template versions: `["templates", selectedTemplateId, "versions"]` — matches `TemplateVersionEditModal`'s `invalidateQueries` so saves auto-refresh 3D overlays
 
 **`src/components/geometries/GeometryUploadModal.tsx`** — Decimation Ratio Slider:
 - `form.initialValues.decimationRatio: 0.05`
