@@ -208,6 +208,7 @@ def transform_geometry(
         rh_cfg=data.ride_height,
         yaw_angle_deg=data.yaw_angle_deg,
         yaw_cfg=data.yaw_config,
+        rh_template_cfg=data.rh_template,
     )
 
     # Create System + new Geometry

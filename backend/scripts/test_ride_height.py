@@ -70,10 +70,13 @@ def main() -> None:
     print(f"Parts: {len(analysis['part_info'])}")
 
     # ── Build ride height config ──────────────────────────────────────────────
+    from app.schemas.template_settings import RideHeightTemplateConfig
     rh_cfg = RideHeightConditionConfig(
         enabled=True,
         target_front_wheel_axis_rh=front_rh,
         target_rear_wheel_axis_rh=rear_rh,
+    )
+    rh_template_cfg = RideHeightTemplateConfig(
         adjust_body_wheel_separately=False,
         use_original_wheel_position=False,
     )
@@ -91,7 +94,7 @@ def main() -> None:
     print()
 
     try:
-        snapshot = compute_transform(analysis, rh_cfg, yaw_deg, yaw_cfg)
+        snapshot = compute_transform(analysis, rh_cfg, yaw_deg, yaw_cfg, rh_template_cfg=rh_template_cfg)
     except Exception as e:
         print(f"❌ compute_transform error: {e}")
         raise

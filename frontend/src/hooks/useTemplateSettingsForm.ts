@@ -417,10 +417,12 @@ export const FORM_DEFAULTS = {
   tg_body_intensity: D.setup_option.boundary_condition.turbulence_generator.body_tg_intensity,
   tg_body_length_scale: D.setup_option.boundary_condition.turbulence_generator.body_tg_length_scale ?? null,
 
-  // ── Compute flags ─────────────────────────────────────────────────────
-  // NOTE: porous_media / turbulence_generator / rotate_wheels / moving_ground
-  //   are all auto-derived in compute_engine — no explicit toggle needed.
-  compute_adjust_ride_height: D.setup_option.compute.adjust_ride_height,
+  // ── Compute flags / Ride Height Template Config ────────────────────────
+  // All compute flags are now auto-derived in compute_engine.
+  // adjust_ride_height moved to setup_option.ride_height (RideHeightTemplateConfig)
+  rh_reference_parts: [...(D.setup_option.ride_height.reference_parts as string[])],
+  rh_adjust_body_wheel_separately: D.setup_option.ride_height.adjust_body_wheel_separately,
+  rh_use_original_wheel_position: D.setup_option.ride_height.use_original_wheel_position,
 
   // ── Output — full data ────────────────────────────────────────────────
   fd_output_start_time: D.output.full_data.output_start_time as number,
@@ -575,7 +577,6 @@ export function valuesFromSettings(settings: any): FormValues {
   const b5 = gc?.belt5 ?? {};
   const b1 = gc?.belt1 ?? {};
   const tg = so?.boundary_condition?.turbulence_generator ?? {};
-  const cp = so?.compute ?? {};
   const setup = settings?.setup ?? {};
   const bbox = setup?.domain_bounding_box ?? [-5, 10, -12, 12, 0, 20];
   const tn = settings?.target_names ?? {};
@@ -813,7 +814,9 @@ export function valuesFromSettings(settings: any): FormValues {
     tg_body_intensity: tg.body_tg_intensity ?? FORM_DEFAULTS.tg_body_intensity,
     tg_body_length_scale: tg.body_tg_length_scale ?? null,
 
-    compute_adjust_ride_height: cp.adjust_ride_height ?? FORM_DEFAULTS.compute_adjust_ride_height,
+    rh_reference_parts: [...(so?.ride_height?.reference_parts ?? FORM_DEFAULTS.rh_reference_parts)],
+    rh_adjust_body_wheel_separately: so?.ride_height?.adjust_body_wheel_separately ?? FORM_DEFAULTS.rh_adjust_body_wheel_separately,
+    rh_use_original_wheel_position: so?.ride_height?.use_original_wheel_position ?? FORM_DEFAULTS.rh_use_original_wheel_position,
 
     fd_output_start_time: fd.output_start_time ?? FORM_DEFAULTS.fd_output_start_time,
     fd_output_interval: fd.output_interval ?? FORM_DEFAULTS.fd_output_interval,
@@ -1057,8 +1060,11 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
           body_tg_length_scale: values.tg_body_length_scale,
         },
       },
-      compute: {
-        adjust_ride_height: values.compute_adjust_ride_height,
+      compute: {},
+      ride_height: {
+        reference_parts: values.rh_reference_parts,
+        adjust_body_wheel_separately: values.rh_adjust_body_wheel_separately,
+        use_original_wheel_position: values.rh_use_original_wheel_position,
       },
     },
     simulation_parameter: {

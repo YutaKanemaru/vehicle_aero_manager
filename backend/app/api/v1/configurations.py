@@ -17,7 +17,7 @@ from app.schemas.configuration import (
     ConditionMapCreate, ConditionMapResponse, ConditionMapUpdate,
     ConditionMapFolderCreate, ConditionMapFolderUpdate, ConditionMapFolderResponse,
     DiffResult,
-    RunCreate, RunResponse,
+    RunCreate, RunResponse, RunUpdate,
 )
 from app.services import configuration_service
 
@@ -314,6 +314,18 @@ def create_run(
     current_user: User = Depends(get_current_user),
 ):
     run = configuration_service.create_run(db, case_id, data, current_user)
+    return configuration_service.enrich_run_response(db, run)
+
+
+@router.patch("/cases/{case_id}/runs/{run_id}", response_model=RunResponse)
+def update_run(
+    case_id: str,
+    run_id: str,
+    data: RunUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    run = configuration_service.update_run(db, case_id, run_id, data, current_user)
     return configuration_service.enrich_run_response(db, run)
 
 

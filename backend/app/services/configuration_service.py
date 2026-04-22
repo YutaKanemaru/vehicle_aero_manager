@@ -25,7 +25,7 @@ from app.schemas.configuration import (
     ConditionMapCreate, ConditionMapUpdate,
     ConditionMapFolderCreate, ConditionMapFolderUpdate,
     DiffField, DiffResult,
-    RunCreate,
+    RunCreate, RunUpdate,
 )
 from app.schemas.template_settings import TemplateSettings
 
@@ -463,6 +463,23 @@ def trigger_xml_generation(
     return run
 
 
+def update_run(
+    db: Session,
+    case_id: str,
+    run_id: str,
+    data: RunUpdate,
+    current_user: User,
+) -> Run:
+    """Partial update of a Run (e.g. set geometry_override_id)."""
+    run = _get_run_or_404(db, case_id, run_id)
+    _check_owner_or_admin(run, current_user)
+    if "geometry_override_id" in data.model_fields_set:
+        run.geometry_override_id = data.geometry_override_id
+    db.commit()
+    db.refresh(run)
+    return run
+
+
 def _generate_xml_task(run_id: str) -> None:
     from app.database import SessionLocal
     db = SessionLocal()
@@ -495,9 +512,22 @@ def _generate_xml_task(run_id: str) -> None:
         merged_analysis = _merge_analysis_results(assembly)
         template_settings = TemplateSettings.model_validate(json.loads(active_version.settings))
 
+        # geometry_override_id: if set, use a single override geometry for this run
+        # (e.g. a ride-height-transformed version) instead of the assembly's geometries
+        override_geom = None
+        if run.geometry_override_id:
+            from app.models.geometry import Geometry as GeometryModel
+            override_geom = db.get(GeometryModel, run.geometry_override_id)
+            if override_geom and override_geom.analysis_result:
+                import json as _json
+                override_analysis = _json.loads(override_geom.analysis_result) if isinstance(override_geom.analysis_result, str) else override_geom.analysis_result
+                merged_analysis = override_analysis
+
         source_file: str | None = None
         source_files: list[str] = []
-        if assembly and assembly.geometries:
+        if override_geom:
+            source_file = override_geom.original_filename
+        elif assembly and assembly.geometries:
             geom_names = [g.original_filename for g in assembly.geometries]
             if len(geom_names) == 1:
                 source_file = geom_names[0]
@@ -512,7 +542,12 @@ def _generate_xml_task(run_id: str) -> None:
 
         # Resolve STL file paths for PCA axis extraction
         stl_paths: list[Path] = []
-        if assembly and assembly.geometries:
+        if override_geom:
+            if override_geom.is_linked:
+                stl_paths.append(Path(override_geom.file_path))
+            else:
+                stl_paths.append(settings.upload_dir / override_geom.file_path)
+        elif assembly and assembly.geometries:
             for geom in assembly.geometries:
                 if geom.is_linked:
                     stl_paths.append(Path(geom.file_path))

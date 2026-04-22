@@ -795,6 +795,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cases/{case_id}/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Run */
+        patch: operations["update_run_api_v1_cases__case_id__runs__run_id__patch"];
+        trace?: never;
+    };
     "/api/v1/cases/{case_id}/runs/{run_id}/generate": {
         parameters: {
             query?: never;
@@ -1382,14 +1399,9 @@ export interface components {
          *       rotate_wheels / moving_ground → derived from ground_mode
          *       porous_media   → derived from bool(template_settings.porous_coefficients)
          *       turbulence_generator → derived from tg_cfg.enable_ground_tg | enable_body_tg
+         *       adjust_ride_height   → moved to SetupOption.ride_height (RideHeightTemplateConfig)
          */
-        ComputeOption: {
-            /**
-             * Adjust Ride Height
-             * @default false
-             */
-            adjust_ride_height: boolean;
-        };
+        ComputeOption: Record<string, never>;
         /** ConditionCreate */
         ConditionCreate: {
             /** Name */
@@ -2593,7 +2605,13 @@ export interface components {
              */
             description: string;
         };
-        /** RideHeightConditionConfig */
+        /**
+         * RideHeightConditionConfig
+         * @description Target ride height values per condition.
+         *
+         *     The *how* (reference_parts, adjust_body_wheel_separately, use_original_wheel_position)
+         *     now lives in Template.setup_option.ride_height (RideHeightTemplateConfig).
+         */
         RideHeightConditionConfig: {
             /**
              * Enabled
@@ -2604,6 +2622,24 @@ export interface components {
             target_front_wheel_axis_rh?: number | null;
             /** Target Rear Wheel Axis Rh */
             target_rear_wheel_axis_rh?: number | null;
+            /** Target Front Wheel Rh */
+            target_front_wheel_rh?: number | null;
+            /** Target Rear Wheel Rh */
+            target_rear_wheel_rh?: number | null;
+        };
+        /**
+         * RideHeightTemplateConfig
+         * @description How ride height should be applied — lives in Template, not Condition.
+         *
+         *     The Condition stores *target* values (enabled, target_front/rear_wheel_axis_rh).
+         *     The Template stores *how* the transform is performed.
+         */
+        RideHeightTemplateConfig: {
+            /**
+             * Reference Parts
+             * @default []
+             */
+            reference_parts: string[];
             /**
              * Adjust Body Wheel Separately
              * @default false
@@ -2614,10 +2650,6 @@ export interface components {
              * @default false
              */
             use_original_wheel_position: boolean;
-            /** Target Front Wheel Rh */
-            target_front_wheel_rh?: number | null;
-            /** Target Rear Wheel Rh */
-            target_rear_wheel_rh?: number | null;
         };
         /** RunCreate */
         RunCreate: {
@@ -2645,6 +2677,8 @@ export interface components {
             xml_path: string | null;
             /** Stl Path */
             stl_path?: string | null;
+            /** Geometry Override Id */
+            geometry_override_id?: string | null;
             /**
              * Status
              * @enum {string}
@@ -2681,6 +2715,14 @@ export interface components {
              * @default 0
              */
             condition_yaw: number;
+        };
+        /**
+         * RunUpdate
+         * @description Partial update for a Run. Only provided fields are updated.
+         */
+        RunUpdate: {
+            /** Geometry Override Id */
+            geometry_override_id?: string | null;
         };
         /**
          * SectionCutConfig
@@ -2924,6 +2966,7 @@ export interface components {
             meshing?: components["schemas"]["MeshingOption"];
             boundary_condition?: components["schemas"]["BoundaryConditionOption-Input"];
             compute?: components["schemas"]["ComputeOption"];
+            ride_height?: components["schemas"]["RideHeightTemplateConfig"];
         };
         /** SetupOption */
         "SetupOption-Output": {
@@ -2931,6 +2974,7 @@ export interface components {
             meshing?: components["schemas"]["MeshingOption"];
             boundary_condition?: components["schemas"]["BoundaryConditionOption-Output"];
             compute?: components["schemas"]["ComputeOption"];
+            ride_height?: components["schemas"]["RideHeightTemplateConfig"];
         };
         /** SimulationOption */
         SimulationOption: {
@@ -3277,6 +3321,7 @@ export interface components {
             /** Condition Id */
             condition_id?: string | null;
             ride_height?: components["schemas"]["RideHeightConditionConfig"];
+            rh_template?: components["schemas"]["RideHeightTemplateConfig"];
             /**
              * Yaw Angle Deg
              * @default 0
@@ -5639,6 +5684,42 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_run_api_v1_cases__case_id__runs__run_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

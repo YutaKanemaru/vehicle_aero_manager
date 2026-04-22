@@ -43,6 +43,7 @@ if TYPE_CHECKING:
         RideHeightConditionConfig,
         YawConditionConfig,
     )
+    from app.schemas.template_settings import RideHeightTemplateConfig
 
 logger = logging.getLogger(__name__)
 
@@ -132,13 +133,21 @@ def compute_transform(
     rh_cfg: "RideHeightConditionConfig",
     yaw_angle_deg: float,
     yaw_cfg: "YawConditionConfig",
+    rh_template_cfg: "RideHeightTemplateConfig | None" = None,
 ) -> dict:
     """
     Derive transform_snapshot dict from analysis_result and ride height config.
 
+    rh_cfg          – condition-level config: enabled + target heights
+    rh_template_cfg – template-level config: adjust_body_wheel_separately, use_original_wheel_position
+                      (falls back to RideHeightTemplateConfig defaults when None)
+
     Returns a dict with keys:
       transform, wheel_transforms (optional), landmarks, targets, verification
     """
+    from app.schemas.template_settings import RideHeightTemplateConfig as _RHTemplate
+    if rh_template_cfg is None:
+        rh_template_cfg = _RHTemplate()
     from app.services.compute_engine import classify_wheels  # avoid circular
 
     # We need a minimal TargetNames-like object for classify_wheels.
@@ -221,8 +230,8 @@ def compute_transform(
 
     # ── Wheel transforms (only when adjust_body_wheel_separately=True) ─────
     wheel_transforms: dict | None = None
-    if rh_cfg.enabled and rh_cfg.adjust_body_wheel_separately:
-        if rh_cfg.use_original_wheel_position:
+    if rh_cfg.enabled and rh_template_cfg.adjust_body_wheel_separately:
+        if rh_template_cfg.use_original_wheel_position:
             # Wheels: undo the body Z-translation, keep yaw only
             wheel_transforms = {
                 "fr_lh": {"yaw_angle_deg": yaw_angle_deg, "yaw_center_xy": yaw_center_xy,
@@ -302,7 +311,7 @@ def compute_transform(
         }
 
     # ── Verification ───────────────────────────────────────────────────────
-    if not rh_cfg.adjust_body_wheel_separately:
+    if not rh_template_cfg.adjust_body_wheel_separately:
         front_actual_z = landmarks["front_wheel_center"]["after"][2]
         rear_actual_z  = landmarks["rear_wheel_center"]["after"][2]
     else:

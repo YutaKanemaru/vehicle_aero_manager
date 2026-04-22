@@ -29,8 +29,6 @@ interface FormValues {
   rh_enabled: boolean;
   rh_target_front: number | "";
   rh_target_rear: number | "";
-  rh_adjust_separately: boolean;
-  rh_use_original_pos: boolean;
   rh_wheel_front: number | "";
   rh_wheel_rear: number | "";
   // yaw config
@@ -49,8 +47,6 @@ function defaultValues(cond?: ConditionResponse): FormValues {
     rh_enabled: rh?.enabled ?? false,
     rh_target_front: rh?.target_front_wheel_axis_rh ?? "",
     rh_target_rear: rh?.target_rear_wheel_axis_rh ?? "",
-    rh_adjust_separately: rh?.adjust_body_wheel_separately ?? false,
-    rh_use_original_pos: rh?.use_original_wheel_position ?? false,
     rh_wheel_front: rh?.target_front_wheel_rh ?? "",
     rh_wheel_rear: rh?.target_rear_wheel_rh ?? "",
     yaw_center_mode: yc?.center_mode ?? "wheel_center",
@@ -68,12 +64,8 @@ function toConditionCreate(v: FormValues): ConditionCreate {
       enabled: v.rh_enabled,
       target_front_wheel_axis_rh: v.rh_enabled && v.rh_target_front !== "" ? Number(v.rh_target_front) : null,
       target_rear_wheel_axis_rh: v.rh_enabled && v.rh_target_rear !== "" ? Number(v.rh_target_rear) : null,
-      adjust_body_wheel_separately: v.rh_enabled && v.rh_adjust_separately,
-      use_original_wheel_position: v.rh_enabled && v.rh_adjust_separately && v.rh_use_original_pos,
-      target_front_wheel_rh: v.rh_enabled && v.rh_adjust_separately && !v.rh_use_original_pos && v.rh_wheel_front !== ""
-        ? Number(v.rh_wheel_front) : null,
-      target_rear_wheel_rh: v.rh_enabled && v.rh_adjust_separately && !v.rh_use_original_pos && v.rh_wheel_rear !== ""
-        ? Number(v.rh_wheel_rear) : null,
+      target_front_wheel_rh: v.rh_enabled && v.rh_wheel_front !== "" ? Number(v.rh_wheel_front) : null,
+      target_rear_wheel_rh: v.rh_enabled && v.rh_wheel_rear !== "" ? Number(v.rh_wheel_rear) : null,
     },
     yaw_config: {
       center_mode: v.yaw_center_mode,
@@ -133,8 +125,6 @@ export function ConditionFormModal({ opened, onClose, mapId, condition }: Props)
 
   const v = form.values;
   const showRhFields = v.rh_enabled;
-  const showWheelSep = showRhFields && v.rh_adjust_separately;
-  const showWheelTargets = showWheelSep && !v.rh_use_original_pos;
   const showYawCenter = v.yaw_center_mode === "user_input";
 
   return (
@@ -214,40 +204,28 @@ export function ConditionFormModal({ opened, onClose, mapId, condition }: Props)
                           error={form.errors["rh_target_rear"]}
                         />
                       </Group>
-                      <Switch
-                        label="Adjust body and wheels separately"
-                        description="When on, wheels can be independently positioned or returned to original positions"
-                        {...form.getInputProps("rh_adjust_separately", { type: "checkbox" })}
-                      />
-                      {showWheelSep && (
-                        <Switch
-                          label="Use original wheel positions"
-                          description="When on, wheels are placed back at their original (un-transformed) positions"
-                          {...form.getInputProps("rh_use_original_pos", { type: "checkbox" })}
+                      <Group gap="sm" grow>
+                        <NumberInput
+                          label="Front wheel RH — body-separated (m, optional)"
+                          description="Only applied when Template uses adjust-separately mode"
+                          placeholder="e.g. 0.335"
+                          step={0.001}
+                          decimalScale={4}
+                          min={0}
+                          value={v.rh_wheel_front}
+                          onChange={(val) => form.setFieldValue("rh_wheel_front", val)}
                         />
-                      )}
-                      {showWheelTargets && (
-                        <Group gap="sm" grow>
-                          <NumberInput
-                            label="Front wheel ride height (m)"
-                            placeholder="e.g. 0.335"
-                            step={0.001}
-                            decimalScale={4}
-                            min={0}
-                            value={v.rh_wheel_front}
-                            onChange={(val) => form.setFieldValue("rh_wheel_front", val)}
-                          />
-                          <NumberInput
-                            label="Rear wheel ride height (m)"
-                            placeholder="e.g. 0.335"
-                            step={0.001}
-                            decimalScale={4}
-                            min={0}
-                            value={v.rh_wheel_rear}
-                            onChange={(val) => form.setFieldValue("rh_wheel_rear", val)}
-                          />
-                        </Group>
-                      )}
+                        <NumberInput
+                          label="Rear wheel RH — body-separated (m, optional)"
+                          description="Only applied when Template uses adjust-separately mode"
+                          placeholder="e.g. 0.335"
+                          step={0.001}
+                          decimalScale={4}
+                          min={0}
+                          value={v.rh_wheel_rear}
+                          onChange={(val) => form.setFieldValue("rh_wheel_rear", val)}
+                        />
+                      </Group>
                     </>
                   )}
                 </Stack>

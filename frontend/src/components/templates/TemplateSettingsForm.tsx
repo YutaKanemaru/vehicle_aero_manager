@@ -1488,7 +1488,24 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
       {/* ── Ride Height ─────────────────────────────────────────────────── */}
       <Tabs.Panel value="ride_height" pt="md">
         <PanelWrapper disabled={readOnly}><Stack gap="xs">
-          <Switch label="Adjust ride height" {...form.getInputProps("compute_adjust_ride_height", { type: "checkbox" })} />
+          <TagsInput
+            label="Reference parts (wheel detection patterns)"
+            description="Part-name patterns used to find wheel centroids for ride-height calculation. Leave empty to use all low-centroid parts."
+            placeholder="Wheel_"
+            splitChars={[",", " "]}
+            {...form.getInputProps("rh_reference_parts")}
+          />
+          <Switch
+            label="Adjust body and wheels separately"
+            description="When on, wheels are transformed independently from the body to reach their own target ride heights"
+            {...form.getInputProps("rh_adjust_body_wheel_separately", { type: "checkbox" })}
+          />
+          <Switch
+            label="Use original wheel positions"
+            description="When on (and adjust-separately is enabled), wheels are returned to their original Z positions instead of a target height"
+            disabled={!form.values.rh_adjust_body_wheel_separately}
+            {...form.getInputProps("rh_use_original_wheel_position", { type: "checkbox" })}
+          />
         </Stack></PanelWrapper>
       </Tabs.Panel>
     </Tabs>

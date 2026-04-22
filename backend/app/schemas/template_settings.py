@@ -198,8 +198,24 @@ class ComputeOption(BaseModel):
       rotate_wheels / moving_ground → derived from ground_mode
       porous_media   → derived from bool(template_settings.porous_coefficients)
       turbulence_generator → derived from tg_cfg.enable_ground_tg | enable_body_tg
+      adjust_ride_height   → moved to SetupOption.ride_height (RideHeightTemplateConfig)
     """
-    adjust_ride_height: bool = False  # ride height adjustment (Config can override)
+    pass  # all compute flags are now auto-derived
+
+
+# ---------------------------------------------------------------------------
+# setup_option — ride height template config
+# ---------------------------------------------------------------------------
+
+class RideHeightTemplateConfig(BaseModel):
+    """How ride height should be applied — lives in Template, not Condition.
+
+    The Condition stores *target* values (enabled, target_front/rear_wheel_axis_rh).
+    The Template stores *how* the transform is performed.
+    """
+    reference_parts: list[str] = []               # part-name patterns for wheel detection
+    adjust_body_wheel_separately: bool = False    # body and wheels transform independently
+    use_original_wheel_position: bool = False     # True = return wheels to original Z
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +236,7 @@ class SetupOption(BaseModel):
         default_factory=BoundaryConditionOption
     )
     compute: ComputeOption = Field(default_factory=ComputeOption)
+    ride_height: RideHeightTemplateConfig = Field(default_factory=RideHeightTemplateConfig)
 
 
 # ---------------------------------------------------------------------------

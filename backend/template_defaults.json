@@ -63,8 +63,11 @@
         "body_tg_length_scale": null
       }
     },
-    "compute": {
-      "adjust_ride_height": false
+    "compute": {},
+    "ride_height": {
+      "reference_parts": [],
+      "adjust_body_wheel_separately": false,
+      "use_original_wheel_position": false
     }
   },
   "simulation_parameter": {

@@ -21,6 +21,7 @@ export type CaseDuplicateRequest = components["schemas"]["CaseDuplicateRequest"]
 
 export type RunResponse = components["schemas"]["RunResponse"];
 export type RunCreate = components["schemas"]["RunCreate"];
+export type RunUpdate = components["schemas"]["RunUpdate"];
 
 export type DiffResult = components["schemas"]["DiffResult"];
 
@@ -142,6 +143,9 @@ export const runsApi = {
 
   create: (caseId: string, data: RunCreate): Promise<RunResponse> =>
     client.post(`/cases/${caseId}/runs/`, data),
+
+  update: (caseId: string, runId: string, data: RunUpdate): Promise<RunResponse> =>
+    client.patch(`/cases/${caseId}/runs/${runId}`, data),
 
   generate: (caseId: string, runId: string): Promise<RunResponse> =>
     client.post(`/cases/${caseId}/runs/${runId}/generate`, {}),

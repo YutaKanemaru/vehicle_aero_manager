@@ -3,18 +3,23 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.schemas.template_settings import RideHeightTemplateConfig
+
 
 # ---------------------------------------------------------------------------
 # Ride Height / Yaw config (stored in Condition)
 # ---------------------------------------------------------------------------
 
 class RideHeightConditionConfig(BaseModel):
+    """Target ride height values per condition.
+
+    The *how* (reference_parts, adjust_body_wheel_separately, use_original_wheel_position)
+    now lives in Template.setup_option.ride_height (RideHeightTemplateConfig).
+    """
     enabled: bool = False
     target_front_wheel_axis_rh: float | None = None  # m from ground
     target_rear_wheel_axis_rh: float | None = None   # m from ground
-    adjust_body_wheel_separately: bool = False
-    use_original_wheel_position: bool = False  # True = return wheels to origin position
-    # used when adjust_body_wheel_separately=True and use_original_wheel_position=False
+    # used when template.ride_height.adjust_body_wheel_separately=True and use_original_wheel_position=False
     target_front_wheel_rh: float | None = None
     target_rear_wheel_rh: float | None = None
 
@@ -55,6 +60,7 @@ class TransformRequest(BaseModel):
     name: str  # name for the resulting Geometry
     condition_id: str | None = None
     ride_height: RideHeightConditionConfig = Field(default_factory=RideHeightConditionConfig)
+    rh_template: RideHeightTemplateConfig = Field(default_factory=RideHeightTemplateConfig)
     yaw_angle_deg: float = 0.0
     yaw_config: YawConditionConfig = Field(default_factory=YawConditionConfig)
 
@@ -247,6 +253,11 @@ class RunCreate(BaseModel):
     condition_id: str
 
 
+class RunUpdate(BaseModel):
+    """Partial update for a Run. Only provided fields are updated."""
+    geometry_override_id: str | None = None  # set/clear geometry override
+
+
 class RunResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
@@ -256,6 +267,7 @@ class RunResponse(BaseModel):
     condition_id: str
     xml_path: str | None
     stl_path: str | None = None
+    geometry_override_id: str | None = None
     status: Literal["pending", "generating", "ready", "error"]
     error_message: str | None
     scheduler_job_id: str | None
