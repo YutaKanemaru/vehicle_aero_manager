@@ -26,6 +26,21 @@ interface PartListPanelProps {
   parts: string[];
 }
 
+// ─── Wildcard pattern matching (parity with backend _matches_pattern) ─────────
+// * present  → glob: Body_* = startsWith, *_Body = endsWith, *_Body_* = contains
+// * absent   → startsWith OR endsWith (case-insensitive)
+function matchesPattern(partName: string, pattern: string): boolean {
+  const name = partName.toLowerCase();
+  const pat = pattern.toLowerCase();
+  if (!pat) return true;
+  if (pat.includes("*")) {
+    // Escape regex meta chars except *, then replace * with .*
+    const escaped = pat.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+    return new RegExp(`^${escaped}$`).test(name);
+  }
+  return name.startsWith(pat) || name.endsWith(pat);
+}
+
 export function PartListPanel({ parts }: PartListPanelProps) {
   const {
     partStates,
@@ -37,11 +52,11 @@ export function PartListPanel({ parts }: PartListPanelProps) {
     setSearchMode,
   } = useViewerStore();
 
-  // 検索フィルタリング
-  const q = searchQuery.toLowerCase().trim();
+  // 検索フィルタリング（ワイルドカード対応 — バックエンド _matches_pattern と同一ロジック）
+  const q = searchQuery.trim();
   const filtered = parts.filter((name) => {
     if (!q) return true;
-    const match = name.toLowerCase().includes(q);
+    const match = matchesPattern(name, q);
     return searchMode === "include" ? match : !match;
   });
 
