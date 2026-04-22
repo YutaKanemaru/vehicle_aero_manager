@@ -45,6 +45,7 @@ interface ViewerStore {
   setPartState: (name: string, state: Partial<PartState>) => void;
   initParts: (names: string[]) => void;
   resetParts: () => void;
+  showAllParts: () => void;
 
   // Search
   searchQuery: string;
@@ -130,6 +131,12 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
     set({ partStates: next });
   },
   resetParts: () => set({ partStates: {} }),
+  showAllParts: () =>
+    set((s) => ({
+      partStates: Object.fromEntries(
+        Object.entries(s.partStates).map(([k, v]) => [k, { ...v, visible: true }])
+      ),
+    })),
 
   searchQuery: "",
   setSearchQuery: (searchQuery) => set({ searchQuery }),

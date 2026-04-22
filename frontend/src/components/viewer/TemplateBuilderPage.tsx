@@ -193,8 +193,8 @@ function CameraOverlay() {
     <div
       style={{
         position: "absolute",
-        bottom: 56,
-        right: 8,
+        bottom: 8,
+        right: 4,
         zIndex: 10,
         display: "flex",
         flexDirection: "column",
@@ -365,7 +365,7 @@ export function TemplateBuilderPage() {
         style={{ width: 255, flexShrink: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
       >
         <Text size="xs" fw={600} mb={4}>Parts</Text>
-        <PartListPanel parts={allParts} />
+        <PartListPanel parts={allParts} partInfo={partInfo} />
       </Paper>
 
       {/* Right panel: 3D canvas */}

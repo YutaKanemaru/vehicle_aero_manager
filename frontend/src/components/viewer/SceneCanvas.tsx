@@ -1,5 +1,4 @@
 import { Suspense, useEffect, useRef, useState } from "react";
-import type React from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, Grid, GizmoHelper, GizmoViewport } from "@react-three/drei";
 import { useGLTF } from "@react-three/drei";
@@ -98,9 +97,9 @@ function CameraFitter({ blobUrl }: { blobUrl: string }) {
       // Z-up: position from +X, -Y, +Z relative to center
       camera.up.set(0, 0, 1);
       camera.position.set(
-        center.x + maxDim * 1.5,
-        center.y - maxDim * 1.5,
-        center.z + maxDim * 0.8,
+        center.x + maxDim * 1.0,
+        center.y - maxDim * 1.0,
+        center.z + maxDim * 0.5,
       );
       camera.lookAt(center);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -180,11 +179,7 @@ function CameraTypeController() {
 
 // ─── Double-click pivot + right-click context menu ────────────────────────────
 
-function PointerEventHandler({
-  onContextMenu,
-}: {
-  onContextMenu: (x: number, y: number, partName: string | null, fitCenter: [number, number, number] | null, fitRadius: number) => void;
-}) {
+function PointerEventHandler() {
   const { camera, scene, controls, gl, raycaster } = useThree();
   const { setSelectedPartName } = useViewerStore();
 
@@ -228,24 +223,7 @@ function PointerEventHandler({
     };
 
     const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      raycaster.setFromCamera(getNDC(e), camera);
-      const hits = raycaster.intersectObjects(scene.children, true).filter((h) => isMesh(h.object));
-      let partName: string | null = null;
-      let fitCenter: [number, number, number] | null = null;
-      let fitRadius = 1;
-      if (hits.length > 0) {
-        const obj = hits[0].object;
-        partName = obj.name || (obj.parent?.name ?? null);
-        if (partName === "Scene" || partName === "") partName = null;
-        // Compute bounding box of the hit mesh for Fit to Part
-        const meshBox = new THREE.Box3().setFromObject(obj);
-        const c = meshBox.getCenter(new THREE.Vector3());
-        const s = meshBox.getSize(new THREE.Vector3());
-        fitCenter = [c.x, c.y, c.z];
-        fitRadius = Math.max(s.x, s.y, s.z) * 0.75;
-      }
-      onContextMenu(e.clientX, e.clientY, partName, fitCenter, fitRadius);
+      e.preventDefault(); // Prevent browser context menu on canvas
     };
 
     canvas.addEventListener("click", handleClick);
@@ -256,74 +234,9 @@ function PointerEventHandler({
       canvas.removeEventListener("dblclick", handleDblClick);
       canvas.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [camera, scene, controls, gl, raycaster, onContextMenu, setSelectedPartName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [camera, scene, controls, gl, raycaster, setSelectedPartName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
-}
-
-// ─── Right-click context menu (React DOM, outside Canvas) ────────────────────
-
-const CTX_ITEM: React.CSSProperties = {
-  display: "block",
-  width: "100%",
-  padding: "5px 14px",
-  background: "none",
-  border: "none",
-  color: "#c1c2c5",
-  fontSize: 12,
-  cursor: "pointer",
-  textAlign: "left",
-};
-
-function ContextMenuPanel({
-  x, y, partName, fitCenter, fitRadius, onClose,
-}: {
-  x: number; y: number; partName: string | null;
-  fitCenter: [number, number, number] | null;
-  fitRadius: number;
-  onClose: () => void;
-}) {
-  const { setPartState, resetParts, setFitToTarget } = useViewerStore();
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
-
-  return (
-    <div
-      ref={ref}
-      style={{
-        position: "fixed", left: x, top: y, zIndex: 9999,
-        background: "#25262b", border: "1px solid #444",
-        borderRadius: 4, padding: "4px 0", minWidth: 140,
-        boxShadow: "0 4px 12px rgba(0,0,0,0.6)",
-      }}
-    >
-      {partName && (
-        <div style={{ padding: "4px 14px", fontSize: 11, color: "#666", borderBottom: "1px solid #333", marginBottom: 2 }}>
-          {partName}
-        </div>
-      )}
-      {partName && fitCenter && (
-        <button style={CTX_ITEM} onClick={() => { setFitToTarget({ center: fitCenter, radius: fitRadius }); onClose(); }}>
-          Fit to Part
-        </button>
-      )}
-      {partName && (
-        <button style={CTX_ITEM} onClick={() => { setPartState(partName, { visible: false }); onClose(); }}>
-          Hide
-        </button>
-      )}
-      <button style={CTX_ITEM} onClick={() => { resetParts(); onClose(); }}>
-        Reset all
-      </button>
-    </div>
-  );
 }
 
 // ─── Camera preset controller — watches store and repositions camera ───────────
@@ -398,11 +311,13 @@ function FitToPartController() {
     const center = new THREE.Vector3(...fitToTarget.center);
     const dist = fitToTarget.radius * 2.5;
     camera.up.set(0, 0, 1);
-    camera.position.set(
-      center.x + dist * 0.6,
-      center.y - dist * 0.8,
-      center.z + dist * 0.6,
-    );
+    // Preserve current camera direction — zoom toward target without changing viewing angle
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const currentTarget = (controls as any)?.target as THREE.Vector3 | undefined;
+    const dir = (currentTarget && camera.position.distanceTo(currentTarget) > 0.01)
+      ? new THREE.Vector3().subVectors(camera.position, currentTarget).normalize()
+      : new THREE.Vector3(0.45, -0.6, 0.45).normalize();
+    camera.position.copy(center.clone().addScaledVector(dir, dist));
     camera.lookAt(center);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (controls as any)?.target?.copy(center);
@@ -435,13 +350,8 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, 
   const [blobEntries, setBlobEntries] = useState<BlobEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; partName: string | null; fitCenter: [number, number, number] | null; fitRadius: number } | null>(null);
   // Must be called unconditionally before any early returns
   const { axesGlbUrl, landmarksGlbUrl, overlays, viewerTheme } = useViewerStore();
-
-  const handleContextMenu = (x: number, y: number, partName: string | null, fitCenter: [number, number, number] | null, fitRadius: number) => {
-    setContextMenu({ x, y, partName, fitCenter, fitRadius });
-  };
 
   const readyGeometries = geometries.filter((g) => g.status === "ready");
 
@@ -519,16 +429,6 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, 
 
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
-      {contextMenu && (
-        <ContextMenuPanel
-          x={contextMenu.x}
-          y={contextMenu.y}
-          partName={contextMenu.partName}
-          fitCenter={contextMenu.fitCenter}
-          fitRadius={contextMenu.fitRadius}
-          onClose={() => setContextMenu(null)}
-        />
-      )}
       <Canvas
         style={{ width: "100%", height: "100%" }}
         camera={{ position: [15, -15, 8], fov: 45 }}
@@ -556,7 +456,7 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, 
         <CameraTypeController />
         <FitToPartController />
         <OrbitCenterMarker />
-        <PointerEventHandler onContextMenu={handleContextMenu} />
+        <PointerEventHandler />
 
         <OverlayObjects
           templateSettings={templateSettings}

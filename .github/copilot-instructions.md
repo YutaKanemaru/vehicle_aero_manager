@@ -1758,6 +1758,8 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 **`src/stores/viewerStore.ts`** (Zustand)
 ```typescript
 partStates: Record<string, { visible, color, opacity }>  // per-part 3D state
+resetParts: () => void            // clears partStates entirely (all parts revert to defaults)
+showAllParts: () => void          // sets visible:true for all entries in partStates, preserves color/opacity
 searchQuery: string
 searchMode: "include" | "exclude"
 selectedAssemblyId: string | null
@@ -1777,6 +1779,12 @@ overlays: ViewerOverlays  // wheelAxes, landmarks remain here
 // NOTE: selectedCaseId, selectedRunId, axesGlbUrl, selectedConditionMapId,
 //       selectedConditionId, landmarksGlbUrl removed — no longer used by Template Builder
 //       (kept in store only if Case UI 3D step is implemented later)
+// Part selection (click highlight)
+selectedPartName: string | null      // name of currently selected part; highlighted yellow (#ffff00) in 3D
+setSelectedPartName: (name: string | null) => void
+// Fit camera to part
+fitToTarget: { center: [number, number, number]; radius: number } | null
+setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canvas
 ```
 
 **`src/api/systems.ts`** (new)
@@ -1806,16 +1814,16 @@ overlays: ViewerOverlays  // wheelAxes, landmarks remain here
 **`src/components/geometries/GeometryList.tsx`** — violet badge + "Building 3D viewer cache..." text + refetchInterval triggers on `ready-decimating`
 
 **`src/components/viewer/SceneCanvas.tsx`**
-- Outer `<div>` wrapper (holds `ContextMenuPanel` + `<Canvas>`)
+- Outer `<div>` wrapper containing `<Canvas>`; **no** ContextMenuPanel (removed)
 - R3F `<Canvas>` + `<OrbitControls makeDefault>` + lights + `<Grid>`
-- `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → `scene.traverse()` applies `partStates` (visible / color / opacity / flatShading) to each `Mesh`; `showEdges` adds/removes `THREE.LineSegments(EdgesGeometry)` children tagged `userData.isEdgeLine`
-- `<CameraFitter>`: `Box3.setFromObject(scene)` → positions camera to fit all geometry on first load
+- `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → `scene.traverse()` applies `partStates` (visible / color / opacity / flatShading) to each `Mesh`; `showEdges` adds/removes `THREE.LineSegments(EdgesGeometry)` children tagged `userData.isEdgeLine`; `selectedPartName === obj.name` → yellow highlight (`#ffff00`, emissive `#444400`)
+- `<CameraFitter>`: `Box3.setFromObject(scene)` → positions camera to fit all geometry on first load; initial position uses `maxDim × 1.0` multiplier (tighter zoom)
 - `<AxesGLBModel>`: loads axes GLB → renders as-is; shown when `axesGlbUrl && overlays.wheelAxes`
 - `<LandmarksGLBModel>`: loads landmarks GLB → renders as-is; shown when `landmarksGlbUrl && overlays.landmarks`
 - `<CameraPresetController>`: watches `cameraPreset` store value → repositions camera using `Box3` + preset offset; clears preset after apply
 - `<CameraTypeController>`: watches `cameraProjection` → swaps `PerspectiveCamera` ↔ `OrthographicCamera` in R3F using `useThree().set()`; copies position/quaternion on switch
-- `<PointerEventHandler>`: attaches `dblclick` (Raycaster → `controls.target.copy(hitPoint)` to change orbit pivot) and `contextmenu` (Raycaster → identifies part name → calls `onContextMenu(x, y, partName)`) on `gl.domElement`
-- `<ContextMenuPanel>`: fixed-position React DOM div with "Hide" (part visible=false) and "Reset all" actions; closes on outside click via `useEffect` document listener
+- `<PointerEventHandler>`: attaches `click` (Raycaster → `setSelectedPartName`), `dblclick` (Raycaster → `controls.target.copy(hitPoint)` to change orbit pivot), and `contextmenu` (`e.preventDefault()` only — no popup menu) on `gl.domElement`
+- `<FitToPartController>`: watches `fitToTarget` store value → moves camera toward target **preserving current viewing angle** (direction = `normalize(camera.pos − oldTarget)`); clears after apply
 - `<GizmoHelper>` + `<GizmoViewport>` at bottom-left
 - Accepts array of `GeometryResponse` (Assembly support) — fetches and overlays all GLBs in parallel
 - Shows `<Loader>` while fetching, error text on failure, placeholder text when no assembly selected
@@ -1837,10 +1845,11 @@ overlays: ViewerOverlays  // wheelAxes, landmarks remain here
 - `partInfo` is merged `part_info` from all assembly geometries (computed in `TemplateBuilderPage`)
 
 **`src/components/viewer/PartListPanel.tsx`**
+- Props: `parts: string[]`; `partInfo?: Record<string, unknown> | null` (merged `analysis_result.part_info` from all assembly geometries)
 - Full part list from `analysis_result.parts`, with count badge
-- Per-part: eye toggle / `ColorInput` / opacity `Slider`
+- Per-part row: **click name text** → `setSelectedPartName` toggle; row shows **yellow tint** when `selectedPartName === name`; `IconFocusCentered` ActionIcon (visible when `partInfo[name]?.bbox` exists) → `setFitToTarget` to zoom to part bbox; eye toggle; compact `ColorInput` (w=52, no eyedropper); opacity `Slider`
 - Search bar + `SegmentedControl` (Include / Exclude) — filters visible list
-- Toolbar buttons: **Toggle all filtered** (eye/eye-off) · **Show Only** (`IconEyeCheck` — hide everything except filtered parts) · **Invert** (`IconArrowsExchange` — flip visibility of all parts) · **Reset all** (`IconRefresh`)
+- Toolbar buttons: **Toggle all filtered** (eye/eye-off) · **Show Only** (`IconEyeCheck` — hide everything except filtered parts) · **Invert** (`IconArrowsExchange` — flip visibility of all parts) · **Show all** (`IconEye` → `showAllParts()` — sets visible:true for all parts, preserves color/opacity)
 
 **`src/components/viewer/OverlayPanel.tsx`** (new — 2A-13)
 - 4-tab `Tabs` component (`pills` variant) rendered inside `ControlPanel`; replaces old flat Switch list
@@ -1860,7 +1869,7 @@ overlays: ViewerOverlays  // wheelAxes, landmarks remain here
   2. **Create Case** button (`IconPlus`, enabled when both assembly + template selected) → `CreateCaseFromBuilderModal`
   3. **Overlays** `Divider` → `<OverlayPanel templateSettings={templateSettings} />`
   4. **Camera** — preset buttons (iso / front / rear / side / top) + theme toggle
-- `PartListPanel` receives `allParts` (all part names from assembly geometries)
+- `PartListPanel` receives `allParts` (all part names from assembly geometries) + `partInfo` (merged `analysis_result.part_info` — used for per-part Fit-to camera function)
 - Template overlay: fetches `["templates", id, "versions"]`, finds active version, passes `settings` (as `templateSettings`) to `ControlPanel` and `<OverlayObjects>`
 - `vehicleBbox`: union of `analysis_result.vehicle_bbox` across all geometries in selected assembly
 - `TemplateVersionEditModal` gated on `editTemplateOpen` (mounted only when open) to avoid TagsInput `_value.map` error

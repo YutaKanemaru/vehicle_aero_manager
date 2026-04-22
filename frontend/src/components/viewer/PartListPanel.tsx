@@ -8,7 +8,6 @@ import {
   ColorInput,
   Slider,
   Text,
-  Button,
   Tooltip,
   Badge,
 } from "@mantine/core";
@@ -16,14 +15,21 @@ import {
   IconEye,
   IconEyeOff,
   IconSearch,
-  IconRefresh,
   IconEyeCheck,
   IconArrowsExchange,
+  IconFocusCentered,
 } from "@tabler/icons-react";
 import { useViewerStore } from "../../stores/viewerStore";
 
+interface PartBbox {
+  x_min: number; x_max: number;
+  y_min: number; y_max: number;
+  z_min: number; z_max: number;
+}
+
 interface PartListPanelProps {
   parts: string[];
+  partInfo?: Record<string, unknown> | null;
 }
 
 // ─── Wildcard pattern matching (parity with backend _matches_pattern) ─────────
@@ -41,15 +47,18 @@ function matchesPattern(partName: string, pattern: string): boolean {
   return name.startsWith(pat) || name.endsWith(pat);
 }
 
-export function PartListPanel({ parts }: PartListPanelProps) {
+export function PartListPanel({ parts, partInfo }: PartListPanelProps) {
   const {
     partStates,
     setPartState,
-    resetParts,
+    showAllParts,
     searchQuery,
     setSearchQuery,
     searchMode,
     setSearchMode,
+    selectedPartName,
+    setSelectedPartName,
+    setFitToTarget,
   } = useViewerStore();
 
   // 検索フィルタリング（ワイルドカード対応 — バックエンド _matches_pattern と同一ロジック）
@@ -133,9 +142,9 @@ export function PartListPanel({ parts }: PartListPanelProps) {
               <IconArrowsExchange size={14} />
             </ActionIcon>
           </Tooltip>
-          <Tooltip label="Reset all">
-            <ActionIcon size="sm" variant="subtle" onClick={resetParts}>
-              <IconRefresh size={14} />
+          <Tooltip label="Show all parts">
+            <ActionIcon size="sm" variant="subtle" onClick={showAllParts}>
+              <IconEye size={14} />
             </ActionIcon>
           </Tooltip>
         </Group>
@@ -146,18 +155,56 @@ export function PartListPanel({ parts }: PartListPanelProps) {
         <Stack gap={4}>
           {filtered.map((name) => {
             const state = partStates[name] ?? { visible: true, color: "#88aabb", opacity: 1.0 };
+            const isSelected = selectedPartName === name;
+            const bbox = (partInfo?.[name] as { bbox?: PartBbox } | undefined)?.bbox;
+            function handleFitTo() {
+              if (!bbox) return;
+              const cx = (bbox.x_min + bbox.x_max) / 2;
+              const cy = (bbox.y_min + bbox.y_max) / 2;
+              const cz = (bbox.z_min + bbox.z_max) / 2;
+              const r = Math.max(
+                bbox.x_max - bbox.x_min,
+                bbox.y_max - bbox.y_min,
+                bbox.z_max - bbox.z_min
+              ) * 0.75;
+              setFitToTarget({ center: [cx, cy, cz], radius: r });
+            }
             return (
-              <Stack key={name} gap={2} p={4} style={{ borderBottom: "1px solid #2a2a2a" }}>
+              <Stack
+                key={name}
+                gap={2}
+                p={4}
+                style={{
+                  borderBottom: "1px solid #2a2a2a",
+                  background: isSelected ? "rgba(255,255,0,0.1)" : undefined,
+                  cursor: "pointer",
+                }}
+              >
                 <Group justify="space-between" gap={4} wrap="nowrap">
-                  <Text size="xs" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <Text
+                    size="xs"
+                    style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    onClick={() => setSelectedPartName(isSelected ? null : name)}
+                  >
                     {name}
                   </Text>
+                  {bbox && (
+                    <Tooltip label="Fit to part">
+                      <ActionIcon
+                        size="xs"
+                        variant="subtle"
+                        onClick={handleFitTo}
+                      >
+                        <IconFocusCentered size={12} />
+                      </ActionIcon>
+                    </Tooltip>
+                  )}
                   <ActionIcon
                     size="xs"
                     variant="subtle"
                     onClick={() => setPartState(name, { visible: !state.visible })}
                   >
-                    {state.visible ? <IconEye size={12} /> : <IconEyeOff size={12} c="dimmed" />}
+                    {state.visible ? <IconEye size={12} /> : <IconEyeOff size={12} />}
                   </ActionIcon>
                 </Group>
 
@@ -167,8 +214,8 @@ export function PartListPanel({ parts }: PartListPanelProps) {
                     value={state.color}
                     onChange={(c) => setPartState(name, { color: c })}
                     withEyeDropper={false}
-                    style={{ flex: 1 }}
-                    styles={{ input: { height: 22, minHeight: 22, fontSize: 11 } }}
+                    style={{ width: 52 }}
+                    styles={{ input: { height: 22, minHeight: 22, fontSize: 11, width: 52 } }}
                   />
                   <Slider
                     size="xs"
