@@ -207,9 +207,57 @@ function PlaneTab({ ts }: { ts: AnyRecord }) {
   const output = asRecord(ts.output);
   const scs = asArray<AnyRecord>(output?.section_cuts);
 
+  // Ground height config
+  const setupOption = asRecord(ts.setup_option);
+  const gc = asRecord(asRecord(setupOption?.boundary_condition)?.ground);
+  const groundMode = gc?.ground_height_mode as string | undefined;
+  const groundOffset = gc?.ground_height_offset_from_geom_zMin as number | undefined;
+  const groundAbsolute = gc?.ground_height_absolute as number | undefined;
+  let groundSub: string;
+  if (groundMode === "absolute") {
+    groundSub = `absolute z = ${(groundAbsolute ?? 0).toFixed(3)} m`;
+  } else if (groundOffset && groundOffset !== 0) {
+    groundSub = `from geometry z_min + ${groundOffset.toFixed(3)} m`;
+  } else {
+    groundSub = "from geometry z_min";
+  }
+
+  // TG config
+  const tgCfg = asRecord(asRecord(setupOption?.boundary_condition)?.turbulence_generator);
+  const enableGroundTg = tgCfg?.enable_ground_tg === true;
+  const enableBodyTg = tgCfg?.enable_body_tg === true;
+  const blSuction = asRecord(gc?.bl_suction);
+  const noSlipXminPos = blSuction?.no_slip_xmin_pos;
+  const tgGroundSub = noSlipXminPos != null
+    ? `x_start = ${(noSlipXminPos as number).toFixed(3)} m`
+    : "x_start = vehicle x_min (auto)";
+  const simParam = asRecord(ts.simulation_parameter);
+  const coarsest = (simParam?.coarsest_voxel_size as number) ?? 0.192;
+  const h_rl6 = coarsest / 8;
+
   return (
     <Stack gap="sm">
-      <OverlaySwitch label="Ground plane" sub={`z = vehicle z_min`} visKey="ground_plane" />
+      <OverlaySwitch label="Ground plane" sub={groundSub} visKey="ground_plane" />
+
+      {(enableGroundTg || enableBodyTg) && (
+        <>
+          <Text size="xs" fw={600} c="dimmed">Turbulence Generators</Text>
+          {enableGroundTg && (
+            <OverlaySwitch
+              label="TG Ground"
+              sub={`${tgGroundSub}, h = ${h_rl6.toFixed(4)} m`}
+              visKey="tg_ground"
+            />
+          )}
+          {enableBodyTg && (
+            <OverlaySwitch
+              label="TG Body"
+              sub="y ±45%, z 10–65% of height"
+              visKey="tg_body"
+            />
+          )}
+        </>
+      )}
 
       {scs.length > 0 && (
         <>
@@ -227,8 +275,8 @@ function PlaneTab({ ts }: { ts: AnyRecord }) {
         </>
       )}
 
-      {scs.length === 0 && (
-        <Text size="xs" c="dimmed" mt={4}>No section cuts defined in template.</Text>
+      {scs.length === 0 && !enableGroundTg && !enableBodyTg && (
+        <Text size="xs" c="dimmed" mt={4}>No section cuts or TGs defined in template.</Text>
       )}
     </Stack>
   );

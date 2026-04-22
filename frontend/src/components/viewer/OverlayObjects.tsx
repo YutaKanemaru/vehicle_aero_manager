@@ -1,6 +1,12 @@
 import * as THREE from "three";
 import { useViewerStore } from "../../stores/viewerStore";
 
+// ─── Typed helper ────────────────────────────────────────────────────────────
+type AnyRec = Record<string, unknown>;
+function asRec(v: unknown): AnyRec | undefined {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as AnyRec) : undefined;
+}
+
 export interface VehicleBbox {
   x_min: number; x_max: number;
   y_min: number; y_max: number;
@@ -87,6 +93,20 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
 
   const setup = templateSettings.setup as Record<string, unknown> | undefined;
   const setupOption = templateSettings.setup_option as Record<string, unknown> | undefined;
+  const simParam = templateSettings.simulation_parameter as Record<string, unknown> | undefined;
+  const coarsest = (simParam?.coarsest_voxel_size as number) ?? 0.192;
+
+  // ─── Ground height ────────────────────────────────────────────────────────
+  const gc = asRec(asRec(setupOption?.boundary_condition)?.ground);
+  const groundMode = gc?.ground_height_mode as string | undefined;
+  const groundZ = groundMode === "absolute"
+    ? ((gc?.ground_height_absolute as number) ?? 0)
+    : vb.z_min + ((gc?.ground_height_offset_from_geom_zMin as number) ?? 0);
+
+  // ─── TG config ────────────────────────────────────────────────────────────
+  const tgCfg = asRec(asRec(setupOption?.boundary_condition)?.turbulence_generator);
+  const blSuction = asRec(gc?.bl_suction);
+  const noSlipXminPos = blSuction?.no_slip_xmin_pos as number | null | undefined;
 
   // ─── Domain box ──────────────────────────────────────────────────────────
   const domainBoxNode = (() => {
@@ -140,7 +160,60 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
   // ─── Ground plane ────────────────────────────────────────────────────────
   const groundNode = (() => {
     if (!vis("ground_plane")) return null;
-    return <GroundPlane z={vb.z_min} />;
+    return <GroundPlane z={groundZ} />;
+  })();
+
+  // ─── TG ground box ───────────────────────────────────────────────────────
+  const tgGroundNode = (() => {
+    if (!vis("tg_ground") || !tgCfg?.enable_ground_tg) return null;
+    // h_rl6 = coarsest × (0.5^6) × 8 = coarsest / 8
+    const h_rl6 = coarsest / 8;
+    const xStart = noSlipXminPos ?? vb.x_min;
+    const floorY = vWid * 0.85;
+    const centerY = (vb.y_min + vb.y_max) / 2;
+    const yMin = centerY - floorY / 2;
+    const yMax = centerY + floorY / 2;
+    return (
+      <>
+        <WireBox
+          min={[xStart, yMin, groundZ]}
+          max={[vb.x_max, yMax, groundZ + h_rl6]}
+          color="#00ffff"
+          opacity={0.7}
+        />
+        <mesh position={[xStart, centerY, groundZ + h_rl6 / 2]} rotation={[0, Math.PI / 2, 0]}>
+          <planeGeometry args={[h_rl6, floorY]} />
+          <meshBasicMaterial color="#00ffff" transparent opacity={0.25} side={THREE.DoubleSide} />
+        </mesh>
+      </>
+    );
+  })();
+
+  // ─── TG body box ─────────────────────────────────────────────────────────
+  const tgBodyNode = (() => {
+    if (!vis("tg_body") || !tgCfg?.enable_body_tg) return null;
+    const tgX = vb.x_min - vLen * 0.05;
+    const carYCenter = (vb.y_min + vb.y_max) / 2;
+    const yMin = carYCenter - vWid * 0.45;
+    const yMax = carYCenter + vWid * 0.45;
+    const zMin = vb.z_min + vHgt * 0.10;
+    const zMax = vb.z_min + vHgt * 0.65;
+    const boxH = zMax - zMin;
+    const boxW = yMax - yMin;
+    return (
+      <>
+        <WireBox
+          min={[tgX, yMin, zMin]}
+          max={[vb.x_max, yMax, zMax]}
+          color="#00ffff"
+          opacity={0.7}
+        />
+        <mesh position={[tgX, carYCenter, zMin + boxH / 2]} rotation={[0, Math.PI / 2, 0]}>
+          <planeGeometry args={[boxH, boxW]} />
+          <meshBasicMaterial color="#00ffff" transparent opacity={0.25} side={THREE.DoubleSide} />
+        </mesh>
+      </>
+    );
   })();
 
   // ─── Output settings helper ──────────────────────────────────────────────
@@ -252,6 +325,8 @@ export function OverlayObjects({ templateSettings, vehicleBbox }: OverlayObjects
       {domainBoxNode}
       {refinementNodes}
       {groundNode}
+      {tgGroundNode}
+      {tgBodyNode}
       {probeNodes}
       {pvNodes}
       {scNodes}
