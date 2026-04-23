@@ -1774,6 +1774,9 @@ showEdges: boolean                   // default false; THREE.EdgesGeometry overl
 // Key naming: "domain_box" | "ground_plane" | "box_{name}" | "pv_{name}" | "sc_{name}" | "probe_{name}"
 overlayVisibility: Record<string, boolean>;
 setOverlayVisibility: (key: string, value: boolean) => void;
+// Global master switch — hides ALL template overlays in SceneCanvas (OverlayObjects returns null)
+overlaysAllVisible: boolean;          // default true
+setOverlaysAllVisible: (v: boolean) => void;
 // Legacy overlay object kept for axesGlbUrl / landmarksGlbUrl feature flags
 overlays: ViewerOverlays  // wheelAxes, landmarks remain here
 // NOTE: selectedCaseId, selectedRunId, axesGlbUrl, selectedConditionMapId,
@@ -1816,7 +1819,7 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
 **`src/components/viewer/SceneCanvas.tsx`**
 - Outer `<div>` wrapper containing `<Canvas>`; **no** ContextMenuPanel (removed)
 - R3F `<Canvas>` + `<OrbitControls makeDefault>` + lights + `<Grid>`
-- `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → `scene.traverse()` applies `partStates` (visible / color / opacity / flatShading) to each `Mesh`; `showEdges` adds/removes `THREE.LineSegments(EdgesGeometry)` children tagged `userData.isEdgeLine`; `selectedPartName === obj.name` → yellow highlight (`#ffff00`, emissive `#444400`)
+- `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → `scene.traverse()` applies material conversion + flatShading to **all** meshes first (before `!state` early-return), then applies `partStates` (visible / color / opacity); `showEdges` adds/removes `THREE.LineSegments(EdgesGeometry)` children tagged `userData.isEdgeLine`; `selectedPartName === obj.name` → yellow highlight (`#ffff00`, emissive `#444400`)
 - `<CameraFitter>`: `Box3.setFromObject(scene)` → positions camera to fit all geometry on first load; initial position uses `maxDim × 1.0` multiplier (tighter zoom)
 - `<AxesGLBModel>`: loads axes GLB → renders as-is; shown when `axesGlbUrl && overlays.wheelAxes`
 - `<LandmarksGLBModel>`: loads landmarks GLB → renders as-is; shown when `landmarksGlbUrl && overlays.landmarks`
@@ -1848,17 +1851,18 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
 **`src/components/viewer/PartListPanel.tsx`**
 - Props: `parts: string[]`; `partInfo?: Record<string, unknown> | null` (merged `analysis_result.part_info` from all assembly geometries)
 - Full part list from `analysis_result.parts`, with count badge
-- Per-part row: **click name text** → `setSelectedPartName` toggle; row shows **yellow tint** when `selectedPartName === name`; `IconFocusCentered` ActionIcon (visible when `partInfo[name]?.bbox` exists) → `setFitToTarget` to zoom to part bbox; eye toggle; compact `ColorInput` (w=52, no eyedropper); opacity `Slider`
+- Per-part row: **click name text** → `setSelectedPartName` toggle; row shows **yellow tint** + top+bottom border when `selectedPartName === name`; `IconFocusCentered` ActionIcon (visible when `partInfo[name]?.bbox` exists) → `setFitToTarget` to zoom to part bbox (preserves camera angle, calls `invalidate()`); `IconEyeCheck` ActionIcon per row → "Show only this part" (hides all other parts); eye toggle; compact `ColorInput` (w=52, no eyedropper); **opacity `Popover`** (`Button` showing `α XX%` → `Popover.Dropdown` with `Slider`); part name uses `size="sm"`
 - Search bar + `SegmentedControl` (Include / Exclude) — filters visible list
-- Toolbar buttons: **Toggle all filtered** (eye/eye-off) · **Show Only** (`IconEyeCheck` — hide everything except filtered parts) · **Invert** (`IconArrowsExchange` — flip visibility of all parts) · **Show all** (`IconEye` → `showAllParts()` — sets visible:true for all parts, preserves color/opacity)
+- Toolbar buttons: **Toggle all filtered** (eye/eye-off) · **Show Only** (`IconEyeCheck` — hide everything except filtered parts) · **Invert** (`IconArrowsExchange` — flip visibility of all parts) · **Show all** (`IconEye` → `parts.forEach(n => setPartState(n, { visible: true }))` — correctly handles parts never clicked, unlike `showAllParts()` which only acts on existing `partStates` entries)
 
 **`src/components/viewer/OverlayPanel.tsx`** (new — 2A-13)
 - 4-tab `Tabs` component (`pills` variant) rendered inside `ControlPanel`; replaces old flat Switch list
 - **Parts tab**: reads `setup.meshing.offset_refinement[].parts`, `setup.meshing.custom_refinement[].parts`, `target_names.wheel/rim/baffle/windtunnel`, `setup_option.ride_height.reference_parts`, `porous_coefficients[].part_name`, `setup_option.meshing.triangle_splitting_instances[].parts` → groups of pattern `Badge` elements. Click any badge → `setSearchQuery(pattern)` → `PartListPanel` search bar filters to matching parts.
-- **Box tab**: `OverlaySwitch` rows for Domain Bounding Box (key `"domain_box"`), each `box_refinement` item (key `"box_{name}"`), `part_based_box_refinement` items — when `per_coefficient=False`: one switch per entry (key `"box_{entryName}"`); when `per_coefficient=True`: one switch per porous coefficient (key `"box_{entryName}_{coeff.part_name}"`), label `"{entryName} / {coeff.part_name}"`; each `partial_volumes` item (key `"pv_{name}"`).
-- **Plane tab**: `OverlaySwitch` for TG Ground (key `"tg_ground"`, sub-text shows `x_pos = noSlipXminPos − 0.01`, shown when `enable_ground_tg=true`), TG Body (key `"tg_body"`, shown when `enable_body_tg=true`), each `section_cuts` item (key `"sc_{name}"`). Ground Plane removed — domain bounding box in Box tab is sufficient for ground height reference.
-- **Probe tab**: `OverlaySwitch` per `probe_files` item (key `"probe_{name}"`) — sub-text shows point count.
+- **Box tab**: `OverlaySwitch` rows for Domain Bounding Box (key `"domain_box"`), each `box_refinement` item (key `"box_{name}"`), `part_based_box_refinement` items — when `per_coefficient=False`: one switch per entry (key `"box_{entryName}"`); when `per_coefficient=True`: one switch per porous coefficient (key `"box_{entryName}_{coeff.part_name}"`), label `"{entryName} / {coeff.part_name}"`; each `partial_volumes` item (key `"pv_{name}"`). **`TabMasterSwitch`** at top toggles all items at once.
+- **Plane tab**: `OverlaySwitch` for TG Ground (key `"tg_ground"`, sub-text shows `x_pos = noSlipXminPos − 0.01`, shown when `enable_ground_tg=true`), TG Body (key `"tg_body"`, shown when `enable_body_tg=true`), each `section_cuts` item (key `"sc_{name}"`). Ground Plane removed — domain bounding box in Box tab is sufficient for ground height reference. **`TabMasterSwitch`** at top.
+- **Probe tab**: `OverlaySwitch` per `probe_files` item (key `"probe_{name}"`) — sub-text shows point count. **`TabMasterSwitch`** at top.
 - `OverlaySwitch` reads/writes `overlayVisibility` store directly; key-absent → default visible.
+- **`TabMasterSwitch({ visKeys })`**: computes `allVisible = visKeys.every(k => overlayVisibility[k] !== false)`; single `Switch` toggles all keys; placed at top of Box/Plane/Probe tabs.
 - No template selected → placeholder text shown.
 
 **`src/components/viewer/TemplateBuilderPage.tsx`**
@@ -1869,7 +1873,7 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
 - `ControlPanel` sections (275px left, scrollable) — receives `geometries` + `templateSettings` props:
   1. Assembly `Select` (+ `IconPackage` ActionIcon → `AssemblyGeometriesDrawer`) → Template `Select` (+ `IconPencil` ActionIcon → `TemplateVersionEditModal` for active version; enabled only when template + version loaded)
   2. **Create Case** button (`IconPlus`, enabled when both assembly + template selected) → `CreateCaseFromBuilderModal`
-  3. **Overlays** `Divider` → `<OverlayPanel templateSettings={templateSettings} />`
+  3. **Overlays** header (`Group`: `Text` + `Divider` + `Switch` → `setOverlaysAllVisible`, global on/off for all 3D overlays) → `<OverlayPanel templateSettings={templateSettings} />`
   4. **Camera** — preset buttons (iso / front / rear / side / top) + theme toggle
 - `PartListPanel` receives `allParts` (all part names from assembly geometries) + `partInfo` (merged `analysis_result.part_info` — used for per-part Fit-to camera function)
 - Template overlay: fetches `["templates", id, "versions"]`, finds active version, passes `settings` (as `templateSettings`) to `ControlPanel` and `<OverlayObjects>`
