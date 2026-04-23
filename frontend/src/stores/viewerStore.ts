@@ -78,6 +78,10 @@ interface ViewerStore {
   showEdges: boolean;
   setShowEdges: (v: boolean) => void;
 
+  // Origin axes + XY plane overlay
+  showOriginAxes: boolean;
+  setShowOriginAxes: (v: boolean) => void;
+
   // Part selection (click highlight)
   selectedPartName: string | null;
   setSelectedPartName: (name: string | null) => void;
@@ -172,6 +176,9 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
   setFlatShading: (v) => set({ flatShading: v }),
   showEdges: false,
   setShowEdges: (v) => set({ showEdges: v }),
+
+  showOriginAxes: true,
+  setShowOriginAxes: (v) => set({ showOriginAxes: v }),
 
   selectedPartName: null,
   setSelectedPartName: (name) => set({ selectedPartName: name }),

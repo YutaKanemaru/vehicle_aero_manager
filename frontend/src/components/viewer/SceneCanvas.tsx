@@ -330,6 +330,45 @@ function FitToPartController() {
   return null;
 }
 
+// ─── Origin coordinate axes + XY ground plane ───────────────────────────────
+
+function OriginAxes({ vehicleBbox }: { vehicleBbox?: VehicleBbox | null }) {
+  // Axis length: 15% of vehicle max dimension, fallback 1 m
+  const axisSize = vehicleBbox
+    ? Math.max(
+        vehicleBbox.x_max - vehicleBbox.x_min,
+        vehicleBbox.y_max - vehicleBbox.y_min,
+        vehicleBbox.z_max - vehicleBbox.z_min,
+      ) * 0.15
+    : 1.0;
+
+  // XY plane half-extent: 2× vehicle footprint, fallback 5 m
+  const planeSize = vehicleBbox
+    ? Math.max(
+        vehicleBbox.x_max - vehicleBbox.x_min,
+        vehicleBbox.y_max - vehicleBbox.y_min,
+      ) * 2.0
+    : 10.0;
+
+  return (
+    <group>
+      {/* Coordinate axes at origin — red=X, green=Y, blue=Z */}
+      <axesHelper args={[axisSize]} />
+      {/* Semi-transparent XY plane at z=0 */}
+      <mesh rotation={[0, 0, 0]} position={[0, 0, 0]}>
+        <planeGeometry args={[planeSize, planeSize]} />
+        <meshBasicMaterial
+          color="#aaaaaa"
+          transparent
+          opacity={0.08}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
+  );
+}
+
 // ─── Public SceneCanvas component ────────────────────────────────────────────
 
 interface SceneCanvasProps {
@@ -351,7 +390,7 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Must be called unconditionally before any early returns
-  const { axesGlbUrl, landmarksGlbUrl, overlays, viewerTheme } = useViewerStore();
+  const { axesGlbUrl, landmarksGlbUrl, overlays, viewerTheme, showOriginAxes } = useViewerStore();
 
   const readyGeometries = geometries.filter((g) => g.status === "ready");
 
@@ -457,6 +496,8 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, 
         <FitToPartController />
         <OrbitCenterMarker />
         <PointerEventHandler />
+
+        {showOriginAxes && <OriginAxes vehicleBbox={vehicleBbox} />}
 
         <OverlayObjects
           templateSettings={templateSettings}

@@ -14,7 +14,7 @@ import {
   Tooltip,
   SegmentedControl,
 } from "@mantine/core";
-import { IconSun, IconMoon, IconCamera, IconPackage, IconPlus, IconPencil } from "@tabler/icons-react";
+import { IconSun, IconMoon, IconCamera, IconPackage, IconPlus, IconPencil, IconAxisX } from "@tabler/icons-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { assembliesApi, type AssemblyResponse, type GeometryResponse } from "../../api/geometries";
 import { templatesApi, type TemplateResponse } from "../../api/templates";
@@ -188,7 +188,7 @@ function ControlPanel({
 // ─── Floating camera controls (bottom-right of 3D view) ─────────────────────
 
 function CameraOverlay() {
-  const { setCameraPreset, viewerTheme, setViewerTheme } = useViewerStore();
+  const { setCameraPreset, viewerTheme, setViewerTheme, showOriginAxes, setShowOriginAxes } = useViewerStore();
   return (
     <div
       style={{
@@ -226,6 +226,19 @@ function CameraOverlay() {
           onClick={() => setViewerTheme(viewerTheme === "dark" ? "light" : "dark")}
         >
           {viewerTheme === "dark" ? <IconSun size={14} /> : <IconMoon size={14} />}
+        </ActionIcon>
+      </Tooltip>
+      <Tooltip label={showOriginAxes ? "Hide origin axes" : "Show origin axes"}>
+        <ActionIcon
+          size="sm"
+          variant={showOriginAxes ? "filled" : "light"}
+          style={{
+            background: showOriginAxes ? "rgba(70,100,220,0.75)" : "rgba(0,0,0,0.55)",
+            borderColor: "rgba(255,255,255,0.15)",
+          }}
+          onClick={() => setShowOriginAxes(!showOriginAxes)}
+        >
+          <IconAxisX size={14} />
         </ActionIcon>
       </Tooltip>
     </div>

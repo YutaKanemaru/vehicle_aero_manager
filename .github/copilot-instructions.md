@@ -1824,6 +1824,7 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
 - `<CameraTypeController>`: watches `cameraProjection` → swaps `PerspectiveCamera` ↔ `OrthographicCamera` in R3F using `useThree().set()`; copies position/quaternion on switch
 - `<PointerEventHandler>`: attaches `click` (Raycaster → `setSelectedPartName`), `dblclick` (Raycaster → `controls.target.copy(hitPoint)` to change orbit pivot), and `contextmenu` (`e.preventDefault()` only — no popup menu) on `gl.domElement`
 - `<FitToPartController>`: watches `fitToTarget` store value → moves camera toward target **preserving current viewing angle** (direction = `normalize(camera.pos − oldTarget)`); clears after apply
+- `<OriginAxes vehicleBbox?>`: shown when `showOriginAxes=true`; renders `<axesHelper>` (red=X, green=Y, blue=Z) + semi-transparent XY plane (`z=0`, `color=#aaaaaa, opacity=0.08, DoubleSide`); axis length = `maxDim × 0.15` (fallback 1 m); plane size = `maxFootprint × 2` (fallback 10 m)
 - `<GizmoHelper>` + `<GizmoViewport>` at bottom-left
 - Accepts array of `GeometryResponse` (Assembly support) — fetches and overlays all GLBs in parallel
 - Shows `<Loader>` while fetching, error text on failure, placeholder text when no assembly selected
@@ -1864,6 +1865,7 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
 - Route: `/template-builder`
 - **3-column layout**: 275px `ControlPanel` | 255px `PartListPanel` | flex-1 `<SceneCanvas>`
 - **`ViewerToolbar`** (floating, top-right of 3D panel, `position:absolute`): `SegmentedControl` Persp/Ortho → `setCameraProjection()` · `Switch` Flat → `setFlatShading()` · `Switch` Edges → `setShowEdges()`
+- **`CameraOverlay`** (floating, bottom-right of 3D panel, `position:absolute`, `bottom:8, right:4`): camera preset buttons (iso/front/rear/side/top) + **theme toggle** (`IconSun`/`IconMoon`) + **origin axes toggle** (`IconAxisX`, filled=blue when ON, light when OFF → `setShowOriginAxes()`)
 - `ControlPanel` sections (275px left, scrollable) — receives `geometries` + `templateSettings` props:
   1. Assembly `Select` (+ `IconPackage` ActionIcon → `AssemblyGeometriesDrawer`) → Template `Select` (+ `IconPencil` ActionIcon → `TemplateVersionEditModal` for active version; enabled only when template + version loaded)
   2. **Create Case** button (`IconPlus`, enabled when both assembly + template selected) → `CreateCaseFromBuilderModal`
