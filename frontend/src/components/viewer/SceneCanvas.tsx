@@ -391,8 +391,10 @@ function FitToPartController() {
       const oldDist = camera.position.distanceTo(oldTarget);
       const dir = camera.position.clone().sub(oldTarget).normalize();
       camera.position.copy(center.clone().addScaledVector(dir, oldDist));
-      const currentHalfH = (camera.top - camera.bottom) / 2 / Math.max(camera.zoom, 0.001);
-      camera.zoom = (currentHalfH / radius) * 0.8;
+      // frustumHalfH is zoom=1 world-space half-height — fixed value, must NOT divide by camera.zoom
+      // (dividing creates a feedback loop: zoom→recalc→zoom oscillates every other press)
+      const frustumHalfH = (camera.top - camera.bottom) / 2;
+      camera.zoom = (frustumHalfH / radius) * 0.8;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (controls as any)?.target?.copy(center);
       camera.updateProjectionMatrix();
