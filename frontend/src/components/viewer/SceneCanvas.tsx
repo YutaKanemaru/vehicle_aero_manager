@@ -621,7 +621,7 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, 
           fadeStrength={1}
           followCamera={false}
           infiniteGrid
-          rotation={[-Math.PI / 2, 0, 0]}
+          rotation={[Math.PI / 2, 0, 0]}
         />
 
         <OrbitControls makeDefault enableDamping={false} />

@@ -1842,7 +1842,7 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
 
 **`src/components/viewer/SceneCanvas.tsx`**
 - Outer `<div>` wrapper containing `<Canvas>`; **no** ContextMenuPanel (removed)
-- R3F `<Canvas>` + `<OrbitControls makeDefault>` + lights + `<Grid>`
+- R3F `<Canvas>` + `<OrbitControls makeDefault>` + lights + `<Grid rotation={[Math.PI / 2, 0, 0]}>` — `+π/2` rotation places grid in XY plane with normal pointing to +Z, visible from top (+Z) view (Z-up coordinate system)
 - `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → three separate `useEffect` hooks:
   - **`[scene, flatShading]`** (dedicated): re-creates `new THREE.MeshStandardMaterial({ flatShading })` for every Mesh, copying `color/opacity/transparent/emissive` from the old material and calling `.dispose()` on it. Also tags every mesh with `obj.userData.isGLBMesh = true` so `buildGLBBox()` can identify GLB meshes and exclude Grid/axes/gizmos from camera-fit calculations. This bypasses WebGL shader-program cache (which ignores `mat.flatShading = x; mat.needsUpdate = true` on already-compiled materials).
   - **`[scene, partStates, selectedPartName]`** (partStates): applies `visible/color/opacity/selectedPartName` highlight. Does NOT touch `flatShading` (delegated to the dedicated effect above).
