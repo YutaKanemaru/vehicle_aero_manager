@@ -358,22 +358,35 @@ function FitToPartController() {
   useEffect(() => {
     if (!fitToTarget) return;
     const center = new THREE.Vector3(...fitToTarget.center);
-    const dist = fitToTarget.radius * 2.5;
+    const radius = fitToTarget.radius;
     camera.up.set(0, 0, 1);
-    // Preserve current camera direction — zoom toward target without changing viewing angle
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const currentTarget = (controls as any)?.target as THREE.Vector3 | undefined;
-    const dir = (currentTarget && camera.position.distanceTo(currentTarget) > 0.01)
-      ? new THREE.Vector3().subVectors(camera.position, currentTarget).normalize()
-      : new THREE.Vector3(0.45, -0.6, 0.45).normalize();
-    camera.position.copy(center.clone().addScaledVector(dir, dist));
-    camera.lookAt(center);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (controls as any)?.target?.copy(center);
+
+    if (camera instanceof THREE.OrthographicCamera) {
+      // Ortho: keep camera position/direction, adjust zoom so the part fills ~80% of viewport height
+      const currentHalfH = (camera.top - camera.bottom) / 2 / Math.max(camera.zoom, 0.001);
+      camera.zoom = (currentHalfH / radius) * 0.8;
+      // Also move controls target to part center so orbit rotates around it
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (controls as any)?.target?.copy(center);
+      camera.updateProjectionMatrix();
+    } else {
+      // Perspective: move camera along current viewing direction toward the part
+      const dist = radius * 2.5;
+      const dir = (currentTarget && camera.position.distanceTo(currentTarget) > 0.01)
+        ? new THREE.Vector3().subVectors(camera.position, currentTarget).normalize()
+        : new THREE.Vector3(0.45, -0.6, 0.45).normalize();
+      camera.position.copy(center.clone().addScaledVector(dir, dist));
+      camera.lookAt(center);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (controls as any)?.target?.copy(center);
+      camera.updateProjectionMatrix();
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (controls as any)?.update?.();
-    (camera as THREE.PerspectiveCamera).updateProjectionMatrix?.();
-    invalidate(); // Force R3F to re-render the frame
+    invalidate();
     setFitToTarget(null);
   }, [fitToTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
