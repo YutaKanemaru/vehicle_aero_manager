@@ -364,10 +364,20 @@ function FitToPartController() {
     const currentTarget = (controls as any)?.target as THREE.Vector3 | undefined;
 
     if (camera instanceof THREE.OrthographicCamera) {
-      // Ortho: keep camera position/direction, adjust zoom so the part fills ~80% of viewport height
+      // Ortho: preserve viewing direction and distance, only shift target + adjust zoom.
+      // IMPORTANT: set camera.position BEFORE controls.update() — otherwise OrbitControls
+      // will recompute position from (old position → new target) and move the camera,
+      // which shifts near/far and causes clipping artifacts.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const oldTarget = ((controls as any)?.target as THREE.Vector3 | undefined)?.clone()
+        ?? new THREE.Vector3();
+      const oldDist = camera.position.distanceTo(oldTarget);
+      const dir = camera.position.clone().sub(oldTarget).normalize();
+      // Pre-position camera at same direction/distance from new center
+      camera.position.copy(center.clone().addScaledVector(dir, oldDist));
+      // Adjust zoom so the part fills ~80% of viewport height
       const currentHalfH = (camera.top - camera.bottom) / 2 / Math.max(camera.zoom, 0.001);
       camera.zoom = (currentHalfH / radius) * 0.8;
-      // Also move controls target to part center so orbit rotates around it
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (controls as any)?.target?.copy(center);
       camera.updateProjectionMatrix();
