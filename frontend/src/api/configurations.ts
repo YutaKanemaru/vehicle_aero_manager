@@ -24,6 +24,8 @@ export type RunCreate = components["schemas"]["RunCreate"];
 export type RunUpdate = components["schemas"]["RunUpdate"];
 
 export type DiffResult = components["schemas"]["DiffResult"];
+export type CaseCompareResult = components["schemas"]["CaseCompareResult"];
+export type PartsDiffResult = components["schemas"]["PartsDiffResult"];
 
 export type ConditionMapFolderResponse = components["schemas"]["ConditionMapFolderResponse"];
 export type ConditionMapFolderCreate = components["schemas"]["ConditionMapFolderCreate"];
@@ -117,6 +119,9 @@ export const casesApi = {
 
   updateFolder: (caseId: string, folderId: string | null): Promise<CaseResponse> =>
     client.patch(`/cases/${caseId}`, { folder_id: folderId }),
+
+  compare: (caseId: string, withCaseId: string): Promise<CaseCompareResult> =>
+    client.get(`/cases/${caseId}/compare?with=${withCaseId}`),
 };
 
 // ---- Case Folder API ----------------------------------------------------
@@ -147,8 +152,14 @@ export const runsApi = {
   update: (caseId: string, runId: string, data: RunUpdate): Promise<RunResponse> =>
     client.patch(`/cases/${caseId}/runs/${runId}`, data),
 
-  generate: (caseId: string, runId: string): Promise<RunResponse> =>
-    client.post(`/cases/${caseId}/runs/${runId}/generate`, {}),
+  generate: (caseId: string, runId: string, geometryOnly = false): Promise<RunResponse> =>
+    client.post(`/cases/${caseId}/runs/${runId}/generate?geometry_only=${geometryOnly}`, {}),
+
+  delete: (caseId: string, runId: string): Promise<void> =>
+    client.delete(`/cases/${caseId}/runs/${runId}`),
+
+  reset: (caseId: string, runId: string): Promise<RunResponse> =>
+    client.post(`/cases/${caseId}/runs/${runId}/reset`, {}),
 
   download: async (caseId: string, runId: string): Promise<Blob> => {
     const token = localStorage.getItem("vam_token");

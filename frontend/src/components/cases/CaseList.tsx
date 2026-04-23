@@ -7,7 +7,6 @@ import {
   ActionIcon,
   Tooltip,
   Badge,
-  Drawer,
   Paper,
   Collapse,
   Modal,
@@ -37,6 +36,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useDisclosure } from "@mantine/hooks";
 import { useForm } from "@mantine/form";
 import {
@@ -49,7 +49,6 @@ import { useAuthStore } from "../../stores/auth";
 import { CaseCreateModal } from "./CaseCreateModal";
 import { CaseDuplicateModal } from "./CaseDuplicateModal";
 import { CaseCompareModal } from "./CaseCompareModal";
-import { RunList } from "../runs/RunList";
 import { useSortedItems, type SortKey } from "../../hooks/useSortedItems";
 
 // ── SortTh ───────────────────────────────────────────────────────────────────
@@ -344,10 +343,9 @@ function NewFolderModal({ opened, onClose }: { opened: boolean; onClose: () => v
 export function CaseList() {
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [createOpened, { open: openCreate, close: closeCreate }] = useDisclosure(false);
   const [newFolderOpened, { open: openNewFolder, close: closeNewFolder }] = useDisclosure(false);
-  const [selectedCase, setSelectedCase] = useState<CaseResponse | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [duplicateCase, setDuplicateCase] = useState<CaseResponse | null>(null);
   const [compareMode, setCompareMode] = useState(false);
   const [selectedForCompare, setSelectedForCompare] = useState<string[]>([]);
@@ -368,7 +366,6 @@ export function CaseList() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       notifications.show({ message: "Case deleted", color: "green" });
-      if (selectedCase) setDrawerOpen(false);
     },
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
@@ -391,8 +388,7 @@ export function CaseList() {
   });
 
   function openDrawer(c: CaseResponse) {
-    setSelectedCase(c);
-    setDrawerOpen(true);
+    navigate(`/cases/${c.id}`);
   }
 
   function handleDelete(c: CaseResponse) {
@@ -515,30 +511,6 @@ export function CaseList() {
           opened={!!duplicateCase}
           onClose={() => setDuplicateCase(null)}
         />
-      )}
-
-      {selectedCase && (
-        <Drawer
-          opened={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          title={
-            <Stack gap={2}>
-              <Group gap="xs">
-                {selectedCase.case_number && (
-                  <Badge variant="outline" color="gray" size="sm">{selectedCase.case_number}</Badge>
-                )}
-                <Text fw={600}>{selectedCase.name}</Text>
-              </Group>
-              {selectedCase.description && (
-                <Text size="xs" c="dimmed">{selectedCase.description}</Text>
-              )}
-            </Stack>
-          }
-          position="right"
-          size="xl"
-        >
-          <RunList caseId={selectedCase.id} case={selectedCase} />
-        </Drawer>
       )}
     </Stack>
   );

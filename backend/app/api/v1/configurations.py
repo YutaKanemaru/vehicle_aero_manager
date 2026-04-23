@@ -13,6 +13,7 @@ from app.models.user import User
 from app.schemas.configuration import (
     CaseCreate, CaseResponse, CaseUpdate, CaseDuplicateRequest,
     CaseFolderCreate, CaseFolderUpdate, CaseFolderResponse,
+    CaseCompareResult,
     ConditionCreate, ConditionResponse, ConditionUpdate,
     ConditionMapCreate, ConditionMapResponse, ConditionMapUpdate,
     ConditionMapFolderCreate, ConditionMapFolderUpdate, ConditionMapFolderResponse,
@@ -334,12 +335,34 @@ def generate_xml(
     case_id: str,
     run_id: str,
     background_tasks: BackgroundTasks,
+    geometry_only: bool = Query(False, description="Swap STL only, reuse parent Run XML (requires parent_case_id)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     run = configuration_service.trigger_xml_generation(
-        db, case_id, run_id, current_user, background_tasks
+        db, case_id, run_id, current_user, background_tasks, geometry_only
     )
+    return configuration_service.enrich_run_response(db, run)
+
+
+@router.delete("/cases/{case_id}/runs/{run_id}", status_code=204)
+def delete_run(
+    case_id: str,
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    configuration_service.delete_run(db, case_id, run_id, current_user)
+
+
+@router.post("/cases/{case_id}/runs/{run_id}/reset", response_model=RunResponse)
+def reset_run(
+    case_id: str,
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    run = configuration_service.reset_run(db, case_id, run_id, current_user)
     return configuration_service.enrich_run_response(db, run)
 
 
@@ -387,6 +410,17 @@ def get_axes_glb(
     """Return a GLB file containing wheel-rotation-axis arrows and porous-flow-axis arrows."""
     glb_bytes = configuration_service.get_axes_glb(db, case_id, run_id)
     return Response(content=glb_bytes, media_type="model/gltf-binary")
+
+
+@router.get("/cases/{case_id}/compare", response_model=CaseCompareResult)
+def compare_cases(
+    case_id: str,
+    with_case: str = Query(..., alias="with", description="ID of the case to compare against"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Compare two cases: template settings diff, map conditions diff, assembly parts diff."""
+    return configuration_service.compare_cases(db, case_id, with_case)
 
 
 # ---------------------------------------------------------------------------

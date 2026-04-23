@@ -119,7 +119,8 @@ vehicle_aero_manager/
 │       │   ├── systems.ts         # systemsApi + transformApi (Phase 2A-5)
 │       ├── components/          # UI components
 │       │   ├── cases/
-│       │   │   ├── CaseList.tsx             # table with compare-mode toggle
+│       │   │   ├── CaseList.tsx             # table with compare-mode toggle; row click → /cases/:id
+│       │   │   ├── CaseDetailPage.tsx       # /cases/:caseId — 4 tabs: Info / Runs / Compare / Viewer
 │       │   │   ├── CaseCreateModal.tsx      # New Case tab + Copy from Case tab
 │       │   │   ├── CaseDuplicateModal.tsx
 │       │   │   └── CaseCompareModal.tsx     # 2-column run list comparison
@@ -1059,8 +1060,8 @@ The Compute Engine derives `Computed` fields from STL geometry. Key calculations
 - `Condition`: `id`, `map_id` (FK→condition_maps, index), `name`, `inflow_velocity`, `yaw_angle`, `ride_height_json` (Text, nullable), `yaw_config_json` (Text, nullable), `created_by`, `created_at`, `updated_at`
   - `@property ride_height` → parses `ride_height_json` or returns `{}`
   - `@property yaw_config` → parses `yaw_config_json` or returns `{}`
-- `Case`: `id`, `name`, `description`, `template_id` (FK→templates), `assembly_id` (FK→geometry_assemblies), `map_id` (FK→condition_maps, nullable), `created_by`, `created_at`, `updated_at`; `runs` relationship
-- `Run`: `id`, `name`, `case_id` (FK→cases, CASCADE, index), `condition_id` (FK→conditions), `xml_path` (nullable), `geometry_override_id` (nullable FK→geometries, ondelete SET NULL — overrides assembly geometry for XML generation), `status` (`pending`/`generating`/`ready`/`error`), `error_message` (nullable), `scheduler_job_id` (nullable), `created_by`, `created_at`, `updated_at`
+- `Case`: `id`, `case_number`, `name`, `description`, `template_id` (FK→templates), `assembly_id` (FK→geometry_assemblies), `map_id` (FK→condition_maps, nullable), `folder_id` (nullable FK→case_folders), `parent_case_id` (nullable self-FK → cases, ondelete SET NULL), `created_by`, `created_at`, `updated_at`; `runs` relationship
+- `Run`: `id`, `run_number`, `name`, `case_id` (FK→cases, CASCADE, index), `condition_id` (FK→conditions), `xml_path` (nullable), `stl_path` (nullable), `geometry_override_id` (nullable FK→geometries, ondelete SET NULL — overrides assembly geometry for XML generation), `status` (`pending`/`generating`/`ready`/`error`), `error_message` (nullable), `scheduler_job_id` (nullable), `created_by`, `created_at`, `updated_at`
 
 **Models** (`app/models/system.py`)
 - `System`: `id`, `name`, `source_geometry_id` (FK→geometries), `result_geometry_id` (FK→geometries, nullable), `condition_id` (FK→conditions, nullable), `transform_snapshot` (Text/JSON), `created_by`, `created_at`
@@ -1128,11 +1129,14 @@ class SystemResponse(BaseModel):
     created_by: str; created_at: datetime
 ```
 
-- `CaseCreate`, `CaseUpdate`, `CaseResponse` (includes `run_count`, `case_number`, `template_name`, `assembly_name`, `map_name`)
-- `CaseDuplicateRequest`: `{ name, description }` — copies active template/assembly/map from source case
-- `RunCreate`, `RunResponse` (includes `xml_path`, `stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`, `geometry_override_id`)
+- `CaseCreate`, `CaseUpdate` (`name`, `description`, `template_id`, `assembly_id`, `map_id`, `folder_id`), `CaseResponse` (includes `run_count`, `case_number`, `template_name`, `assembly_name`, `map_name`, `parent_case_id`, `parent_case_number`, `parent_case_name`)
+- `CaseDuplicateRequest`: `{ name, description }` — copies active template/assembly/map from source case; auto-sets `parent_case_id`
+- `RunCreate`: `{ name: str = "", condition_id, comment: str = "" }` — if `name` is empty, auto-formats as `{case_number}_{run_number}_{condition_name}[_{comment}]`
+- `RunResponse` (includes `xml_path`, `stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`, `geometry_override_id`)
 - `RunUpdate`: `{ geometry_override_id: str | None }` — used to set geometry override after ride-height transform
 - `DiffResult`: list of changed fields between two Runs
+- `PartsDiffResult`: `{ added: list[str], removed: list[str], common: list[str] }` — assembly parts comparison
+- `CaseCompareResult`: `{ base_case_id, compare_case_id, base_case_number, compare_case_number, template_settings_diff: list[DiffField], map_diff: list[DiffField], parts_diff: PartsDiffResult }`
 
 **Service** (`app/services/configuration_service.py`)
 - `list_maps`, `get_map`, `create_map`, `update_map`, `delete_map`
@@ -1140,14 +1144,21 @@ class SystemResponse(BaseModel):
 - `list_conditions(map_id)`, `get_condition`, `create_condition`, `update_condition`, `delete_condition` — JSON fields serialized via `json.dumps(data.ride_height.model_dump())`
 - `delete_condition()`: raises HTTP 400 if any `Run.condition_id` references this condition — delete those runs first
 - `list_cases`, `get_case`, `create_case`, `update_case`, `delete_case`
-- `delete_case()`: cascades DB delete to Runs; also deletes `data/runs/{run_id}/` output directories from filesystem for each Run (uses `_rmtree_force` imported from `geometry_service`; deletion failures are logged as `WARNING` and do not abort the request)
-- `create_run(case_id, condition_id)`, `list_runs(case_id)`
+- `update_case()`: accepts `template_id` and `assembly_id` updates (validates existence)
+- `delete_case()`: cascades DB delete to Runs; also deletes `data/runs/{run_id}/` output directories
+- `create_run(case_id, data: RunCreate, current_user)`: auto-name = `{case_number}_R{n:02d}_{condition_name}[_{comment}]` when `data.name` is empty; `data.comment` appended as suffix
+- `list_runs(case_id)`
+- `delete_run(db, case_id, run_id, current_user)` — deletes Run row + `data/runs/{run_id}/` directory
+- `reset_run(db, case_id, run_id, current_user)` — clears `xml_path`, `stl_path`, `error_message`, sets `status="pending"`, deletes output dir
 - `update_run(db, case_id, run_id, data: RunUpdate, current_user)` — updates `geometry_override_id` on a Run (PATCH)
-- `generate_xml(run_id, db, background_tasks)` — background task: resolves Condition → if `run.geometry_override_id` set, uses override geometry instead of assembly first STL → `assemble_ufx_solver_deck()` → `serialize_ufx()` → save to `data/runs/{run_id}/output.xml`; then `build_probe_csv_files()` writes one CSV per probe_file_instance beside the XML; copies STL to `data/runs/{run_id}/input.stl` and stores path in `run.stl_path` → update `run.status`
-- `duplicate_case(db, source_case_id, data: CaseDuplicateRequest, current_user)` — copies Case row (same template/assembly/map); does NOT copy Runs
-- `create_case_with_runs(db, case_data, condition_ids, current_user)` — creates Case + one Run per Condition
+- `trigger_xml_generation(db, case_id, run_id, current_user, background_tasks, geometry_only=False)` — triggers `_generate_xml_task(run_id, geometry_only)`
+- `_generate_xml_task(run_id, geometry_only=False)` — background task. When `geometry_only=True` and `case.parent_case_id` is set: finds parent's ready Run (same condition preferred), parses its XML via `parse_ufx()`, swaps `geometry.source_file` for the new assembly STL, serializes and saves — skips full re-assembly. Falls back to full generation if no parent ready run found.
+- `duplicate_case(db, source_case_id, data: CaseDuplicateRequest, current_user)` — copies Case row (same template/assembly/map); sets `parent_case_id = source_case_id`; does NOT copy Runs
+- `create_case_with_runs(db, case_data, current_user)` — creates Case + one Run per Condition; run names auto-formatted as `{case_number}_R{n:02d}_{condition_name}`
+- `compare_cases(db, base_case_id, compare_case_id) -> CaseCompareResult`: deep-diffs active template settings JSON, flat map condition values, and assembly `analysis_result.parts` sets
 - `get_axes_glb(db, case_id, run_id) -> bytes`: resolves Run → Condition → Assembly → `viewer_service.build_axes_glb()`; raises 400 on ValueError
 - `get_diff(run_id_a, run_id_b, db)` → `DiffResult`
+- `enrich_case_response(db, case)` — populates `parent_case_number` + `parent_case_name` when `parent_case_id` is set
 - Permission check: `resource.created_by == current_user.id OR current_user.is_admin`
 
 **API Endpoints** (`app/api/v1/configurations.py`):
@@ -1166,17 +1177,20 @@ class SystemResponse(BaseModel):
 | `DELETE` | `/maps/{map_id}/conditions/{cid}` | Delete condition |
 | `GET` | `/cases/` | List all cases |
 | `POST` | `/cases/` | Create case (template_id + assembly_id required) |
-| `GET` | `/cases/{id}` | Get case with run_count |
-| `PATCH` | `/cases/{id}` | Update name/description |
+| `GET` | `/cases/{id}` | Get case with run_count, parent_case_number/name |
+| `PATCH` | `/cases/{id}` | Update name/description/template_id/assembly_id/map_id |
 | `DELETE` | `/cases/{id}` | Delete case + cascade |
+| `GET` | `/cases/{id}/compare?with={id2}` | Compare two cases: template settings diff, map conditions diff, assembly parts diff |
 | `GET` | `/cases/{id}/runs/` | List runs |
-| `POST` | `/cases/{id}/runs/` | Create run (condition_id required) |
-| `POST` | `/cases/{id}/runs/{rid}/generate` | Trigger XML generation (background task) |
+| `POST` | `/cases/{id}/runs/` | Create run (condition_id + optional comment; auto-formats name) |
+| `POST` | `/cases/{id}/runs/{rid}/generate?geometry_only=false` | Trigger XML generation; `geometry_only=true` reuses parent Run's XML and swaps STL only |
 | `PATCH` | `/cases/{id}/runs/{rid}` | Update run (set `geometry_override_id`) |
+| `DELETE` | `/cases/{id}/runs/{rid}` | Delete a single Run + output directory |
+| `POST` | `/cases/{id}/runs/{rid}/reset` | Reset Run to pending (clears xml/stl/error, deletes output dir) |
 | `GET` | `/cases/{id}/runs/{rid}/download` | Download generated XML |
 | `GET` | `/cases/{id}/runs/{rid}/download-stl` | Download input STL used for XML generation |
 | `GET` | `/cases/{id}/runs/{rid}/axes-glb` | On-demand axis-visualisation GLB |
-| `POST` | `/cases/{id}/duplicate` | Duplicate a Case (new name/description, same template/assembly/map) |
+| `POST` | `/cases/{id}/duplicate` | Duplicate a Case; sets `parent_case_id = source_case_id` |
 | `GET` | `/runs/diff?a={rid}&b={rid}` | Diff two runs' settings |
 
 **API Endpoints** (`app/api/v1/systems.py`):
@@ -1200,6 +1214,7 @@ class SystemResponse(BaseModel):
 - `8949ff1689b0_add_ride_height_yaw_to_conditions_and_` — systems table; `ride_height_json` + `yaw_config_json` on conditions
 - `ff0265eeeb01_add_stl_path_to_runs` — adds nullable `stl_path` Text column to `runs`
 - `0601bb149381_add_geometry_override_id_to_runs` — adds nullable `geometry_override_id` FK column to `runs` (ondelete SET NULL); uses `batch_alter_table` for SQLite
+- `100503ac21a7_add_parent_case_id_to_cases` — adds nullable `parent_case_id` self-FK to `cases` (ondelete SET NULL); uses `batch_alter_table` for SQLite
 
 ### Template Settings Extensions (`app/schemas/template_settings.py`)
 
@@ -1547,14 +1562,20 @@ adjust_ride_height:
 - `src/components/maps/ConditionFormModal.tsx` — create/edit condition; two Accordions:
   - **Ride Height Transform**: enabled switch → target front/rear wheel axis heights → optional per-wheel RH targets (only active when Template's `adjust_body_wheel_separately=True`; note shown in UI)
   - **Yaw Center Configuration**: `center_mode` Select (`wheel_center` / `user_input`) → center X/Y inputs when `user_input`
-- `src/components/cases/CaseList.tsx` — table with `case_number` badge, Template/Assembly/Map badges, Run button, Duplicate button; **Compare mode**: toggle button activates row-selection mode (highlight up to 2 rows), "Compare" button opens `CaseCompareModal`
+- `src/components/cases/CaseList.tsx` — folder-grouped table; row click navigates to `/cases/{id}` (dedicated page); **Compare mode**: toggle activates row-selection mode (up to 2 rows), "Compare" → `CaseCompareModal`; Duplicate button → `CaseDuplicateModal`
+- `src/components/cases/CaseDetailPage.tsx` — dedicated page at `/cases/:caseId`; 4 tabs:
+  - **Information** tab: case number (read-only), editable Name/Description/Template/Assembly/Map; Parent Case display (badge + link when `parent_case_id` exists)
+  - **Runs** tab: create-run form (Condition Select + Comment TextInput + auto-name preview + "+ New Run"); run table with per-run actions: Generate (with "Geom only" checkbox when `parent_case_id` exists) / Download XML / Download STL / Reset (→ pending) / Delete
+  - **Compare** tab: "Compare with" Case Select (pre-filled with parent case); Template Settings diff table (yellow-highlighted rows); Map Conditions diff table; Assembly Parts three-column view (Added green / Removed red / Common gray)
+  - **Viewer** tab: placeholder ("coming soon")
 - `src/components/cases/CaseCreateModal.tsx` — Two-tab modal: **New Case** (Template + Assembly + optional Map + `withRuns` Switch) / **Copy from Case** (source Case select + auto-fill name → `casesApi.duplicate()`)
-- `src/components/cases/CaseDuplicateModal.tsx` — standalone duplicate form (also opened from Duplicate icon in CaseList row)
+- `src/components/cases/CaseDuplicateModal.tsx` — standalone duplicate form; newly created case has `parent_case_id` automatically set to source case
 - `src/components/cases/CaseCompareModal.tsx` — 2-column `Grid` showing `CaseColumn` per selected case; each column: case info badges + scrollable Run list table (`run_number` / `condition_name` / velocity / yaw / status badge)
 - `src/components/cases/CreateCaseFromBuilderModal.tsx` — Modal opened from Template Builder to bulk-create a Case + Runs from a Condition Map; auto-generates case name; for `ride_height.enabled=True` conditions, fires `transformApi.transform()` using Template's `RideHeightTemplateConfig` then patches `Run.geometry_override_id` via `runsApi.update()`; navigates to `/cases` on success
-- `src/components/runs/RunList.tsx` — status badge, XML download link, Diff selector
+- `src/components/runs/RunList.tsx` — legacy run list used in old Drawer (kept for reference); main run UI is now in `CaseDetailPage.tsx` Runs tab
 - `src/components/runs/DiffView.tsx` — side-by-side or diff-list view of two Run settings
 - Navigation: `AppShell.tsx` adds `Condition Maps` (IconList) and `Cases` (IconCar)
+- Routes: `/cases` → `CaseList`; `/cases/:caseId` → `CaseDetailPage`
 
 **`TemplateSettingsForm.tsx`** (used inside Create/Edit/View modals):
 

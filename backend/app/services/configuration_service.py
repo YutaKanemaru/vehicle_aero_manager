@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 from app.schemas.configuration import (
     CaseCreate, CaseUpdate, CaseDuplicateRequest,
     CaseFolderCreate, CaseFolderUpdate,
+    CaseCompareResult, PartsDiffResult,
     ConditionCreate, ConditionUpdate,
     ConditionMapCreate, ConditionMapUpdate,
     ConditionMapFolderCreate, ConditionMapFolderUpdate,
@@ -299,6 +300,14 @@ def update_case(db: Session, case_id: str, data: CaseUpdate, current_user: User)
         case.name = data.name
     if data.description is not None:
         case.description = data.description
+    if "template_id" in data.model_fields_set and data.template_id is not None:
+        if not db.get(Template, data.template_id):
+            raise HTTPException(status_code=404, detail="Template not found")
+        case.template_id = data.template_id
+    if "assembly_id" in data.model_fields_set and data.assembly_id is not None:
+        if not db.get(GeometryAssembly, data.assembly_id):
+            raise HTTPException(status_code=404, detail="Assembly not found")
+        case.assembly_id = data.assembly_id
     if "map_id" in data.model_fields_set:
         if data.map_id and not db.get(ConditionMap, data.map_id):
             raise HTTPException(status_code=404, detail="ConditionMap not found")
@@ -376,7 +385,7 @@ def delete_case_folder(db: Session, folder_id: str, current_user: User) -> None:
 
 def duplicate_case(db: Session, case_id: str, data: CaseDuplicateRequest, current_user: User) -> Case:
     """Create a new Case with the same template/assembly/map as an existing Case.
-    Runs are NOT copied — the duplicate starts empty."""
+    Sets parent_case_id to the source case. Runs are NOT copied — the duplicate starts empty."""
     src = _get_case_or_404(db, case_id)
     n = db.scalar(select(func.count()).select_from(Case)) or 0
     case_number = f"C{n + 1:03d}"
@@ -387,6 +396,7 @@ def duplicate_case(db: Session, case_id: str, data: CaseDuplicateRequest, curren
         template_id=src.template_id,
         assembly_id=src.assembly_id,
         map_id=src.map_id,
+        parent_case_id=case_id,
         created_by=current_user.id,
     )
     db.add(new_case)
@@ -408,9 +418,10 @@ def create_case_with_runs(db: Session, data: CaseCreate, current_user: User) -> 
         )
         for idx, cond in enumerate(conditions, start=1):
             run_number = f"{case.case_number}_R{idx:02d}"
+            auto_name = f"{case.case_number}_R{idx:02d}_{cond.name}"
             run = Run(
                 run_number=run_number,
-                name=cond.name,
+                name=auto_name,
                 case_id=case.id,
                 condition_id=cond.id,
                 status="pending",
@@ -449,10 +460,15 @@ def create_run(db: Session, case_id: str, data: RunCreate, current_user: User) -
         )
     # Auto-generate run_number within this case
     run_count = db.scalar(select(func.count()).select_from(Run).where(Run.case_id == case_id)) or 0
-    run_number = f"{case.case_number}_R{run_count + 1:02d}"
+    run_idx = run_count + 1
+    run_number = f"{case.case_number}_R{run_idx:02d}"
+    # Auto-format run name: {case_number}_{run_number_suffix}_{condition_name}[_{comment}]
+    auto_name = f"{case.case_number}_R{run_idx:02d}_{condition.name}"
+    if data.comment:
+        auto_name = f"{auto_name}_{data.comment}"
     run = Run(
         run_number=run_number,
-        name=data.name,
+        name=data.name if data.name else auto_name,
         case_id=case_id,
         condition_id=data.condition_id,
         status="pending",
@@ -464,12 +480,49 @@ def create_run(db: Session, case_id: str, data: RunCreate, current_user: User) -
     return run
 
 
+def delete_run(db: Session, case_id: str, run_id: str, current_user: User) -> None:
+    """Delete a single Run and its output directory."""
+    run = _get_run_or_404(db, case_id, run_id)
+    _check_owner_or_admin(run, current_user)
+    db.delete(run)
+    db.commit()
+    from app.services.geometry_service import _rmtree_force  # avoid circular import at module level
+    run_dir = settings.runs_dir / run_id
+    try:
+        if run_dir.exists() and run_dir != settings.runs_dir:
+            _rmtree_force(run_dir)
+            logger.info("Deleted run directory: %s", run_dir)
+    except Exception as e:
+        logger.warning("Failed to delete run directory %s: %s", run_dir, e)
+
+
+def reset_run(db: Session, case_id: str, run_id: str, current_user: User) -> Run:
+    """Reset a Run back to pending state (clears xml/stl/error) and deletes its output dir."""
+    run = _get_run_or_404(db, case_id, run_id)
+    _check_owner_or_admin(run, current_user)
+    from app.services.geometry_service import _rmtree_force
+    run_dir = settings.runs_dir / run_id
+    try:
+        if run_dir.exists() and run_dir != settings.runs_dir:
+            _rmtree_force(run_dir)
+    except Exception as e:
+        logger.warning("Failed to delete run directory %s: %s", run_dir, e)
+    run.xml_path = None
+    run.stl_path = None
+    run.status = "pending"
+    run.error_message = None
+    db.commit()
+    db.refresh(run)
+    return run
+
+
 def trigger_xml_generation(
     db: Session,
     case_id: str,
     run_id: str,
     current_user: User,
     background_tasks: BackgroundTasks,
+    geometry_only: bool = False,
 ) -> Run:
     run = _get_run_or_404(db, case_id, run_id)
     _check_owner_or_admin(run, current_user)
@@ -477,7 +530,7 @@ def trigger_xml_generation(
         raise HTTPException(status_code=409, detail="XML generation already in progress")
     run.status = "generating"
     db.commit()
-    background_tasks.add_task(_generate_xml_task, run_id)
+    background_tasks.add_task(_generate_xml_task, run_id, geometry_only)
     return run
 
 
@@ -498,7 +551,7 @@ def update_run(
     return run
 
 
-def _generate_xml_task(run_id: str) -> None:
+def _generate_xml_task(run_id: str, geometry_only: bool = False) -> None:
     from app.database import SessionLocal
     db = SessionLocal()
     run = None
@@ -571,6 +624,44 @@ def _generate_xml_task(run_id: str) -> None:
                     stl_paths.append(Path(geom.file_path))
                 else:
                     stl_paths.append(settings.upload_dir / geom.file_path)
+
+        # geometry_only: parse parent Run's XML and swap source_file only — no re-assembly
+        if geometry_only and case.parent_case_id:
+            parent_ready = db.scalar(
+                select(Run).where(
+                    Run.case_id == case.parent_case_id,
+                    Run.status == "ready",
+                    Run.condition_id == run.condition_id,
+                ).limit(1)
+            ) or db.scalar(
+                select(Run).where(
+                    Run.case_id == case.parent_case_id,
+                    Run.status == "ready",
+                ).limit(1)
+            )
+            if parent_ready and parent_ready.xml_path and Path(parent_ready.xml_path).exists():
+                from app.ultrafluid.parser import parse_ufx
+                deck = parse_ufx(Path(parent_ready.xml_path).read_bytes())
+                if source_file:
+                    deck.geometry.source_file = source_file
+                geom_only_bytes = serialize_ufx(deck)
+                out_dir = settings.runs_dir / run_id
+                out_dir.mkdir(parents=True, exist_ok=True)
+                xml_path = out_dir / "output.xml"
+                xml_path.write_bytes(geom_only_bytes)
+                if stl_paths:
+                    stl_dst = out_dir / "input.stl"
+                    shutil.copy2(str(stl_paths[0]), str(stl_dst))
+                    run.stl_path = str(stl_dst)
+                run.xml_path = str(xml_path)
+                run.status = "ready"
+                run.error_message = None
+                return  # skip full generation
+            else:
+                logger.warning(
+                    "geometry_only=True but no ready parent run found for run %s; falling back to full generation",
+                    run_id,
+                )
 
         porous_patterns = [pc.part_name for pc in template_settings.porous_coefficients]
         rim_patterns = list(template_settings.target_names.rim)
@@ -782,6 +873,77 @@ def _diff_dicts(prefix: str, a: dict, b: dict) -> list[DiffField]:
 # Response enrichment helpers
 # ---------------------------------------------------------------------------
 
+def compare_cases(db: Session, base_case_id: str, compare_case_id: str) -> CaseCompareResult:
+    """Compare two Cases: template settings diff, map conditions diff, assembly parts diff."""
+    base = _get_case_or_404(db, base_case_id)
+    comp = _get_case_or_404(db, compare_case_id)
+
+    # Template settings deep-diff
+    base_tv = db.scalar(
+        select(TemplateVersion).where(
+            TemplateVersion.template_id == base.template_id,
+            TemplateVersion.is_active == True,  # noqa: E712
+        )
+    )
+    comp_tv = db.scalar(
+        select(TemplateVersion).where(
+            TemplateVersion.template_id == comp.template_id,
+            TemplateVersion.is_active == True,  # noqa: E712
+        )
+    )
+    base_settings = json.loads(base_tv.settings) if base_tv else {}
+    comp_settings = json.loads(comp_tv.settings) if comp_tv else {}
+    template_diff = _diff_dicts("", base_settings, comp_settings)
+
+    # Map / conditions diff: flat representation {"condname.velocity": val, ...}
+    def _conditions_flat(map_id: str | None) -> dict:
+        if not map_id:
+            return {}
+        conds = list(
+            db.scalars(
+                select(Condition).where(Condition.map_id == map_id).order_by(Condition.name)
+            ).all()
+        )
+        result: dict = {}
+        for c in conds:
+            result[f"{c.name}.inflow_velocity"] = c.inflow_velocity
+            result[f"{c.name}.yaw_angle"] = c.yaw_angle
+        return result
+
+    map_diff = _diff_dicts("", _conditions_flat(base.map_id), _conditions_flat(comp.map_id))
+
+    # Assembly parts diff
+    base_assembly = db.scalar(
+        select(GeometryAssembly)
+        .options(selectinload(GeometryAssembly.geometries))
+        .where(GeometryAssembly.id == base.assembly_id)
+    )
+    comp_assembly = db.scalar(
+        select(GeometryAssembly)
+        .options(selectinload(GeometryAssembly.geometries))
+        .where(GeometryAssembly.id == comp.assembly_id)
+    )
+    base_analysis = _merge_analysis_results(base_assembly)
+    comp_analysis = _merge_analysis_results(comp_assembly)
+    base_parts = set(base_analysis.get("parts", []))
+    comp_parts = set(comp_analysis.get("parts", []))
+    parts_diff = PartsDiffResult(
+        added=sorted(comp_parts - base_parts),
+        removed=sorted(base_parts - comp_parts),
+        common=sorted(base_parts & comp_parts),
+    )
+
+    return CaseCompareResult(
+        base_case_id=base_case_id,
+        compare_case_id=compare_case_id,
+        base_case_number=base.case_number,
+        compare_case_number=comp.case_number,
+        template_settings_diff=template_diff,
+        map_diff=map_diff,
+        parts_diff=parts_diff,
+    )
+
+
 def enrich_case_response(db: Session, case: Case, run_count: int | None = None) -> CaseResponse:
     """Build CaseResponse with display name fields populated from related rows."""
     out = CaseResponse.model_validate(case)
@@ -791,6 +953,11 @@ def enrich_case_response(db: Session, case: Case, run_count: int | None = None) 
     out.template_name = template.name if template else ""
     out.assembly_name = assembly.name if assembly else ""
     out.map_name = cmap.name if cmap else ""
+    if case.parent_case_id:
+        parent = db.get(Case, case.parent_case_id)
+        if parent:
+            out.parent_case_number = parent.case_number
+            out.parent_case_name = parent.name
     if run_count is None:
         rc = db.scalar(select(func.count()).select_from(Run).where(Run.case_id == case.id)) or 0
         out.run_count = rc

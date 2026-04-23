@@ -139,6 +139,9 @@ class Case(Base):
     folder_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("case_folders.id"), nullable=True, index=True
     )
+    parent_case_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("cases.id", ondelete="SET NULL"), nullable=True
+    )
     created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, server_default=func.now()

@@ -805,7 +805,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Run */
+        delete: operations["delete_run_api_v1_cases__case_id__runs__run_id__delete"];
         options?: never;
         head?: never;
         /** Update Run */
@@ -823,6 +824,23 @@ export interface paths {
         put?: never;
         /** Generate Xml */
         post: operations["generate_xml_api_v1_cases__case_id__runs__run_id__generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/runs/{run_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset Run */
+        post: operations["reset_run_api_v1_cases__case_id__runs__run_id__reset_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -878,6 +896,26 @@ export interface paths {
          * @description Return a GLB file containing wheel-rotation-axis arrows and porous-flow-axis arrows.
          */
         get: operations["get_axes_glb_api_v1_cases__case_id__runs__run_id__axes_glb_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare Cases
+         * @description Compare two cases: template settings diff, map conditions diff, assembly parts diff.
+         */
+        get: operations["compare_cases_api_v1_cases__case_id__compare_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1274,6 +1312,28 @@ export interface components {
              */
             offset_zmax: number;
         };
+        /** CaseCompareResult */
+        CaseCompareResult: {
+            /** Base Case Id */
+            base_case_id: string;
+            /** Compare Case Id */
+            compare_case_id: string;
+            /**
+             * Base Case Number
+             * @default
+             */
+            base_case_number: string;
+            /**
+             * Compare Case Number
+             * @default
+             */
+            compare_case_number: string;
+            /** Template Settings Diff */
+            template_settings_diff: components["schemas"]["DiffField"][];
+            /** Map Diff */
+            map_diff: components["schemas"]["DiffField"][];
+            parts_diff: components["schemas"]["PartsDiffResult"];
+        };
         /** CaseCreate */
         CaseCreate: {
             /** Name */
@@ -1350,6 +1410,8 @@ export interface components {
             map_id: string | null;
             /** Folder Id */
             folder_id?: string | null;
+            /** Parent Case Id */
+            parent_case_id?: string | null;
             /** Created By */
             created_by: string;
             /**
@@ -1382,6 +1444,16 @@ export interface components {
              * @default
              */
             map_name: string;
+            /**
+             * Parent Case Number
+             * @default
+             */
+            parent_case_number: string;
+            /**
+             * Parent Case Name
+             * @default
+             */
+            parent_case_name: string;
         };
         /** CaseUpdate */
         CaseUpdate: {
@@ -1389,6 +1461,10 @@ export interface components {
             name?: string | null;
             /** Description */
             description?: string | null;
+            /** Template Id */
+            template_id?: string | null;
+            /** Assembly Id */
+            assembly_id?: string | null;
             /** Map Id */
             map_id?: string | null;
             /** Folder Id */
@@ -2492,6 +2568,15 @@ export interface components {
              */
             window_avg_temperature: boolean;
         };
+        /** PartsDiffResult */
+        PartsDiffResult: {
+            /** Added */
+            added: string[];
+            /** Removed */
+            removed: string[];
+            /** Common */
+            common: string[];
+        };
         /** PorousMedia */
         PorousMedia: {
             /** Part Name */
@@ -2661,10 +2746,18 @@ export interface components {
         };
         /** RunCreate */
         RunCreate: {
-            /** Name */
+            /**
+             * Name
+             * @default
+             */
             name: string;
             /** Condition Id */
             condition_id: string;
+            /**
+             * Comment
+             * @default
+             */
+            comment: string;
         };
         /** RunResponse */
         RunResponse: {
@@ -5710,6 +5803,36 @@ export interface operations {
             };
         };
     };
+    delete_run_api_v1_cases__case_id__runs__run_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_run_api_v1_cases__case_id__runs__run_id__patch: {
         parameters: {
             query?: never;
@@ -5747,6 +5870,41 @@ export interface operations {
         };
     };
     generate_xml_api_v1_cases__case_id__runs__run_id__generate_post: {
+        parameters: {
+            query?: {
+                /** @description Swap STL only, reuse parent Run XML (requires parent_case_id) */
+                geometry_only?: boolean;
+            };
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_run_api_v1_cases__case_id__runs__run_id__reset_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -5861,6 +6019,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_cases_api_v1_cases__case_id__compare_get: {
+        parameters: {
+            query: {
+                /** @description ID of the case to compare against */
+                with: string;
+            };
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseCompareResult"];
                 };
             };
             /** @description Validation Error */

@@ -215,6 +215,8 @@ class CaseCreate(BaseModel):
 class CaseUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
+    template_id: str | None = None
+    assembly_id: str | None = None
     map_id: str | None = None
     folder_id: str | None = None
 
@@ -234,6 +236,7 @@ class CaseResponse(BaseModel):
     assembly_id: str
     map_id: str | None
     folder_id: str | None = None
+    parent_case_id: str | None = None
     created_by: str
     created_at: datetime
     updated_at: datetime
@@ -242,6 +245,8 @@ class CaseResponse(BaseModel):
     template_name: str = ""
     assembly_name: str = ""
     map_name: str = ""
+    parent_case_number: str = ""
+    parent_case_name: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -249,8 +254,9 @@ class CaseResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class RunCreate(BaseModel):
-    name: str
+    name: str = ""  # If empty, auto-generated as {case_number}_{run_number}_{condition_name}[_{comment}]
     condition_id: str
+    comment: str = ""  # Optional suffix appended to auto-generated name
 
 
 class RunUpdate(BaseModel):
@@ -294,3 +300,23 @@ class DiffResult(BaseModel):
     run_a_id: str
     run_b_id: str
     changed_fields: list[DiffField]
+
+
+# ---------------------------------------------------------------------------
+# Case Compare
+# ---------------------------------------------------------------------------
+
+class PartsDiffResult(BaseModel):
+    added: list[str]    # parts in compare case but not in base
+    removed: list[str]  # parts in base case but not in compare
+    common: list[str]
+
+
+class CaseCompareResult(BaseModel):
+    base_case_id: str
+    compare_case_id: str
+    base_case_number: str = ""
+    compare_case_number: str = ""
+    template_settings_diff: list[DiffField]
+    map_diff: list[DiffField]
+    parts_diff: PartsDiffResult
