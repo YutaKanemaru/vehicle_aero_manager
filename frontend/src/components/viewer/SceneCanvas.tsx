@@ -31,15 +31,22 @@ function GLBModel({
     scene.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return;
       if (obj.userData?.isEdgeLine) return;
-      const state = partStates[obj.name] ?? partStates[obj.parent?.name ?? ""];
-      if (!state) return;
 
-      obj.visible = state.visible;
-
+      // Ensure MeshStandardMaterial for flatShading support — applies to ALL meshes
       if (!(obj.material instanceof THREE.MeshStandardMaterial)) {
         obj.material = new THREE.MeshStandardMaterial();
       }
       const mat = obj.material as THREE.MeshStandardMaterial;
+      mat.flatShading = flatShading;
+
+      const state = partStates[obj.name] ?? partStates[obj.parent?.name ?? ""];
+      if (!state) {
+        mat.needsUpdate = true;
+        return;
+      }
+
+      obj.visible = state.visible;
+
       const isSelected = obj.name === selectedPartName || obj.parent?.name === selectedPartName;
       if (isSelected) {
         mat.color.set("#ffff00");
@@ -51,7 +58,6 @@ function GLBModel({
       }
       mat.opacity = state.opacity;
       mat.transparent = state.opacity < 1.0;
-      mat.flatShading = flatShading;
       mat.needsUpdate = true;
     });
   }, [scene, partStates, flatShading, selectedPartName]);
@@ -304,7 +310,7 @@ function OrbitCenterMarker() {
 
 function FitToPartController() {
   const { fitToTarget, setFitToTarget } = useViewerStore();
-  const { camera, controls } = useThree();
+  const { camera, controls, invalidate } = useThree();
 
   useEffect(() => {
     if (!fitToTarget) return;
@@ -324,6 +330,7 @@ function FitToPartController() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (controls as any)?.update?.();
     (camera as THREE.PerspectiveCamera).updateProjectionMatrix?.();
+    invalidate(); // Force R3F to re-render the frame
     setFitToTarget(null);
   }, [fitToTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 

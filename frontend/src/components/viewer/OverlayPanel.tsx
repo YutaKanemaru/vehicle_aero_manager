@@ -47,7 +47,23 @@ function OverlaySwitch({
     </Group>
   );
 }
+// ─── TabMasterSwitch — master toggle for all items in a tab ──────────────────
 
+function TabMasterSwitch({ visKeys }: { visKeys: string[] }) {
+  const { overlayVisibility, setOverlayVisibility } = useViewerStore();
+  if (visKeys.length === 0) return null;
+  const allVisible = visKeys.every((k) => overlayVisibility[k] !== false);
+  return (
+    <Group justify="flex-end" mb={4}>
+      <Switch
+        size="xs"
+        label={<Text size="xs" c="dimmed">All</Text>}
+        checked={allVisible}
+        onChange={(e) => visKeys.forEach((k) => setOverlayVisibility(k, e.currentTarget.checked))}
+      />
+    </Group>
+  );
+}
 // ─── Parts tab ───────────────────────────────────────────────────────────────
 
 function PartsTab({ ts }: { ts: AnyRecord }) {
@@ -150,8 +166,28 @@ function BoxTab({ ts }: { ts: AnyRecord }) {
   const output = asRecord(ts.output);
   const pvs = asArray<AnyRecord>(output?.partial_volumes);
 
+  // Collect all vis keys for master switch
+  const allVisKeys: string[] = ["domain_box"];
+  Object.keys(boxRefinement).forEach((name) => allVisKeys.push(`box_${name}`));
+  const soMeshingForKeys = asRecord(asRecord(ts.setup_option)?.meshing);
+  const perCoeffForKeys = !!soMeshingForKeys?.box_refinement_porous_per_coefficient;
+  const porousCoeffsForKeys = asArray<AnyRecord>(ts.porous_coefficients);
+  Object.keys(partBasedBox).forEach((name) => {
+    if (perCoeffForKeys && porousCoeffsForKeys.length > 0) {
+      porousCoeffsForKeys.forEach((pc) => {
+        const partName = pc.part_name as string | undefined;
+        if (partName) allVisKeys.push(`box_${name}_${partName.replace(/\*/g, "")}`);
+      });
+    } else {
+      allVisKeys.push(`box_${name}`);
+    }
+  });
+  pvs.forEach((pv) => allVisKeys.push(`pv_${(pv.name as string) ?? "partial_volume"}`));
+
   return (
     <Stack gap="sm">
+      <TabMasterSwitch visKeys={allVisKeys} />
+
       {/* Domain bounding box */}
       <OverlaySwitch label="Domain bounding box" sub="Setup domain extents" visKey="domain_box" />
 
@@ -264,8 +300,15 @@ function PlaneTab({ ts }: { ts: AnyRecord }) {
   const coarsest = (simParam?.coarsest_voxel_size as number) ?? 0.192;
   const h_rl6 = coarsest / 8;
 
+  // Collect all vis keys for master switch
+  const allVisKeys: string[] = [];
+  if (enableGroundTg) allVisKeys.push("tg_ground");
+  if (enableBodyTg) allVisKeys.push("tg_body");
+  scs.forEach((sc) => allVisKeys.push(`sc_${(sc.name as string) ?? "section_cut"}`));
+
   return (
     <Stack gap="sm">
+      <TabMasterSwitch visKeys={allVisKeys} />
       {(enableGroundTg || enableBodyTg) && (
         <>
           <Text size="xs" fw={600} c="dimmed">Turbulence Generators</Text>
@@ -319,8 +362,11 @@ function ProbeTab({ ts }: { ts: AnyRecord }) {
     return <Text size="xs" c="dimmed">No probe files defined in template.</Text>;
   }
 
+  const allVisKeys = probeFiles.map((pf) => `probe_${(pf.name as string) ?? "probe"}`);
+
   return (
     <Stack gap="sm">
+      <TabMasterSwitch visKeys={allVisKeys} />
       {probeFiles.map((pf) => {
         const name = pf.name as string ?? "probe";
         const pts = asArray(pf.points);

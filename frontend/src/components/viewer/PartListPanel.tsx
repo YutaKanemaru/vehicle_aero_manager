@@ -10,6 +10,8 @@ import {
   Text,
   Tooltip,
   Badge,
+  Popover,
+  Button,
 } from "@mantine/core";
 import {
   IconEye,
@@ -51,7 +53,6 @@ export function PartListPanel({ parts, partInfo }: PartListPanelProps) {
   const {
     partStates,
     setPartState,
-    showAllParts,
     searchQuery,
     setSearchQuery,
     searchMode,
@@ -143,7 +144,7 @@ export function PartListPanel({ parts, partInfo }: PartListPanelProps) {
             </ActionIcon>
           </Tooltip>
           <Tooltip label="Show all parts">
-            <ActionIcon size="sm" variant="subtle" onClick={showAllParts}>
+            <ActionIcon size="sm" variant="subtle" onClick={() => parts.forEach((n) => setPartState(n, { visible: true }))}>
               <IconEye size={14} />
             </ActionIcon>
           </Tooltip>
@@ -175,6 +176,7 @@ export function PartListPanel({ parts, partInfo }: PartListPanelProps) {
                 gap={2}
                 p={4}
                 style={{
+                  borderTop: "1px solid #2a2a2a",
                   borderBottom: "1px solid #2a2a2a",
                   background: isSelected ? "rgba(255,255,0,0.1)" : undefined,
                   cursor: "pointer",
@@ -182,7 +184,7 @@ export function PartListPanel({ parts, partInfo }: PartListPanelProps) {
               >
                 <Group justify="space-between" gap={4} wrap="nowrap">
                   <Text
-                    size="xs"
+                    size="sm"
                     style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                     onClick={() => setSelectedPartName(isSelected ? null : name)}
                   >
@@ -199,6 +201,15 @@ export function PartListPanel({ parts, partInfo }: PartListPanelProps) {
                       </ActionIcon>
                     </Tooltip>
                   )}
+                  <Tooltip label="Show only this part">
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      onClick={() => parts.forEach((n) => setPartState(n, { visible: n === name }))}
+                    >
+                      <IconEyeCheck size={12} />
+                    </ActionIcon>
+                  </Tooltip>
                   <ActionIcon
                     size="xs"
                     variant="subtle"
@@ -217,15 +228,28 @@ export function PartListPanel({ parts, partInfo }: PartListPanelProps) {
                     style={{ width: 52 }}
                     styles={{ input: { height: 22, minHeight: 22, fontSize: 11, width: 52 } }}
                   />
-                  <Slider
-                    size="xs"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={state.opacity}
-                    onChange={(v) => setPartState(name, { opacity: v })}
-                    style={{ flex: 1 }}
-                  />
+                  <Popover withArrow position="bottom-start" width={150} withinPortal>
+                    <Popover.Target>
+                      <Button
+                        size="xs"
+                        variant="subtle"
+                        style={{ fontSize: 10, minWidth: 44, padding: "0 6px", height: 22 }}
+                      >
+                        α {Math.round(state.opacity * 100)}%
+                      </Button>
+                    </Popover.Target>
+                    <Popover.Dropdown p={8}>
+                      <Slider
+                        size="xs"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={state.opacity}
+                        onChange={(v) => setPartState(name, { opacity: v })}
+                        style={{ width: 120 }}
+                      />
+                    </Popover.Dropdown>
+                  </Popover>
                 </Group>
               </Stack>
             );

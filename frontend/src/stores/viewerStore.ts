@@ -82,6 +82,10 @@ interface ViewerStore {
   showOriginAxes: boolean;
   setShowOriginAxes: (v: boolean) => void;
 
+  // Master overlay visibility (hides ALL template overlays in SceneCanvas)
+  overlaysAllVisible: boolean;
+  setOverlaysAllVisible: (v: boolean) => void;
+
   // Part selection (click highlight)
   selectedPartName: string | null;
   setSelectedPartName: (name: string | null) => void;
@@ -179,6 +183,9 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
 
   showOriginAxes: true,
   setShowOriginAxes: (v) => set({ showOriginAxes: v }),
+
+  overlaysAllVisible: true,
+  setOverlaysAllVisible: (v) => set({ overlaysAllVisible: v }),
 
   selectedPartName: null,
   setSelectedPartName: (name) => set({ selectedPartName: name }),

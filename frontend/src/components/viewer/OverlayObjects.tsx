@@ -108,9 +108,12 @@ function rlColor(level: number): string {
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function OverlayObjects({ templateSettings, vehicleBbox, partInfo }: OverlayObjectsProps) {
-  const { overlayVisibility } = useViewerStore();
+  const { overlayVisibility, overlaysAllVisible } = useViewerStore();
   // Helper: key absent = visible by default
   const vis = (key: string) => overlayVisibility[key] !== false;
+
+  // Global overlay on/off switch
+  if (!overlaysAllVisible) return null;
 
   if (!templateSettings || !vehicleBbox) return null;
 

@@ -39,6 +39,7 @@ function ControlPanel({
   const {
     selectedAssemblyId, setSelectedAssemblyId,
     selectedTemplateId, setSelectedTemplateId,
+    overlaysAllVisible, setOverlaysAllVisible,
   } = useViewerStore();
   const queryClient = useQueryClient();
 
@@ -155,7 +156,17 @@ function ControlPanel({
         Create Case
       </Button>
 
-      <Divider label="Overlays" labelPosition="left" />
+      <Group gap={6} align="center" my={2}>
+        <Text size="xs" c="dimmed" fw={600}>Overlays</Text>
+        <Divider style={{ flex: 1 }} />
+        <Tooltip label={overlaysAllVisible ? "Hide all overlays" : "Show all overlays"} position="left">
+          <Switch
+            size="xs"
+            checked={overlaysAllVisible}
+            onChange={(e) => setOverlaysAllVisible(e.currentTarget.checked)}
+          />
+        </Tooltip>
+      </Group>
       <OverlayPanel templateSettings={templateSettings} />
 
       <AssemblyGeometriesDrawer
