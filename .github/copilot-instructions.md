@@ -1786,7 +1786,7 @@ searchMode: "include" | "exclude"
 selectedAssemblyId: string | null
 selectedTemplateId: string | null
 ratio: 0.05                          // decimation ratio used for GLB fetch
-cameraProjection: "perspective" | "orthographic"  // toggled by floating toolbar
+cameraProjection: "perspective" | "orthographic"  // toggled by floating toolbar; **default: "orthographic"**
 cameraPreset: string | null          // trigger: "top" | "front" | "side" | "iso" | "rear" | null
 viewerTheme: "dark" | "light"
 flatShading: boolean                 // default false; MeshStandardMaterial.flatShading
@@ -1844,11 +1844,11 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
   - **`[scene, flatShading]`** (dedicated): re-creates `new THREE.MeshStandardMaterial({ flatShading })` for every Mesh, copying `color/opacity/transparent/emissive` from the old material and calling `.dispose()` on it. This bypasses WebGL shader-program cache (which ignores `mat.flatShading = x; mat.needsUpdate = true` on already-compiled materials).
   - **`[scene, partStates, selectedPartName]`** (partStates): applies `visible/color/opacity/selectedPartName` highlight. Does NOT touch `flatShading` (delegated to the dedicated effect above).
   - `showEdges` adds/removes `THREE.LineSegments(EdgesGeometry)` children tagged `userData.isEdgeLine`; `selectedPartName === obj.name` → yellow highlight (`#ffff00`, emissive `#444400`)
-- `<CameraFitter>`: `Box3.setFromObject(scene)` → positions camera to fit all geometry on first load; initial position uses `maxDim × 1.0` multiplier (tighter zoom)
+- `<CameraFitter>`: `Box3.setFromObject(scene)` → positions camera to fit all geometry on first load; initial position uses `maxDim × 1.0` multiplier (tighter zoom); sets `near/far` based on camera type: PerspectiveCamera → `[maxDim×0.001, maxDim×100]`; OrthographicCamera → `[-maxDim×500, maxDim×500]`
 - `<AxesGLBModel>`: loads axes GLB → renders as-is; shown when `axesGlbUrl && overlays.wheelAxes`
 - `<LandmarksGLBModel>`: loads landmarks GLB → renders as-is; shown when `landmarksGlbUrl && overlays.landmarks`
 - `<CameraPresetController>`: watches `cameraPreset` store value → repositions camera using `Box3` + preset offset; clears preset after apply
-- `<CameraTypeController>`: watches `cameraProjection` → swaps `PerspectiveCamera` ↔ `OrthographicCamera` in R3F using `useThree().set()`; copies position/quaternion on switch
+- `<CameraTypeController>`: watches `cameraProjection` → swaps `PerspectiveCamera` ↔ `OrthographicCamera` in R3F using `useThree().set()`; copies `position/quaternion/up` on switch; **dist uses `camera.position.distanceTo(controls.target)`** (not `position.length()`) to compute correct ortho frustum size; ortho `near/far = [-farRange, +farRange]` where `farRange = max(halfH, dist) × 500` — negative near prevents clipping when zooming; **re-applies `controls.target` after switch** to avoid rotation snap; `prevProjection` starts as `"perspective"` so initial store default `"orthographic"` triggers immediate switch on first mount
 - `<PointerEventHandler>`: attaches `click` (Raycaster → `setSelectedPartName`), `dblclick` (Raycaster → `controls.target.copy(hitPoint)` to change orbit pivot), and `contextmenu` (`e.preventDefault()` only — no popup menu) on `gl.domElement`
 - `<FitToPartController>`: watches `fitToTarget` store value → moves camera toward target **preserving current viewing angle** (direction = `normalize(camera.pos − oldTarget)`); clears after apply
 - `<OriginAxes vehicleBbox?>`: shown when `showOriginAxes=true`; renders `<axesHelper>` (red=X, green=Y, blue=Z) + semi-transparent XY plane (`z=0`, `color=#aaaaaa, opacity=0.08, DoubleSide`); axis length = `maxDim × 0.15` (fallback 1 m); plane size = `maxFootprint × 2` (fallback 10 m)

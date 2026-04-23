@@ -115,8 +115,14 @@ function CameraFitter({ blobUrl }: { blobUrl: string }) {
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
-      (camera as THREE.PerspectiveCamera).near = maxDim * 0.001;
-      (camera as THREE.PerspectiveCamera).far = maxDim * 100;
+      // Set near/far based on camera type
+      if (camera instanceof THREE.PerspectiveCamera) {
+        camera.near = maxDim * 0.001;
+        camera.far  = maxDim * 100;
+      } else if (camera instanceof THREE.OrthographicCamera) {
+        camera.near = -maxDim * 500;
+        camera.far  =  maxDim * 500;
+      }
       // Z-up: position from +X, -Y, +Z relative to center
       camera.up.set(0, 0, 1);
       camera.position.set(
@@ -129,7 +135,7 @@ function CameraFitter({ blobUrl }: { blobUrl: string }) {
       (controls as any)?.target?.copy(center);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (controls as any)?.update?.();
-      (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+      camera.updateProjectionMatrix();
       fitted.current = true;
     }, 300);
     return () => clearTimeout(timer);
@@ -157,43 +163,63 @@ function LandmarksGLBModel({ blobUrl }: { blobUrl: string }) {
 
 function CameraTypeController() {
   const { cameraProjection } = useViewerStore();
-  const { camera, set, size } = useThree();
+  const { camera, set, size, controls } = useThree();
   const perspRef = useRef<THREE.PerspectiveCamera | null>(null);
   const orthoRef = useRef<THREE.OrthographicCamera | null>(null);
+  // Initial prevProjection matches the Canvas default (PerspectiveCamera),
+  // so the first render with cameraProjection="orthographic" immediately triggers a switch.
   const prevProjection = useRef<string>("perspective");
 
   useEffect(() => {
     if (cameraProjection === prevProjection.current) return;
     const aspect = size.width / size.height;
+    // Preserve current controls target across the switch to avoid rotation snap
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const currentTarget = ((controls as any)?.target as THREE.Vector3 | undefined)
+      ?.clone() ?? new THREE.Vector3();
 
     if (cameraProjection === "orthographic") {
       if (!perspRef.current) perspRef.current = camera as THREE.PerspectiveCamera;
 
-      const dist = camera.position.length();
+      // Use distance from camera to orbit target (not to world origin)
+      const dist = camera.position.distanceTo(currentTarget);
       const fovRad = ((perspRef.current.fov ?? 45) * Math.PI) / 180;
       const halfH = Math.tan(fovRad / 2) * dist;
       const halfW = halfH * aspect;
+      // Use a large near/far range — negative near avoids front-clipping when zooming
+      const farRange = Math.max(halfH, dist) * 500;
 
       if (!orthoRef.current) {
-        orthoRef.current = new THREE.OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.001, 10000);
+        orthoRef.current = new THREE.OrthographicCamera(
+          -halfW, halfW, halfH, -halfH, -farRange, farRange
+        );
       } else {
-        orthoRef.current.left = -halfW;
-        orthoRef.current.right = halfW;
-        orthoRef.current.top = halfH;
+        orthoRef.current.left   = -halfW;
+        orthoRef.current.right  =  halfW;
+        orthoRef.current.top    =  halfH;
         orthoRef.current.bottom = -halfH;
+        orthoRef.current.near   = -farRange;
+        orthoRef.current.far    =  farRange;
       }
+      orthoRef.current.up.copy(camera.up);
       orthoRef.current.position.copy(camera.position);
       orthoRef.current.quaternion.copy(camera.quaternion);
       orthoRef.current.updateProjectionMatrix();
       set({ camera: orthoRef.current });
     } else {
       if (perspRef.current) {
+        perspRef.current.up.copy(camera.up);
         perspRef.current.position.copy(camera.position);
         perspRef.current.quaternion.copy(camera.quaternion);
         perspRef.current.updateProjectionMatrix();
         set({ camera: perspRef.current });
       }
     }
+    // Re-apply target so OrbitControls doesn't snap/rotate on the next frame
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (controls as any)?.target?.copy(currentTarget);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (controls as any)?.update?.();
     prevProjection.current = cameraProjection;
   }, [cameraProjection]); // eslint-disable-line react-hooks/exhaustive-deps
 
