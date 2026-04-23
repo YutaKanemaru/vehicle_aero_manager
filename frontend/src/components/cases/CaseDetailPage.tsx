@@ -8,7 +8,7 @@ import {
   Text,
   Title,
   Badge,
-  Tabs,
+  Accordion,
   ActionIcon,
   Tooltip,
   Button,
@@ -17,7 +17,6 @@ import {
   Select,
   Table,
   Loader,
-  Anchor,
   Checkbox,
   Paper,
   Divider,
@@ -40,7 +39,7 @@ import {
   IconAlertCircle,
   IconInfoCircle,
 } from "@tabler/icons-react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useState, useEffect } from "react";
@@ -84,6 +83,7 @@ function InformationTab({ caseData }: { caseData: CaseResponse }) {
   const { data: templates = [] } = useQuery({ queryKey: ["templates"], queryFn: templatesApi.list });
   const { data: assemblies = [] } = useQuery({ queryKey: ["assemblies"], queryFn: assembliesApi.list });
   const { data: maps = [] } = useQuery({ queryKey: ["maps"], queryFn: mapsApi.list });
+  const { data: allCases = [] } = useQuery({ queryKey: ["cases"], queryFn: casesApi.list });
 
   const form = useForm({
     initialValues: {
@@ -92,6 +92,7 @@ function InformationTab({ caseData }: { caseData: CaseResponse }) {
       template_id: caseData.template_id,
       assembly_id: caseData.assembly_id,
       map_id: caseData.map_id ?? null as string | null,
+      parent_case_id: caseData.parent_case_id ?? null as string | null,
     },
   });
 
@@ -102,6 +103,7 @@ function InformationTab({ caseData }: { caseData: CaseResponse }) {
       template_id: caseData.template_id,
       assembly_id: caseData.assembly_id,
       map_id: caseData.map_id ?? null,
+      parent_case_id: caseData.parent_case_id ?? null,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseData.id]);
@@ -114,6 +116,7 @@ function InformationTab({ caseData }: { caseData: CaseResponse }) {
         template_id: v.template_id,
         assembly_id: v.assembly_id,
         map_id: v.map_id,
+        parent_case_id: v.parent_case_id,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["case", caseData.id] });
@@ -188,24 +191,16 @@ function InformationTab({ caseData }: { caseData: CaseResponse }) {
         data={maps.map((m) => ({ value: m.id, label: m.name }))}
         {...form.getInputProps("map_id")}
       />
-
-      {/* Parent case */}
-      {caseData.parent_case_id && (
-        <>
-          <Divider label="Origin" labelPosition="left" />
-          <Group gap="xs">
-            <Text size="sm" c="dimmed" w={120}>Created from</Text>
-            <Anchor component={Link} to={`/cases/${caseData.parent_case_id}`} size="sm">
-              <Group gap={6}>
-                <Badge variant="outline" color="orange" size="sm">
-                  {caseData.parent_case_number || caseData.parent_case_id.slice(0, 8)}
-                </Badge>
-                <Text size="sm">{caseData.parent_case_name}</Text>
-              </Group>
-            </Anchor>
-          </Group>
-        </>
-      )}
+      <Select
+        label="Parent Case"
+        description="Branch origin — set automatically when using Create Child Case"
+        clearable
+        disabled={!editing}
+        data={allCases
+          .filter((c) => c.id !== caseData.id)
+          .map((c) => ({ value: c.id, label: `${c.case_number ? c.case_number + " — " : ""}${c.name}` }))}
+        {...form.getInputProps("parent_case_id")}
+      />
     </Stack>
   );
 }
@@ -245,6 +240,7 @@ function RunsTab({ caseData }: { caseData: CaseResponse }) {
   const createRun = useMutation({
     mutationFn: () =>
       runsApi.create(caseData.id, {
+        name: "",
         condition_id: selectedConditionId!,
         comment,
       }),
@@ -701,38 +697,42 @@ export function CaseDetailPage() {
         {caseData.map_id && <Badge variant="dot" color="cyan" size="sm">{caseData.map_name}</Badge>}
       </Group>
 
-      {/* Tabs */}
-      <Tabs defaultValue="runs" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <Tabs.List px="md">
-          <Tabs.Tab value="information">Information</Tabs.Tab>
-          <Tabs.Tab value="runs">
-            Runs
-          </Tabs.Tab>
-          <Tabs.Tab value="compare">Compare</Tabs.Tab>
-          <Tabs.Tab value="viewer">Viewer</Tabs.Tab>
-        </Tabs.List>
+      {/* Single-page scroll layout */}
+      <ScrollArea style={{ flex: 1 }}>
+        <Stack gap={0} px="md">
+          {/* Information */}
+          <InformationTab caseData={caseData} />
 
-        <ScrollArea style={{ flex: 1 }}>
-          <Tabs.Panel value="information" px="md">
-            <InformationTab caseData={caseData} />
-          </Tabs.Panel>
+          <Divider my="lg" />
 
-          <Tabs.Panel value="runs" px="md">
-            <RunsTab caseData={caseData} />
-          </Tabs.Panel>
+          {/* Runs */}
+          <RunsTab caseData={caseData} />
 
-          <Tabs.Panel value="compare" px="md">
-            <CompareTab caseData={caseData} />
-          </Tabs.Panel>
+          {/* Compare & Viewer — collapsible accordions */}
+          <Accordion mt="lg" variant="separated">
+            <Accordion.Item value="compare">
+              <Accordion.Control>
+                <Text fw={600} size="sm">Compare with another case</Text>
+              </Accordion.Control>
+              <Accordion.Panel>
+                <CompareTab caseData={caseData} />
+              </Accordion.Panel>
+            </Accordion.Item>
 
-          <Tabs.Panel value="viewer" px="md" pt="md">
-            <Group gap="xs">
-              <ThemeIcon color="gray" variant="light" size="sm"><IconInfoCircle size={12} /></ThemeIcon>
-              <Text c="dimmed" size="sm">3D Viewer — coming soon (will reuse Template Builder canvas).</Text>
-            </Group>
-          </Tabs.Panel>
-        </ScrollArea>
-      </Tabs>
+            <Accordion.Item value="viewer">
+              <Accordion.Control>
+                <Text fw={600} size="sm">3D Viewer</Text>
+              </Accordion.Control>
+              <Accordion.Panel>
+                <Group gap="xs" py="sm">
+                  <ThemeIcon color="gray" variant="light" size="sm"><IconInfoCircle size={12} /></ThemeIcon>
+                  <Text c="dimmed" size="sm">3D Viewer — coming soon (will reuse Template Builder canvas).</Text>
+                </Group>
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
+        </Stack>
+      </ScrollArea>
     </Stack>
   );
 }

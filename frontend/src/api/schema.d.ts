@@ -1469,6 +1469,8 @@ export interface components {
             map_id?: string | null;
             /** Folder Id */
             folder_id?: string | null;
+            /** Parent Case Id */
+            parent_case_id?: string | null;
         };
         /**
          * ComputeOption

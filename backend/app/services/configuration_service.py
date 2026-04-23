@@ -314,6 +314,10 @@ def update_case(db: Session, case_id: str, data: CaseUpdate, current_user: User)
         case.map_id = data.map_id
     if "folder_id" in data.model_fields_set:
         case.folder_id = data.folder_id
+    if "parent_case_id" in data.model_fields_set:
+        if data.parent_case_id and not db.get(Case, data.parent_case_id):
+            raise HTTPException(status_code=404, detail="Parent case not found")
+        case.parent_case_id = data.parent_case_id
     db.commit()
     db.refresh(case)
     return case

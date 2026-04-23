@@ -24,6 +24,7 @@ export type RunCreate = components["schemas"]["RunCreate"];
 export type RunUpdate = components["schemas"]["RunUpdate"];
 
 export type DiffResult = components["schemas"]["DiffResult"];
+export type DiffField = components["schemas"]["DiffField"];
 export type CaseCompareResult = components["schemas"]["CaseCompareResult"];
 export type PartsDiffResult = components["schemas"]["PartsDiffResult"];
 

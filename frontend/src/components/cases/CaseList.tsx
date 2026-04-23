@@ -21,7 +21,7 @@ import {
   IconTrash,
   IconRefresh,
   IconSettings,
-  IconCopy,
+  IconGitBranch,
   IconArrowsLeftRight,
   IconFolderPlus,
   IconFolder,
@@ -114,6 +114,7 @@ function CaseTable({
       <Table.Thead>
         <Table.Tr>
           <Table.Th style={{ width: 70 }}>#</Table.Th>
+          <Table.Th style={{ width: 100 }}>Parent</Table.Th>
           <SortTh label="Name" sortKey="name" activeKey={sort.key} dir={sort.dir} onToggle={toggle} />
           <Table.Th>Template</Table.Th>
           <Table.Th>Assembly</Table.Th>
@@ -137,6 +138,21 @@ function CaseTable({
           >
             <Table.Td>
               <Badge variant="outline" color="gray" size="sm">{c.case_number || "—"}</Badge>
+            </Table.Td>
+            <Table.Td onClick={(e) => e.stopPropagation()}>
+              {c.parent_case_number ? (
+                <Badge
+                  variant="dot"
+                  color="orange"
+                  size="sm"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => onRowClick({ id: c.parent_case_id! } as CaseResponse)}
+                >
+                  {c.parent_case_number}
+                </Badge>
+              ) : (
+                <Text size="xs" c="dimmed">—</Text>
+              )}
             </Table.Td>
             <Table.Td>
               <Text fw={500} size="sm">{c.name}</Text>
@@ -174,9 +190,9 @@ function CaseTable({
                     <IconSettings size={14} />
                   </ActionIcon>
                 </Tooltip>
-                <Tooltip label="Duplicate">
+                <Tooltip label="Create child case">
                   <ActionIcon size="sm" variant="subtle" color="orange" onClick={() => onDuplicate(c)}>
-                    <IconCopy size={14} />
+                    <IconGitBranch size={14} />
                   </ActionIcon>
                 </Tooltip>
                 <Popover withinPortal position="bottom-end">

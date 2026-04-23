@@ -219,6 +219,7 @@ class CaseUpdate(BaseModel):
     assembly_id: str | None = None
     map_id: str | None = None
     folder_id: str | None = None
+    parent_case_id: str | None = None  # set/clear parent case link
 
 
 class CaseDuplicateRequest(BaseModel):

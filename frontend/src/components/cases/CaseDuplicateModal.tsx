@@ -15,7 +15,7 @@ export function CaseDuplicateModal({ opened, onClose, sourceCase }: Props) {
 
   const form = useForm<CaseDuplicateRequest>({
     initialValues: {
-      name: `${sourceCase.name} (copy)`,
+      name: `${sourceCase.name} — child`,
       description: sourceCase.description ?? "",
     },
     validate: {
@@ -27,7 +27,7 @@ export function CaseDuplicateModal({ opened, onClose, sourceCase }: Props) {
     mutationFn: (data: CaseDuplicateRequest) => casesApi.duplicate(sourceCase.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
-      notifications.show({ message: "Case duplicated", color: "green" });
+      notifications.show({ message: "Child case created", color: "green" });
       form.reset();
       onClose();
     },
@@ -35,13 +35,13 @@ export function CaseDuplicateModal({ opened, onClose, sourceCase }: Props) {
   });
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Duplicate Case" size="sm">
+    <Modal opened={opened} onClose={onClose} title="Create Child Case" size="sm">
       <form onSubmit={form.onSubmit((v) => mutation.mutate(v))}>
         <Stack>
           <Text size="sm" c="dimmed">
-            Creates a new Case with the same Template, Assembly, and Condition Map as{" "}
+            Creates a child case branched from{" "}
             <Badge variant="outline" size="sm">{sourceCase.case_number || sourceCase.name}</Badge>.
-            Runs are not copied.
+            Inherits the same Template, Assembly, and Condition Map. Runs are not copied.
           </Text>
           <TextInput
             label="New Case Name"
@@ -57,7 +57,7 @@ export function CaseDuplicateModal({ opened, onClose, sourceCase }: Props) {
           />
           <Group justify="flex-end">
             <Button variant="subtle" onClick={onClose}>Cancel</Button>
-            <Button type="submit" loading={mutation.isPending}>Duplicate</Button>
+            <Button type="submit" loading={mutation.isPending}>Create</Button>
           </Group>
         </Stack>
       </form>
