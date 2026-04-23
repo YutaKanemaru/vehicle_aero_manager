@@ -123,6 +123,7 @@ function CameraFitter() {
 
   useEffect(() => {
     if (!glbLoaded || fitted.current) return;
+    threeScene.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(threeScene);
     if (box.isEmpty()) return;
     const center = box.getCenter(new THREE.Vector3());
@@ -302,21 +303,24 @@ function PointerEventHandler() {
 // ─── Camera preset controller — watches store and repositions camera ───────────
 
 function CameraPresetController() {
-  const { cameraPreset, setCameraPreset } = useViewerStore();
   const { camera, scene: threeScene, controls } = useThree();
 
-  useEffect(() => {
+  // useFrame — Zustand .getState() で毎フレーム礁読み￼ React render cycle に依存せず連打でも即応答
+  useFrame(() => {
+    const { cameraPreset, setCameraPreset } = useViewerStore.getState();
     if (!cameraPreset) return;
+
+    threeScene.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(threeScene);
     if (box.isEmpty()) { setCameraPreset(null); return; }
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const dist = Math.max(size.x, size.y, size.z) * 2.0;
+    // dist multiplier を CameraFitter と揃時 (1.2) に統一 — 5m車両で約 8m 離れ
+    const dist = Math.max(size.x, size.y, size.z) * 1.2;
 
     // Z-up: X=forward (downstream), Y=lateral, Z=up
-    // front = car nose (low X), rear = car back (high X), side = -Y (driver side)
     const presets: Record<string, THREE.Vector3> = {
-      iso:   new THREE.Vector3(center.x + dist, center.y - dist * 0.6, center.z + dist * 0.8),
+      iso:   new THREE.Vector3(center.x + dist, center.y - dist * 0.6, center.z + dist * 0.6),
       front: new THREE.Vector3(center.x - dist * 1.5, center.y, center.z),
       rear:  new THREE.Vector3(center.x + dist * 1.5, center.y, center.z),
       side:  new THREE.Vector3(center.x, center.y - dist * 1.5, center.z),
@@ -331,10 +335,10 @@ function CameraPresetController() {
       (controls as any)?.target?.copy(center);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (controls as any)?.update?.();
-      (camera as THREE.PerspectiveCamera).updateProjectionMatrix?.();
+      camera.updateProjectionMatrix();
     }
     setCameraPreset(null);
-  }, [cameraPreset]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
 
   return null;
 }
@@ -363,11 +367,13 @@ function OrbitCenterMarker() {
 // ─── Fit camera to a part (triggered via store) ───────────────────────────────
 
 function FitToPartController() {
-  const { fitToTarget, setFitToTarget } = useViewerStore();
-  const { camera, controls, invalidate } = useThree();
+  const { camera, controls } = useThree();
 
-  useEffect(() => {
+  // useFrame — Zustand .getState() で毎フレーム監視、連打でも即応答
+  useFrame(() => {
+    const { fitToTarget, setFitToTarget } = useViewerStore.getState();
     if (!fitToTarget) return;
+
     const center = new THREE.Vector3(...fitToTarget.center);
     const radius = fitToTarget.radius;
     camera.up.set(0, 0, 1);
@@ -384,9 +390,7 @@ function FitToPartController() {
         ?? new THREE.Vector3();
       const oldDist = camera.position.distanceTo(oldTarget);
       const dir = camera.position.clone().sub(oldTarget).normalize();
-      // Pre-position camera at same direction/distance from new center
       camera.position.copy(center.clone().addScaledVector(dir, oldDist));
-      // Adjust zoom so the part fills ~80% of viewport height
       const currentHalfH = (camera.top - camera.bottom) / 2 / Math.max(camera.zoom, 0.001);
       camera.zoom = (currentHalfH / radius) * 0.8;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -407,9 +411,8 @@ function FitToPartController() {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (controls as any)?.update?.();
-    invalidate();
     setFitToTarget(null);
-  }, [fitToTarget]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
 
   return null;
 }
