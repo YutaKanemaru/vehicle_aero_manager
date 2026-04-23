@@ -9,6 +9,19 @@ import { geometriesApi, type GeometryResponse } from "../../api/geometries";
 import { useViewerStore } from "../../stores/viewerStore";
 import { OverlayObjects, type VehicleBbox } from "./OverlayObjects";
 
+// ─── Helper: build Box3 from GLB meshes only (excludes Grid, axes, gizmos) ───
+// Grid args={[200,200]} would dominate setFromObject(scene) for m-unit models.
+// Tag every GLB mesh with userData.isGLBMesh=true, then use expandByObject only on those.
+function buildGLBBox(scene: THREE.Object3D): THREE.Box3 {
+  const box = new THREE.Box3();
+  scene.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh && obj.userData.isGLBMesh) {
+      box.expandByObject(obj);
+    }
+  });
+  return box;
+}
+
 // ─── GLB model inner component (rendered inside Suspense) ────────────────────
 
 function GLBModel({
@@ -30,6 +43,8 @@ function GLBModel({
   useEffect(() => {
     scene.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh) || obj.userData?.isEdgeLine) return;
+      // Tag as GLB mesh so buildGLBBox can identify it (excludes Grid/axes/gizmos)
+      obj.userData.isGLBMesh = true;
       const old = obj.material instanceof THREE.MeshStandardMaterial
         ? obj.material as THREE.MeshStandardMaterial
         : null;
@@ -124,7 +139,7 @@ function CameraFitter() {
   useEffect(() => {
     if (!glbLoaded || fitted.current) return;
     threeScene.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(threeScene);
+    const box = buildGLBBox(threeScene);
     if (box.isEmpty()) return;
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
@@ -311,7 +326,7 @@ function CameraPresetController() {
     if (!cameraPreset) return;
 
     threeScene.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(threeScene);
+    const box = buildGLBBox(threeScene);
     if (box.isEmpty()) { setCameraPreset(null); return; }
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
