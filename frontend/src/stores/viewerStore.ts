@@ -90,6 +90,10 @@ interface ViewerStore {
   selectedPartName: string | null;
   setSelectedPartName: (name: string | null) => void;
 
+  // GLB load completion flag — true after first GLBModel confirms Mesh presence
+  glbLoaded: boolean;
+  setGlbLoaded: (v: boolean) => void;
+
   // Fit camera to part
   fitToTarget: { center: [number, number, number]; radius: number } | null;
   setFitToTarget: (t: { center: [number, number, number]; radius: number } | null) => void;
@@ -107,7 +111,10 @@ interface ViewerStore {
 
 export const useViewerStore = create<ViewerStore>((set, get) => ({
   selectedAssemblyId: null,
-  setSelectedAssemblyId: (id) => set({ selectedAssemblyId: id }),
+  setSelectedAssemblyId: (id) => set({ selectedAssemblyId: id, glbLoaded: false }),
+
+  glbLoaded: false,
+  setGlbLoaded: (v) => set({ glbLoaded: v }),
 
   selectedTemplateId: null,
   setSelectedTemplateId: (id) => set({ selectedTemplateId: id }),

@@ -1783,9 +1783,12 @@ resetParts: () => void            // clears partStates entirely (all parts rever
 showAllParts: () => void          // sets visible:true for all entries in partStates, preserves color/opacity
 searchQuery: string
 searchMode: "include" | "exclude"
-selectedAssemblyId: string | null
+selectedAssemblyId: string | null  // setSelectedAssemblyId also resets glbLoaded=false
 selectedTemplateId: string | null
 ratio: 0.05                          // decimation ratio used for GLB fetch
+// GLB load completion flag
+glbLoaded: boolean                   // false on Assembly change; set true by GLBModel after first Mesh detected; reset to false by CameraFitter after fitting
+setGlbLoaded: (v: boolean) => void
 cameraProjection: "perspective" | "orthographic"  // toggled by floating toolbar; **default: "perspective"**
 cameraPreset: string | null          // trigger: "top" | "front" | "side" | "iso" | "rear" | null
 viewerTheme: "dark" | "light"
@@ -1840,11 +1843,15 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
 **`src/components/viewer/SceneCanvas.tsx`**
 - Outer `<div>` wrapper containing `<Canvas>`; **no** ContextMenuPanel (removed)
 - R3F `<Canvas>` + `<OrbitControls makeDefault>` + lights + `<Grid>`
-- `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → two separate `useEffect` hooks:
+- `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → three separate `useEffect` hooks:
   - **`[scene, flatShading]`** (dedicated): re-creates `new THREE.MeshStandardMaterial({ flatShading })` for every Mesh, copying `color/opacity/transparent/emissive` from the old material and calling `.dispose()` on it. This bypasses WebGL shader-program cache (which ignores `mat.flatShading = x; mat.needsUpdate = true` on already-compiled materials).
   - **`[scene, partStates, selectedPartName]`** (partStates): applies `visible/color/opacity/selectedPartName` highlight. Does NOT touch `flatShading` (delegated to the dedicated effect above).
+  - **`[scene]`** (glbLoaded detection): `scene.traverse` checks `isMesh`; if any Mesh found → `setGlbLoaded(true)`. This replaces the old `setTimeout(300)` approach — CameraFitter now fires only after Mesh presence is confirmed.
   - `showEdges` adds/removes `THREE.LineSegments(EdgesGeometry)` children tagged `userData.isEdgeLine`; `selectedPartName === obj.name` → yellow highlight (`#ffff00`, emissive `#444400`)
-- `<CameraFitter>`: `Box3.setFromObject(scene)` → positions camera to fit all geometry on first load; initial position uses `maxDim × 1.0` multiplier (tighter zoom); sets `near/far` based on camera type: PerspectiveCamera → `[maxDim×0.001, maxDim×100]`; OrthographicCamera → `[-maxDim×500, maxDim×500]`
+- `<CameraFitter>`: no props; reads `glbLoaded` from store; two `useEffect` hooks:
+  - **`[glbLoaded=false]`**: resets `fitted.current = false` so next Assembly triggers a new fit.
+  - **`[glbLoaded=true]`**: runs camera fit — `Box3.setFromObject(scene)` → `maxDim = max(x,y,z)`; iso position `(center + maxDim×1.2, center − maxDim×1.2, center + maxDim×0.6)` (≈8m standoff for 5m vehicle); sets `near/far`; calls `setGlbLoaded(false)` after fit to prepare for next Assembly change. **No `setTimeout`.**
+- **Loading overlay**: rendered outside `<Canvas>` inside the wrapper `<div>`; shown when `!glbLoaded && blobEntries.length > 0`; semi-transparent black background + Mantine `<Loader>` + "Loading 3D model…"; `pointerEvents: none` so OrbitControls still work if overlay lingers
 - `<AxesGLBModel>`: loads axes GLB → renders as-is; shown when `axesGlbUrl && overlays.wheelAxes`
 - `<LandmarksGLBModel>`: loads landmarks GLB → renders as-is; shown when `landmarksGlbUrl && overlays.landmarks`
 - `<CameraPresetController>`: watches `cameraPreset` store value → repositions camera using `Box3` + preset offset; clears preset after apply

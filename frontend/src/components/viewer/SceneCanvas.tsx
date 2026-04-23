@@ -3,7 +3,7 @@ import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { OrbitControls, Grid, GizmoHelper, GizmoViewport } from "@react-three/drei";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
-import { Center, Text } from "@mantine/core";
+import { Center, Text, Stack } from "@mantine/core";
 import { Loader } from "@mantine/core";
 import { geometriesApi, type GeometryResponse } from "../../api/geometries";
 import { useViewerStore } from "../../stores/viewerStore";
@@ -19,7 +19,7 @@ function GLBModel({
   parts: string[];
 }) {
   const { scene } = useGLTF(blobUrl);
-  const { partStates, initParts, flatShading, showEdges, selectedPartName } = useViewerStore();
+  const { partStates, initParts, flatShading, showEdges, selectedPartName, setGlbLoaded } = useViewerStore();
 
   // パーツ名でstoreを初期化（1回のみ）
   useEffect(() => {
@@ -98,48 +98,61 @@ function GLBModel({
     });
   }, [scene, showEdges]);
 
+  // GLB ロード完了を検知 — Mesh が1つでも存在したら glbLoaded=true をストアに通知
+  useEffect(() => {
+    let hasMesh = false;
+    scene.traverse((obj) => { if ((obj as THREE.Mesh).isMesh) hasMesh = true; });
+    if (hasMesh) setGlbLoaded(true);
+  }, [scene]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return <primitive object={scene} />;
 }
 
 // カメラをメッシュ全体にフィット ──────────────────────────────────────────────
+// glbLoaded が true になった直後に1回だけ実行される（setTimeout不要）
 
-function CameraFitter({ blobUrl }: { blobUrl: string }) {
+function CameraFitter() {
   const { camera, scene: threeScene, controls } = useThree();
+  const { glbLoaded, setGlbLoaded } = useViewerStore();
   const fitted = useRef(false);
 
+  // Assembly が切り替わったとき（glbLoaded が false に戻ったとき）fitted フラグをリセット
   useEffect(() => {
-    if (fitted.current) return;
-    const timer = setTimeout(() => {
-      const box = new THREE.Box3().setFromObject(threeScene);
-      if (box.isEmpty()) return;
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      // Set near/far based on camera type
-      if (camera instanceof THREE.PerspectiveCamera) {
-        camera.near = maxDim * 0.001;
-        camera.far  = maxDim * 100;
-      } else if (camera instanceof THREE.OrthographicCamera) {
-        camera.near = -maxDim * 500;
-        camera.far  =  maxDim * 500;
-      }
-      // Z-up: position from +X, -Y, +Z relative to center
-      camera.up.set(0, 0, 1);
-      camera.position.set(
-        center.x + maxDim * 1.0,
-        center.y - maxDim * 1.0,
-        center.z + maxDim * 0.5,
-      );
-      camera.lookAt(center);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (controls as any)?.target?.copy(center);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (controls as any)?.update?.();
-      camera.updateProjectionMatrix();
-      fitted.current = true;
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [blobUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!glbLoaded) fitted.current = false;
+  }, [glbLoaded]);
+
+  useEffect(() => {
+    if (!glbLoaded || fitted.current) return;
+    const box = new THREE.Box3().setFromObject(threeScene);
+    if (box.isEmpty()) return;
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    // Set near/far based on camera type
+    if (camera instanceof THREE.PerspectiveCamera) {
+      camera.near = maxDim * 0.001;
+      camera.far  = maxDim * 100;
+    } else if (camera instanceof THREE.OrthographicCamera) {
+      camera.near = -maxDim * 500;
+      camera.far  =  maxDim * 500;
+    }
+    // Z-up: iso view from +X, -Y, +Z  (multiplier 1.2 ≈ 8m standoff for 5m vehicle)
+    camera.up.set(0, 0, 1);
+    camera.position.set(
+      center.x + maxDim * 1.2,
+      center.y - maxDim * 1.2,
+      center.z + maxDim * 0.6,
+    );
+    camera.lookAt(center);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (controls as any)?.target?.copy(center);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (controls as any)?.update?.();
+    camera.updateProjectionMatrix();
+    fitted.current = true;
+    // glbLoaded を false に戻して次の Assembly 切り替えに備える
+    setGlbLoaded(false);
+  }, [glbLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }
@@ -463,7 +476,7 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Must be called unconditionally before any early returns
-  const { axesGlbUrl, landmarksGlbUrl, overlays, viewerTheme, showOriginAxes } = useViewerStore();
+  const { axesGlbUrl, landmarksGlbUrl, overlays, viewerTheme, showOriginAxes, glbLoaded } = useViewerStore();
 
   const readyGeometries = geometries.filter((g) => g.status === "ready");
 
@@ -561,7 +574,7 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, 
           {landmarksGlbUrl && overlays.landmarks && (
             <LandmarksGLBModel blobUrl={landmarksGlbUrl} />
           )}
-          <CameraFitter blobUrl={blobEntries[0].url} />
+          <CameraFitter />
         </Suspense>
 
         <CameraPresetController />
@@ -593,7 +606,7 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, 
           rotation={[-Math.PI / 2, 0, 0]}
         />
 
-        <OrbitControls makeDefault />
+        <OrbitControls makeDefault enableDamping={false} />
 
         <GizmoHelper alignment="bottom-left" margin={[60, 60]}>
           <GizmoViewport
@@ -602,6 +615,23 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, 
           />
         </GizmoHelper>
       </Canvas>
+
+      {/* Loading overlay — visible while GLB is fetching / parsing */}
+      {!glbLoaded && blobEntries.length > 0 && (
+        <Center
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            pointerEvents: "none",
+          }}
+        >
+          <Stack align="center" gap="xs">
+            <Loader color="white" size="md" />
+            <Text c="white" size="sm">Loading 3D model…</Text>
+          </Stack>
+        </Center>
+      )}
     </div>
   );
 }
