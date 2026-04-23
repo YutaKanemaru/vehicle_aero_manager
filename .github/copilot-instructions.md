@@ -1850,7 +1850,7 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
   - `showEdges` adds/removes `THREE.LineSegments(EdgesGeometry)` children tagged `userData.isEdgeLine`; `selectedPartName === obj.name` → yellow highlight (`#ffff00`, emissive `#444400`)
 - `<CameraFitter>`: no props; reads `glbLoaded` from store; two `useEffect` hooks:
   - **`[glbLoaded=false]`**: resets `fitted.current = false` so next Assembly triggers a new fit.
-  - **`[glbLoaded=true]`**: runs camera fit — `Box3.setFromObject(scene)` → `maxDim = max(x,y,z)`; iso position `(center + maxDim×1.2, center − maxDim×1.2, center + maxDim×0.6)` (≈8m standoff for 5m vehicle); sets `near/far`; calls `setGlbLoaded(false)` after fit to prepare for next Assembly change. **No `setTimeout`.**
+  - **`[glbLoaded=true]`**: runs camera fit — `Box3.setFromObject(scene)` → `maxDim = max(x,y,z)`; iso position `(center + maxDim×1.2, center − maxDim×1.2, center + maxDim×0.6)` (≈8m standoff for 5m vehicle); sets `near/far`; sets `fitted.current = true`. **No `setTimeout`. Does NOT call `setGlbLoaded(false)` — Loading overlay stays hidden after fit.**
 - **Loading overlay**: rendered outside `<Canvas>` inside the wrapper `<div>`; shown when `!glbLoaded && blobEntries.length > 0`; semi-transparent black background + Mantine `<Loader>` + "Loading 3D model…"; `pointerEvents: none` so OrbitControls still work if overlay lingers
 - `<AxesGLBModel>`: loads axes GLB → renders as-is; shown when `axesGlbUrl && overlays.wheelAxes`
 - `<LandmarksGLBModel>`: loads landmarks GLB → renders as-is; shown when `landmarksGlbUrl && overlays.landmarks`

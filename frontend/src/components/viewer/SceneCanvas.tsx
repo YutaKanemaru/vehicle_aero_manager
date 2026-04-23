@@ -113,7 +113,7 @@ function GLBModel({
 
 function CameraFitter() {
   const { camera, scene: threeScene, controls } = useThree();
-  const { glbLoaded, setGlbLoaded } = useViewerStore();
+  const { glbLoaded } = useViewerStore();
   const fitted = useRef(false);
 
   // Assembly が切り替わったとき（glbLoaded が false に戻ったとき）fitted フラグをリセット
@@ -150,8 +150,6 @@ function CameraFitter() {
     (controls as any)?.update?.();
     camera.updateProjectionMatrix();
     fitted.current = true;
-    // glbLoaded を false に戻して次の Assembly 切り替えに備える
-    setGlbLoaded(false);
   }, [glbLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
