@@ -1840,7 +1840,10 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
 **`src/components/viewer/SceneCanvas.tsx`**
 - Outer `<div>` wrapper containing `<Canvas>`; **no** ContextMenuPanel (removed)
 - R3F `<Canvas>` + `<OrbitControls makeDefault>` + lights + `<Grid>`
-- `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → `scene.traverse()` applies material conversion + flatShading to **all** meshes first (before `!state` early-return), then applies `partStates` (visible / color / opacity); `showEdges` adds/removes `THREE.LineSegments(EdgesGeometry)` children tagged `userData.isEdgeLine`; `selectedPartName === obj.name` → yellow highlight (`#ffff00`, emissive `#444400`)
+- `<GLBModel>`: loads GLB via `useGLTF(blobUrl)` → two separate `useEffect` hooks:
+  - **`[scene, flatShading]`** (dedicated): re-creates `new THREE.MeshStandardMaterial({ flatShading })` for every Mesh, copying `color/opacity/transparent/emissive` from the old material and calling `.dispose()` on it. This bypasses WebGL shader-program cache (which ignores `mat.flatShading = x; mat.needsUpdate = true` on already-compiled materials).
+  - **`[scene, partStates, selectedPartName]`** (partStates): applies `visible/color/opacity/selectedPartName` highlight. Does NOT touch `flatShading` (delegated to the dedicated effect above).
+  - `showEdges` adds/removes `THREE.LineSegments(EdgesGeometry)` children tagged `userData.isEdgeLine`; `selectedPartName === obj.name` → yellow highlight (`#ffff00`, emissive `#444400`)
 - `<CameraFitter>`: `Box3.setFromObject(scene)` → positions camera to fit all geometry on first load; initial position uses `maxDim × 1.0` multiplier (tighter zoom)
 - `<AxesGLBModel>`: loads axes GLB → renders as-is; shown when `axesGlbUrl && overlays.wheelAxes`
 - `<LandmarksGLBModel>`: loads landmarks GLB → renders as-is; shown when `landmarksGlbUrl && overlays.landmarks`
@@ -1872,7 +1875,7 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
 **`src/components/viewer/PartListPanel.tsx`**
 - Props: `parts: string[]`; `partInfo?: Record<string, unknown> | null` (merged `analysis_result.part_info` from all assembly geometries)
 - Full part list from `analysis_result.parts`, with count badge
-- Per-part row: **click name text** → `setSelectedPartName` toggle; row shows **yellow tint** + top+bottom border when `selectedPartName === name`; `IconFocusCentered` ActionIcon (visible when `partInfo[name]?.bbox` exists) → `setFitToTarget` to zoom to part bbox (preserves camera angle, calls `invalidate()`); `IconEyeCheck` ActionIcon per row → "Show only this part" (hides all other parts); eye toggle; compact `ColorInput` (w=52, no eyedropper); **opacity `Popover`** (`Button` showing `α XX%` → `Popover.Dropdown` with `Slider`); part name uses `size="sm"`
+- Per-part row: **click name text** → `setSelectedPartName` toggle; row shows **yellow tint** + top+bottom border when `selectedPartName === name`; `IconFocusCentered` ActionIcon (visible when `partInfo[name]?.bbox` exists) → `setFitToTarget` to zoom to part bbox (preserves camera angle, calls `invalidate()`); `IconEyeCheck` ActionIcon per row → "Show only this part" (hides all other parts); eye toggle; **color `ColorSwatch`** (22px square, click → `Popover` with `ColorPicker withPicker={false}`, 96 swatches = 12 hues × 8 lightness, `swatchesPerRow={12}`); **opacity `Popover`** (`Button` showing `α XX%` → `Popover.Dropdown` with `Slider`); part name uses `size="sm"`
 - Search bar + `SegmentedControl` (Include / Exclude) — filters visible list
 - Toolbar buttons: **Toggle all filtered** (eye/eye-off) · **Show Only** (`IconEyeCheck` — hide everything except filtered parts) · **Invert** (`IconArrowsExchange` — flip visibility of all parts) · **Show all** (`IconEye` → `parts.forEach(n => setPartState(n, { visible: true }))` — correctly handles parts never clicked, unlike `showAllParts()` which only acts on existing `partStates` entries)
 

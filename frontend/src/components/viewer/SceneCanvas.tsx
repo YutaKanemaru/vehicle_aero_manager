@@ -26,18 +26,35 @@ function GLBModel({
     if (parts.length > 0) initParts(parts);
   }, [parts.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // partStates + flatShading の変化を3Dシーンへ反映
+  // flatShading 専用 effect — ON/OFF のたびにマテリアルを再生成して WebGL シェーダーキャッシュをバイパス
+  useEffect(() => {
+    scene.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh) || obj.userData?.isEdgeLine) return;
+      const old = obj.material instanceof THREE.MeshStandardMaterial
+        ? obj.material as THREE.MeshStandardMaterial
+        : null;
+      const next = new THREE.MeshStandardMaterial({
+        flatShading,
+        color: old?.color ?? new THREE.Color("#88aabb"),
+        opacity: old?.opacity ?? 1.0,
+        transparent: old ? old.transparent : false,
+        emissive: old?.emissive ?? new THREE.Color(0, 0, 0),
+      });
+      old?.dispose();
+      obj.material = next;
+    });
+  }, [scene, flatShading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // partStates (色・不透明度・表示) + 選択ハイライトの変化を3Dシーンへ反映
   useEffect(() => {
     scene.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return;
       if (obj.userData?.isEdgeLine) return;
 
-      // Ensure MeshStandardMaterial for flatShading support — applies to ALL meshes
       if (!(obj.material instanceof THREE.MeshStandardMaterial)) {
-        obj.material = new THREE.MeshStandardMaterial();
+        obj.material = new THREE.MeshStandardMaterial({ flatShading });
       }
       const mat = obj.material as THREE.MeshStandardMaterial;
-      mat.flatShading = flatShading;
 
       const state = partStates[obj.name] ?? partStates[obj.parent?.name ?? ""];
       if (!state) {
@@ -60,7 +77,7 @@ function GLBModel({
       mat.transparent = state.opacity < 1.0;
       mat.needsUpdate = true;
     });
-  }, [scene, partStates, flatShading, selectedPartName]);
+  }, [scene, partStates, selectedPartName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Edge lines visibility
   useEffect(() => {

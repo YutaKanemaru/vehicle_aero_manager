@@ -5,7 +5,8 @@ import {
   ScrollArea,
   Group,
   ActionIcon,
-  ColorInput,
+  ColorPicker,
+  ColorSwatch,
   Slider,
   Text,
   Tooltip,
@@ -33,7 +34,18 @@ interface PartListPanelProps {
   parts: string[];
   partInfo?: Record<string, unknown> | null;
 }
-
+// 96-color swatch palette: 12 hues × 8 lightness levels
+const SWATCHES: string[] = (() => {
+  const hues = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
+  const lightness = [15, 25, 35, 45, 58, 68, 78, 88];
+  const colors: string[] = [];
+  for (const l of lightness) {
+    for (const h of hues) {
+      colors.push(`hsl(${h}, 75%, ${l}%)`);
+    }
+  }
+  return colors;
+})();
 // ─── Wildcard pattern matching (parity with backend _matches_pattern) ─────────
 // * present  → glob: Body_* = startsWith, *_Body = endsWith, *_Body_* = contains
 // * absent   → startsWith OR endsWith (case-insensitive)
@@ -220,14 +232,25 @@ export function PartListPanel({ parts, partInfo }: PartListPanelProps) {
                 </Group>
 
                 <Group gap={4} wrap="nowrap">
-                  <ColorInput
-                    size="xs"
-                    value={state.color}
-                    onChange={(c) => setPartState(name, { color: c })}
-                    withEyeDropper={false}
-                    style={{ width: 52 }}
-                    styles={{ input: { height: 22, minHeight: 22, fontSize: 11, width: 52 } }}
-                  />
+                  <Popover withArrow position="right-start" withinPortal width="auto">
+                    <Popover.Target>
+                      <ColorSwatch
+                        color={state.color}
+                        size={22}
+                        style={{ cursor: "pointer", flexShrink: 0, borderRadius: 4 }}
+                      />
+                    </Popover.Target>
+                    <Popover.Dropdown p={6}>
+                      <ColorPicker
+                        format="hex"
+                        value={state.color}
+                        onChange={(c) => setPartState(name, { color: c })}
+                        withPicker={false}
+                        swatches={SWATCHES}
+                        swatchesPerRow={12}
+                      />
+                    </Popover.Dropdown>
+                  </Popover>
                   <Popover withArrow position="bottom-start" width={150} withinPortal>
                     <Popover.Target>
                       <Button
