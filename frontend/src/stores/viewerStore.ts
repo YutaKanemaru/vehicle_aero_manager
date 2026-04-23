@@ -168,7 +168,7 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
   setOverlayVisibility: (key, value) =>
     set((s) => ({ overlayVisibility: { ...s.overlayVisibility, [key]: value } })),
 
-  cameraProjection: "orthographic",
+  cameraProjection: "perspective",
   setCameraProjection: (p) => set({ cameraProjection: p }),
   cameraPreset: null,
   setCameraPreset: (p) => set({ cameraPreset: p }),

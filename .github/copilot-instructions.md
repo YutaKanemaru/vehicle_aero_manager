@@ -1786,7 +1786,7 @@ searchMode: "include" | "exclude"
 selectedAssemblyId: string | null
 selectedTemplateId: string | null
 ratio: 0.05                          // decimation ratio used for GLB fetch
-cameraProjection: "perspective" | "orthographic"  // toggled by floating toolbar; **default: "orthographic"**
+cameraProjection: "perspective" | "orthographic"  // toggled by floating toolbar; **default: "perspective"**
 cameraPreset: string | null          // trigger: "top" | "front" | "side" | "iso" | "rear" | null
 viewerTheme: "dark" | "light"
 flatShading: boolean                 // default false; MeshStandardMaterial.flatShading
