@@ -263,11 +263,22 @@ function InformationTab({ caseData, runs }: { caseData: CaseResponse; runs: RunR
           {...form.getInputProps("assembly_id")}
         />
 
-        {/* Condition Map — always editable, triggers sync modal */}
+        {/* Condition Map — locked when generated runs exist */}
         <Select
-          label="Condition Map"
+          label={
+            <Group gap={4}>
+              <Text size="sm">Condition Map</Text>
+              {hasGenerated && editing && (
+                <Tooltip label="Locked — runs with generated data exist. Reset or delete them to change.">
+                  <ThemeIcon size="xs" color="orange" variant="transparent">
+                    <IconLock size={12} />
+                  </ThemeIcon>
+                </Tooltip>
+              )}
+            </Group>
+          }
           clearable
-          disabled={!editing}
+          disabled={!editing || hasGenerated}
           data={maps.map((m) => ({ value: m.id, label: m.name }))}
           value={form.values.map_id}
           onChange={handleMapChange}

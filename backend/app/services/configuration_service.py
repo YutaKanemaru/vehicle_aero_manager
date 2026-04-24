@@ -335,6 +335,14 @@ def update_case(db: Session, case_id: str, data: CaseUpdate, current_user: User)
             raise HTTPException(status_code=404, detail="ConditionMap not found")
         old_map_id = case.map_id
         if new_map_id != old_map_id:
+            # Lock: same rule as template/assembly — cannot change when generated runs exist
+            has_non_pending = any(r.status != "pending" for r in case.runs)
+            if has_non_pending:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot change condition map: generated runs exist. "
+                           "Reset or delete them first.",
+                )
             case.map_id = new_map_id
             if new_map_id:
                 # Sync runs to match new map's conditions

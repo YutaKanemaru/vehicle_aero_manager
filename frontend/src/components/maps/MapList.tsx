@@ -404,6 +404,9 @@ export function MapList() {
   const [newFolderOpened, { open: openNewFolder, close: closeNewFolder }] = useDisclosure(false);
   const [selectedMap, setSelectedMap] = useState<ConditionMapResponse | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [metaEditing, setMetaEditing] = useState(false);
+  const [metaName, setMetaName] = useState("");
+  const [metaDesc, setMetaDesc] = useState("");
 
   const { data: maps = [], isLoading, refetch } = useQuery({
     queryKey: ["maps"],
@@ -442,8 +445,23 @@ export function MapList() {
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
 
+  const updateMetaMutation = useMutation({
+    mutationFn: ({ id, name, description }: { id: string; name: string; description: string }) =>
+      mapsApi.update(id, { name: name.trim(), description: description.trim() || undefined }),
+    onSuccess: (updated) => {
+      setSelectedMap(updated);
+      setMetaEditing(false);
+      queryClient.invalidateQueries({ queryKey: ["maps"] });
+      notifications.show({ message: "Map updated", color: "green" });
+    },
+    onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
+  });
+
   function openDrawer(m: ConditionMapResponse) {
     setSelectedMap(m);
+    setMetaEditing(false);
+    setMetaName(m.name);
+    setMetaDesc(m.description ?? "");
     setDrawerOpen(true);
   }
 
@@ -534,19 +552,77 @@ export function MapList() {
       {selectedMap && (
         <Drawer
           opened={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          title={
-            <Stack gap={2}>
-              <Text fw={600}>{selectedMap.name}</Text>
-              {selectedMap.description && (
-                <Text size="xs" c="dimmed">{selectedMap.description}</Text>
-              )}
-            </Stack>
-          }
+          onClose={() => { setDrawerOpen(false); setMetaEditing(false); }}
+          title="Manage Conditions"
           position="right"
           size="lg"
         >
-          <ConditionSection map={selectedMap} />
+          <Stack gap="md">
+            {/* Map name / description header with inline edit */}
+            {metaEditing ? (
+              <Stack gap="xs">
+                <TextInput
+                  label="Map name"
+                  value={metaName}
+                  onChange={(e) => setMetaName(e.currentTarget.value)}
+                  required
+                />
+                <Textarea
+                  label="Description (optional)"
+                  value={metaDesc}
+                  onChange={(e) => setMetaDesc(e.currentTarget.value)}
+                  autosize
+                  minRows={2}
+                />
+                <Group gap="xs">
+                  <Button
+                    size="xs"
+                    loading={updateMetaMutation.isPending}
+                    disabled={!metaName.trim()}
+                    onClick={() =>
+                      updateMetaMutation.mutate({
+                        id: selectedMap.id,
+                        name: metaName,
+                        description: metaDesc,
+                      })
+                    }
+                  >
+                    Save
+                  </Button>
+                  <Button size="xs" variant="subtle" onClick={() => setMetaEditing(false)}>
+                    Cancel
+                  </Button>
+                </Group>
+              </Stack>
+            ) : (
+              <Group gap="xs" align="flex-start">
+                <Stack gap={2} style={{ flex: 1 }}>
+                  <Text fw={600}>{selectedMap.name}</Text>
+                  {selectedMap.description && (
+                    <Text size="xs" c="dimmed">{selectedMap.description}</Text>
+                  )}
+                </Stack>
+                {canDelete(selectedMap) && (
+                  <Tooltip label="Edit name / description">
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      color="blue"
+                      onClick={() => {
+                        setMetaName(selectedMap.name);
+                        setMetaDesc(selectedMap.description ?? "");
+                        setMetaEditing(true);
+                      }}
+                    >
+                      <IconPencil size={14} />
+                    </ActionIcon>
+                  </Tooltip>
+                )}
+              </Group>
+            )}
+
+            <ConditionSection map={selectedMap} />
+          </Stack>
         </Drawer>
       )}
     </Stack>

@@ -1147,7 +1147,7 @@ class SystemResponse(BaseModel):
 - `list_conditions(map_id)`, `get_condition`, `create_condition`, `update_condition`, `delete_condition` — JSON fields serialized via `json.dumps(data.ride_height.model_dump())`
 - `delete_condition()`: raises HTTP 400 if any `Run.condition_id` references this condition — delete those runs first
 - `list_cases`, `get_case`, `create_case`, `update_case`, `delete_case`
-- `update_case()`: accepts `template_id` and `assembly_id` updates (validates existence); **template/assembly locked** — raises HTTP 400 when non-pending runs exist and `template_id`/`assembly_id` change is requested; `map_id` change triggers `sync_runs_for_map()`
+- `update_case()`: accepts `template_id` and `assembly_id` updates (validates existence); **template/assembly/map locked** — raises HTTP 400 when non-pending runs exist and `template_id`/`assembly_id`/`map_id` change is requested; `map_id` change (when allowed) triggers `sync_runs_for_map()`
 - `delete_case()`: cascades DB delete to Runs; also deletes `data/runs/{run_id}/` output directories
 - `create_run(case_id, data: RunCreate, current_user)`: auto-name = `{case_number}_R{n:02d}_{condition_name}[_{comment}]` when `data.name` is empty; `data.comment` appended as suffix
 - `list_runs(case_id)`
@@ -1184,7 +1184,7 @@ class SystemResponse(BaseModel):
 | `GET` | `/cases/` | List all cases |
 | `POST` | `/cases/` | Create case (template_id + assembly_id required) |
 | `GET` | `/cases/{id}` | Get case with run_count, parent_case_number/name |
-| `PATCH` | `/cases/{id}` | Update name/description/template_id/assembly_id/map_id; **template/assembly locked** (HTTP 400) when non-pending runs exist; map change triggers `sync_runs_for_map()` |
+| `PATCH` | `/cases/{id}` | Update name/description/template_id/assembly_id/map_id; **template/assembly/map locked** (HTTP 400) when non-pending runs exist; map change (when allowed) triggers `sync_runs_for_map()` |
 | `DELETE` | `/cases/{id}` | Delete case + cascade |
 | `GET` | `/cases/{id}/compare?with={id2}` | Compare two cases: template settings diff, map conditions diff, assembly parts diff |
 | `GET` | `/cases/{id}/sync-preview?new_map_id={id}` | Preview keep/add/orphan when map is changed (does not modify data) |
@@ -1576,14 +1576,14 @@ adjust_ride_height:
 
 ### Frontend Components
 
-- `src/components/maps/MapList.tsx` — Condition Maps table; per-map drawer opens `ConditionSection`; shows ride height badge per condition row + edit button
+- `src/components/maps/MapList.tsx` — Condition Maps table; per-map drawer opens `ConditionSection`; shows ride height badge per condition row + edit button; drawer header shows map name/description with `IconPencil` inline edit (owner/admin only) — expands to `TextInput` + `Textarea` + Save/Cancel, updates via `mapsApi.update()` and refreshes `["maps"]` query
 - `src/components/maps/MapCreateModal.tsx` — create map (name + description)
 - `src/components/maps/ConditionFormModal.tsx` — create/edit condition; two Accordions:
   - **Ride Height Transform**: enabled switch → **"Target front axis height (m)"** / **"Target rear axis height (m)"** → optional per-wheel RH targets (only active when Template's `adjust_body_wheel_separately=True`; note shown in UI)
   - **Yaw Center Configuration**: `center_mode` Select (`wheel_center` / `user_input`) → center X/Y inputs when `user_input`
 - `src/components/cases/CaseList.tsx` — folder-grouped table; row click navigates to `/cases/{id}` (dedicated page); **Compare mode**: toggle activates row-selection mode (up to 2 rows), "Compare" → `CaseCompareModal`; Duplicate button → `CaseDuplicateModal`
 - `src/components/cases/CaseDetailPage.tsx` — dedicated page at `/cases/:caseId`; 2 tabs:
-  - **Case Info & Compare** tab: case number (read-only), editable Name/Description/Template/Assembly/Map/Parent Case; **Template/Assembly locked** (disabled with lock icon) when any run has `status != "pending"` — backend returns HTTP 400; **Map change** triggers `MapChangeSyncModal` sync preview before applying; **Compare with Parent Case** accordion at bottom
+  - **Case Info & Compare** tab: case number (read-only), editable Name/Description/Template/Assembly/Map/Parent Case; **Template/Assembly/Map locked** (disabled with lock icon) when any run has `status != "pending"` — backend returns HTTP 400; **Map change** (when not locked) triggers `MapChangeSyncModal` sync preview before applying; **Compare with Parent Case** accordion at bottom
   - **Runs** tab: compact run table; per-run **"Open 3D Viewer"** button (`IconExternalLink`, violet, `status === "ready"` only) sets `viewerRun` state which renders a `position: fixed; inset: 0; z-index: 300` fullscreen overlay containing `RunViewer`; overlay has a header bar (run badge, case/condition info, close `IconX` button); "Generate All" button; per-run Generate/Download/Reset/Delete actions
 - `src/components/cases/MapChangeSyncModal.tsx` — previews keep/add/orphan when a Case's Condition Map changes; calls `GET /cases/{id}/sync-preview?new_map_id=...`; confirm applies `PATCH` to update `map_id` which triggers backend `sync_runs_for_map()` (re-links kept runs, creates new pending runs, deletes orphan pending runs, preserves generated orphans)
 - `src/components/cases/RunViewer.tsx` — 3D viewer for a ready Run; 3-column layout (275px OverlayPanel | 255px PartListPanel with `"Parts"` label and padding | flex-1 SceneCanvas); overlay data fetched via `GET /cases/{id}/runs/{id}/overlay` which calls `parse_ufx(xml_path) → extract_overlay_data()` (based on actual generated XML); used as fullscreen overlay inside `CaseDetailPage` and as a standalone page via `RunViewerPage`
