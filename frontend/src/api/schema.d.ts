@@ -2943,6 +2943,16 @@ export interface components {
          */
         RideHeightTemplateConfig: {
             /**
+             * Reference Mode
+             * @default wheel_axis
+             * @enum {string}
+             */
+            reference_mode: "wheel_axis" | "user_input";
+            /** Reference Z Front */
+            reference_z_front?: number | null;
+            /** Reference Z Rear */
+            reference_z_rear?: number | null;
+            /**
              * Reference Parts
              * @default []
              */

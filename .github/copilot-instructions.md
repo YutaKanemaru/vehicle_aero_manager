@@ -1287,10 +1287,21 @@ class BoxRefinementAroundParts(BaseModel):
 ```
 
 
-**`RideHeightTemplateConfig`** (new — template-level "how" config for ride height transforms):
+**`RideHeightTemplateConfig`** (template-level "how" config for ride height transforms):
 ```python
 class RideHeightTemplateConfig(BaseModel):
-    reference_parts: list[str] = []         # part-name patterns used to derive wheel positions for transform
+    reference_mode: Literal["wheel_axis", "user_input"] = "wheel_axis"
+    # wheel_axis: derive front/rear wheel axis Z from STL part centroids
+    #   uses reference_parts patterns when set; heuristic (Z-centroid < ground+1.2m) when empty
+    # user_input: use reference_z_front/rear directly (STL-independent)
+
+    reference_z_front: float | None = None  # wheel axis Z in nominal STL (m) — user_input mode only
+    reference_z_rear:  float | None = None  # wheel axis Z in nominal STL (m) — user_input mode only
+
+    reference_parts: list[str] = []         # part-name patterns for wheel detection
+    #   non-static: used when reference_mode="wheel_axis" to filter part_info by pattern
+    #   static ground: always used (tn_wheel absent in BC tab); leave empty for heuristic fallback
+
     adjust_body_wheel_separately: bool = False  # True = body and wheels transformed independently
     use_original_wheel_position: bool = False   # True = restore wheels to original Z when separately=True
 ```
@@ -1568,7 +1579,7 @@ adjust_ride_height:
 - `src/components/maps/MapList.tsx` — Condition Maps table; per-map drawer opens `ConditionSection`; shows ride height badge per condition row + edit button
 - `src/components/maps/MapCreateModal.tsx` — create map (name + description)
 - `src/components/maps/ConditionFormModal.tsx` — create/edit condition; two Accordions:
-  - **Ride Height Transform**: enabled switch → target front/rear wheel axis heights → optional per-wheel RH targets (only active when Template's `adjust_body_wheel_separately=True`; note shown in UI)
+  - **Ride Height Transform**: enabled switch → **"Target front axis height (m)"** / **"Target rear axis height (m)"** → optional per-wheel RH targets (only active when Template's `adjust_body_wheel_separately=True`; note shown in UI)
   - **Yaw Center Configuration**: `center_mode` Select (`wheel_center` / `user_input`) → center X/Y inputs when `user_input`
 - `src/components/cases/CaseList.tsx` — folder-grouped table; row click navigates to `/cases/{id}` (dedicated page); **Compare mode**: toggle activates row-selection mode (up to 2 rows), "Compare" → `CaseCompareModal`; Duplicate button → `CaseDuplicateModal`
 - `src/components/cases/CaseDetailPage.tsx` — dedicated page at `/cases/:caseId`; 2 tabs:
@@ -1628,7 +1639,9 @@ interface ProbePointFormItem        { x_pos, y_pos, z_pos, description }
 - `tn_wheel` / `tn_rim` moved to BC tab > Ground Condition accordion (aero only); **hidden when `ground_mode="static"`** (`!isStatic` guard)
 - `tn_wt_*` tire parts moved to BC tab > Belt Configuration accordion (isBelt5, marked `required`)
 - `tn_osm_*` OSM parts moved to BC tab > Ground Condition, shown when `overset_wheels` is ON; **hidden when `ground_mode="static"` or `"full_moving"`** (`!isStatic && !isFullMoving` guard)
-- Ride Height tab: `rh_reference_parts` (TagsInput) + `rh_adjust_body_wheel_separately` + `rh_use_original_wheel_position` — maps to `setup_option.ride_height` in Template settings
+- Ride Height tab: `rh_reference_mode` (`SegmentedControl`: `"wheel_axis"` / `"user_input"`) + `rh_reference_z_front/rear` (`NumberInput`, shown when `user_input`) + `rh_reference_parts` (TagsInput, shown only when `isStatic`) + `rh_adjust_body_wheel_separately` + `rh_use_original_wheel_position`
+  - **Static ground** (`isStatic=true`): only `rh_reference_parts` TagsInput shown ("Wheel parts for ride height reference"), `reference_mode` selector hidden
+  - **Non-static**: `SegmentedControl` for `rh_reference_mode`; `user_input` reveals `rh_reference_z_front/rear` NumberInputs; `wheel_axis` shows description text pointing to BC tab wheel parts
 - **Part name list fields use `TagsInput`** (not `TextInput`) — `tn_wheel`, `tn_rim`, `tn_baffle`, `tn_windtunnel`, `offset_refinements[].parts`, `custom_refinements[].parts`, `box_refinements[].parts` (around_parts mode), `triangle_splitting_instances[].parts`, `partial_surfaces[].include_parts/exclude_parts`, `partial_volumes[].bbox_source_parts`. All backed by `string[]` — no `joinList`/`splitList` needed.
 - **Part name pattern matching** (`compute_engine._matches_pattern`): `*` あり → `fnmatch` glob (`Body_*` = starts-with, `*_Body_*` = contains, `*_Body` = ends-with); `*` なし → `startswith OR endswith`; case-insensitive。`offset_refinement[]`, `custom_refinement[]`, `triangle_splitting_instances[]` の `parts` は `part_info` に対して展開済み実パーツ名を XML に書き出す（B案）。
 

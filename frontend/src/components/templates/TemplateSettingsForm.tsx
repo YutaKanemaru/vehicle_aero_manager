@@ -1507,13 +1507,57 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
       {/* ── Ride Height ─────────────────────────────────────────────────── */}
       <Tabs.Panel value="ride_height" pt="md">
         <PanelWrapper disabled={readOnly}><Stack gap="xs">
-          <TagsInput
-            label="Reference parts (wheel detection patterns)"
-            description="Part-name patterns used to find wheel centroids for ride-height calculation. Leave empty to use all low-centroid parts."
-            placeholder="Wheel_"
-            splitChars={[",", " "]}
-            {...form.getInputProps("rh_reference_parts")}
-          />
+          {isStatic ? (
+            // Static ground: no tn_wheel in BC tab — specify wheel parts here for RH detection
+            <TagsInput
+              label="Wheel parts for ride height reference (static ground only)"
+              description="Part-name patterns used to find wheel axis Z-centroid. Leave empty for heuristic fallback (parts whose Z-centroid is within 1.2 m of ground)."
+              placeholder="Wheel_"
+              splitChars={[",", " "]}
+              {...form.getInputProps("rh_reference_parts")}
+            />
+          ) : (
+            // Non-static: wheel parts already defined in BC tab (tn_wheel); choose reference method
+            <>
+              <Text size="sm" fw={500}>Reference point mode</Text>
+              <SegmentedControl
+                data={[
+                  { value: "wheel_axis", label: "Wheel axis (auto-detect)" },
+                  { value: "user_input", label: "User input" },
+                ]}
+                {...form.getInputProps("rh_reference_mode")}
+              />
+              {form.values.rh_reference_mode === "wheel_axis" ? (
+                <Text size="xs" c="dimmed">
+                  Front and rear wheel axis Z-coordinates are derived from the STL Analysis result
+                  using the Wheel parts patterns defined in the Boundary Conditions tab.
+                </Text>
+              ) : (
+                <>
+                  <Text size="xs" c="dimmed">
+                    Enter the wheel axis Z-coordinates from the nominal (unmodified) STL.
+                    The X-coordinate is derived automatically from wheel part centroids.
+                  </Text>
+                  <SimpleGrid cols={2}>
+                    <NumberInput
+                      label="Front reference Z — wheel axis in nominal STL (m)"
+                      placeholder="e.g. 0.335"
+                      step={0.001}
+                      decimalScale={4}
+                      {...form.getInputProps("rh_reference_z_front")}
+                    />
+                    <NumberInput
+                      label="Rear reference Z — wheel axis in nominal STL (m)"
+                      placeholder="e.g. 0.335"
+                      step={0.001}
+                      decimalScale={4}
+                      {...form.getInputProps("rh_reference_z_rear")}
+                    />
+                  </SimpleGrid>
+                </>
+              )}
+            </>
+          )}
           <Switch
             label="Adjust body and wheels separately"
             description="When on, wheels are transformed independently from the body to reach their own target ride heights"

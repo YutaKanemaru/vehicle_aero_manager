@@ -166,22 +166,54 @@ def compute_transform(
     # Simpler: use vbbox.x midpoint to split front/rear, then average Z of
     # the two groups among parts with centroid.Z in [ground_z, ground_z+1.2].
     mid_x = (vbbox["x_min"] + vbbox["x_max"]) / 2.0
+    ref_mode = getattr(rh_template_cfg, "reference_mode", "wheel_axis")
 
-    wheel_candidates = [
-        (name, info) for name, info in part_info.items()
-        if ground_z < info["centroid"][2] < ground_z + 1.2
-    ]
+    if ref_mode == "user_input":
+        # ── User-supplied reference Z (STL-independent) ────────────────────
+        ref_z_front = getattr(rh_template_cfg, "reference_z_front", None)
+        ref_z_rear  = getattr(rh_template_cfg, "reference_z_rear", None)
+        if ref_z_front is None or ref_z_rear is None:
+            raise ValueError(
+                "reference_z_front and reference_z_rear must be set when reference_mode='user_input'"
+            )
+        front_z_orig = float(ref_z_front)
+        rear_z_orig  = float(ref_z_rear)
+        # Derive X positions from heuristic only (needed for wheelbase + yaw center)
+        wheel_candidates_x = [
+            (name, info) for name, info in part_info.items()
+            if ground_z < info["centroid"][2] < ground_z + 1.5
+        ]
+        front_x_list = [info["centroid"][0] for _, info in wheel_candidates_x if info["centroid"][0] < mid_x]
+        rear_x_list  = [info["centroid"][0] for _, info in wheel_candidates_x if info["centroid"][0] >= mid_x]
+        front_x = float(np.mean(front_x_list)) if front_x_list else vbbox["x_min"] + 0.3
+        rear_x  = float(np.mean(rear_x_list))  if rear_x_list  else vbbox["x_max"] - 0.3
+    else:
+        # ── Wheel axis mode: auto-detect from part_info ────────────────────
+        ref_parts = getattr(rh_template_cfg, "reference_parts", [])
+        if ref_parts:
+            # Filter by reference_parts patterns (supports glob via compute_engine helper)
+            from app.services.compute_engine import _matches_any  # noqa: PLC0415
+            wheel_candidates = [
+                (name, info) for name, info in part_info.items()
+                if _matches_any(name, ref_parts)
+            ]
+        else:
+            # Heuristic: parts whose Z-centroid falls within [ground_z, ground_z + 1.2]
+            wheel_candidates = [
+                (name, info) for name, info in part_info.items()
+                if ground_z < info["centroid"][2] < ground_z + 1.2
+            ]
 
-    front_z_list = [info["centroid"][2] for _, info in wheel_candidates if info["centroid"][0] < mid_x]
-    rear_z_list  = [info["centroid"][2] for _, info in wheel_candidates if info["centroid"][0] >= mid_x]
-    front_x_list = [info["centroid"][0] for _, info in wheel_candidates if info["centroid"][0] < mid_x]
-    rear_x_list  = [info["centroid"][0] for _, info in wheel_candidates if info["centroid"][0] >= mid_x]
+        front_z_list = [info["centroid"][2] for _, info in wheel_candidates if info["centroid"][0] < mid_x]
+        rear_z_list  = [info["centroid"][2] for _, info in wheel_candidates if info["centroid"][0] >= mid_x]
+        front_x_list = [info["centroid"][0] for _, info in wheel_candidates if info["centroid"][0] < mid_x]
+        rear_x_list  = [info["centroid"][0] for _, info in wheel_candidates if info["centroid"][0] >= mid_x]
 
-    # If heuristic fails, fall back to vehicle bbox values
-    front_z_orig = float(np.mean(front_z_list)) if front_z_list else ground_z + 0.35
-    rear_z_orig  = float(np.mean(rear_z_list))  if rear_z_list  else ground_z + 0.35
-    front_x      = float(np.mean(front_x_list)) if front_x_list else vbbox["x_min"] + 0.3
-    rear_x       = float(np.mean(rear_x_list))  if rear_x_list  else vbbox["x_max"] - 0.3
+        # If heuristic/pattern matching fails, fall back to vehicle bbox values
+        front_z_orig = float(np.mean(front_z_list)) if front_z_list else ground_z + 0.35
+        rear_z_orig  = float(np.mean(rear_z_list))  if rear_z_list  else ground_z + 0.35
+        front_x      = float(np.mean(front_x_list)) if front_x_list else vbbox["x_min"] + 0.3
+        rear_x       = float(np.mean(rear_x_list))  if rear_x_list  else vbbox["x_max"] - 0.3
 
     wheelbase = abs(rear_x - front_x)
     wb_center_orig = [

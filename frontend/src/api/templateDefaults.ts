@@ -70,6 +70,9 @@ export const templateDefaults = {
     },
     compute: {},
     ride_height: {
+      reference_mode: "wheel_axis",
+      reference_z_front: null,
+      reference_z_rear: null,
       reference_parts: [],
       adjust_body_wheel_separately: false,
       use_original_wheel_position: false,

@@ -184,7 +184,7 @@ export function ConditionFormModal({ opened, onClose, mapId, condition }: Props)
                     <>
                       <Group gap="sm" grow>
                         <NumberInput
-                          label="Target front wheel axis height (m)"
+                          label="Target front axis height (m)"
                           placeholder="e.g. 0.335"
                           step={0.001}
                           decimalScale={4}
@@ -194,7 +194,7 @@ export function ConditionFormModal({ opened, onClose, mapId, condition }: Props)
                           error={form.errors["rh_target_front"]}
                         />
                         <NumberInput
-                          label="Target rear wheel axis height (m)"
+                          label="Target rear axis height (m)"
                           placeholder="e.g. 0.335"
                           step={0.001}
                           decimalScale={4}

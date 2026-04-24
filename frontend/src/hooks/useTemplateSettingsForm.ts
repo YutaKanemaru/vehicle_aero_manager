@@ -424,7 +424,10 @@ export const FORM_DEFAULTS = {
   // ── Compute flags / Ride Height Template Config ────────────────────────
   // All compute flags are now auto-derived in compute_engine.
   // adjust_ride_height moved to setup_option.ride_height (RideHeightTemplateConfig)
-  rh_reference_parts: [...(D.setup_option.ride_height.reference_parts as string[])],
+  rh_reference_mode: D.setup_option.ride_height.reference_mode as "wheel_axis" | "user_input",
+  rh_reference_z_front: null as number | null,
+  rh_reference_z_rear:  null as number | null,
+  rh_reference_parts: [...(D.setup_option.ride_height.reference_parts as unknown as string[])],
   rh_adjust_body_wheel_separately: D.setup_option.ride_height.adjust_body_wheel_separately,
   rh_use_original_wheel_position: D.setup_option.ride_height.use_original_wheel_position,
 
@@ -803,6 +806,9 @@ export function valuesFromSettings(settings: any): FormValues {
     tg_body_intensity: tg.body_tg_intensity ?? FORM_DEFAULTS.tg_body_intensity,
     tg_body_length_scale: tg.body_tg_length_scale ?? null,
 
+    rh_reference_mode: (so?.ride_height?.reference_mode ?? FORM_DEFAULTS.rh_reference_mode) as "wheel_axis" | "user_input",
+    rh_reference_z_front: so?.ride_height?.reference_z_front ?? null,
+    rh_reference_z_rear:  so?.ride_height?.reference_z_rear  ?? null,
     rh_reference_parts: [...(so?.ride_height?.reference_parts ?? FORM_DEFAULTS.rh_reference_parts)],
     rh_adjust_body_wheel_separately: so?.ride_height?.adjust_body_wheel_separately ?? FORM_DEFAULTS.rh_adjust_body_wheel_separately,
     rh_use_original_wheel_position: so?.ride_height?.use_original_wheel_position ?? FORM_DEFAULTS.rh_use_original_wheel_position,
@@ -1049,9 +1055,12 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
       },
       compute: {},
       ride_height: {
-        reference_parts: values.rh_reference_parts,
+        reference_mode:              values.rh_reference_mode,
+        reference_z_front:           values.rh_reference_z_front,
+        reference_z_rear:            values.rh_reference_z_rear,
+        reference_parts:             values.rh_reference_parts,
         adjust_body_wheel_separately: values.rh_adjust_body_wheel_separately,
-        use_original_wheel_position: values.rh_use_original_wheel_position,
+        use_original_wheel_position:  values.rh_use_original_wheel_position,
       },
     },
     simulation_parameter: {

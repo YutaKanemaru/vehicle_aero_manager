@@ -214,7 +214,18 @@ class RideHeightTemplateConfig(BaseModel):
     The Condition stores *target* values (enabled, target_front/rear_wheel_axis_rh).
     The Template stores *how* the transform is performed.
     """
-    reference_parts: list[str] = []               # part-name patterns for wheel detection
+    reference_mode: Literal["wheel_axis", "user_input"] = "wheel_axis"
+    # wheel_axis: derive front/rear wheel axis Z from STL part centroids
+    #   (uses reference_parts patterns when set; heuristic when empty)
+    # user_input: use reference_z_front / reference_z_rear directly (STL-independent)
+
+    reference_z_front: float | None = None  # wheel axis Z in nominal STL (m) — user_input mode only
+    reference_z_rear:  float | None = None  # wheel axis Z in nominal STL (m) — user_input mode only
+
+    reference_parts: list[str] = []         # part-name patterns for wheel detection
+    #   non-static: used when reference_mode="wheel_axis" to filter part_info
+    #   static ground: always used (no tn_wheel in BC tab); leave empty for heuristic fallback
+
     adjust_body_wheel_separately: bool = False    # body and wheels transform independently
     use_original_wheel_position: bool = False     # True = return wheels to original Z
 
