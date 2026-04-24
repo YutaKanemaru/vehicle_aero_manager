@@ -801,14 +801,16 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
                     <Text size="xs" c="dimmed">
                       Enter part name patterns. Use <code>Body_*</code> (starts with), <code>*_Body_*</code> (contains), <code>*_Body</code> (ends with), or <code>Body_</code> (starts/ends with — no wildcard).
                     </Text>
-                    <SimpleGrid cols={2}>
-                      <TagsInput label="Wheel parts" placeholder="Wheel_" splitChars={[",", " "]} {...form.getInputProps("tn_wheel")} />
-                      <TagsInput label="Rim parts (for wheel axis detection)" placeholder="_Spokes_" splitChars={[",", " "]} {...form.getInputProps("tn_rim")} />
-                    </SimpleGrid>
-                    {!isFullMoving && (
+                    {!isStatic && (
+                      <SimpleGrid cols={2}>
+                        <TagsInput label="Wheel parts" placeholder="Wheel_" splitChars={[",", " "]} {...form.getInputProps("tn_wheel")} />
+                        <TagsInput label="Rim parts (for wheel axis detection)" placeholder="_Spokes_" splitChars={[",", " "]} {...form.getInputProps("tn_rim")} />
+                      </SimpleGrid>
+                    )}
+                    {!isStatic && !isFullMoving && (
                       <Switch label="Overset mesh for rotating wheels (OSM)" {...form.getInputProps("overset_wheels", { type: "checkbox" })} />
                     )}
-                    {!isFullMoving && form.values.overset_wheels && (
+                    {!isStatic && !isFullMoving && form.values.overset_wheels && (
                       <>
                         <Divider label="OSM region parts" labelPosition="center" />
                         <SimpleGrid cols={2}>
@@ -856,7 +858,7 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
             </Accordion.Item>
 
             {/* ── Belt Configuration (aero only) ── */}
-            {isAero(simType) && (
+            {isAero(simType) && !isStatic && (
               <Accordion.Item value="belt-config">
                 <Accordion.Control><Text fw={500}>Belt Configuration</Text></Accordion.Control>
                 <Accordion.Panel><Stack gap="xs">
