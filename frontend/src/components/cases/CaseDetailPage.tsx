@@ -3,7 +3,7 @@
  *
  * 2 tabs:
  *   [Case Info & Compare]  — case metadata edit form + compare accordion
- *   [Runs & Viewer]        — upper: run table, lower: 3D RunViewer for selected run
+ *   [Runs]                 — run table; "Launch Viewer" opens /cases/:id/runs/:id/viewer in a new tab
  *
  * Template/Assembly are locked (disabled) when any run has status != "pending".
  * Map changes trigger MapChangeSyncModal for sync preview before applying.
@@ -45,7 +45,7 @@ import {
   IconFileTypography,
   IconAlertCircle,
   IconInfoCircle,
-  IconEye,
+  IconExternalLink,
   IconLock,
 } from "@tabler/icons-react";
 import { useParams, useNavigate } from "react-router-dom";
@@ -65,7 +65,6 @@ import {
 import { templatesApi } from "../../api/templates";
 import { assembliesApi } from "../../api/geometries";
 import { MapChangeSyncModal } from "./MapChangeSyncModal";
-import { RunViewer } from "./RunViewer";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -313,7 +312,6 @@ function InformationTab({ caseData, runs }: { caseData: CaseResponse; runs: RunR
 function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
   const queryClient = useQueryClient();
   const [geometryOnly, setGeometryOnly] = useState<Record<string, boolean>>({});
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
   const { data: runs = [], isLoading } = useQuery({
     queryKey: ["runs", caseData.id],
@@ -325,16 +323,6 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
       return hasActive ? 3000 : false;
     },
   });
-
-  // Auto-select first ready run when none is selected
-  useEffect(() => {
-    if (!selectedRunId && runs.length > 0) {
-      const readyRun = runs.find((r) => r.status === "ready");
-      if (readyRun) setSelectedRunId(readyRun.id);
-    }
-  }, [runs, selectedRunId]);
-
-  const selectedRun = runs.find((r) => r.id === selectedRunId);
 
   const generateMutation = useMutation({
     mutationFn: ({ runId, gOnly }: { runId: string; gOnly: boolean }) =>
@@ -371,10 +359,9 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
 
   const deleteMutation = useMutation({
     mutationFn: (runId: string) => runsApi.delete(caseData.id, runId),
-    onSuccess: (_, runId) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
       queryClient.invalidateQueries({ queryKey: ["cases"] });
-      if (selectedRunId === runId) setSelectedRunId(null);
       notifications.show({ message: "Run deleted", color: "green" });
     },
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
@@ -406,10 +393,8 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Upper: Run Table */}
-      <div style={{ borderBottom: "1px solid var(--mantine-color-default-border)", maxHeight: "40%", overflow: "auto" }}>
-        <Group px="sm" py={6} justify="space-between">
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "auto" }}>
+      <Group px="sm" py={6} justify="space-between">
           <Text size="sm" fw={600}>Runs ({runs.length})</Text>
           {pendingCount > 0 && (
             <Button
@@ -436,7 +421,6 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
             <Table striped highlightOnHover fz="xs">
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th style={{ width: 30 }} />
                   <Table.Th style={{ width: 80 }}>#</Table.Th>
                   <Table.Th>Condition</Table.Th>
                   <Table.Th style={{ width: 90 }}>Velocity</Table.Th>
@@ -447,24 +431,8 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
               </Table.Thead>
               <Table.Tbody>
                 {runs.map((run) => {
-                  const isSelected = run.id === selectedRunId;
                   return (
-                    <Table.Tr
-                      key={run.id}
-                      style={{
-                        cursor: "pointer",
-                        background: isSelected ? "var(--mantine-color-blue-light)" : undefined,
-                      }}
-                      onClick={() => setSelectedRunId(run.id)}
-                    >
-                      {/* View indicator */}
-                      <Table.Td>
-                        {isSelected && (
-                          <ThemeIcon size="xs" color="blue" variant="light">
-                            <IconEye size={10} />
-                          </ThemeIcon>
-                        )}
-                      </Table.Td>
+                    <Table.Tr key={run.id}>
                       <Table.Td>
                         <Badge variant="outline" color="gray" size="xs">
                           {run.run_number || "—"}
@@ -569,6 +537,19 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                               <IconTrash size={12} />
                             </ActionIcon>
                           </Tooltip>
+                          {/* Launch Viewer */}
+                          {run.status === "ready" && (
+                            <Tooltip label="Launch 3D Viewer">
+                              <ActionIcon
+                                size="xs"
+                                variant="filled"
+                                color="violet"
+                                onClick={() => window.open(`/cases/${caseData.id}/runs/${run.id}/viewer`, "_blank")}
+                              >
+                                <IconExternalLink size={12} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
                         </Group>
                       </Table.Td>
                     </Table.Tr>
@@ -578,23 +559,6 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
             </Table>
           </ScrollArea>
         )}
-      </div>
-
-      {/* Lower: 3D RunViewer */}
-      <div style={{ flex: 1, minHeight: 0 }}>
-        {selectedRun ? (
-          <RunViewer
-            caseId={caseData.id}
-            assemblyId={caseData.assembly_id}
-            run={selectedRun}
-          />
-        ) : (
-          <Group gap="xs" p="md" justify="center" style={{ height: "100%" }}>
-            <ThemeIcon color="gray" variant="light" size="sm"><IconInfoCircle size={12} /></ThemeIcon>
-            <Text c="dimmed" size="sm">Click a run above to view its 3D setup.</Text>
-          </Group>
-        )}
-      </div>
     </div>
   );
 }
@@ -804,7 +768,7 @@ export function CaseDetailPage() {
       <Tabs defaultValue="runs" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <Tabs.List px="md">
           <Tabs.Tab value="info">Case Info &amp; Compare</Tabs.Tab>
-          <Tabs.Tab value="runs">Runs &amp; Viewer</Tabs.Tab>
+          <Tabs.Tab value="runs">Runs</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="info" style={{ flex: 1, overflow: "auto" }}>
@@ -817,7 +781,7 @@ export function CaseDetailPage() {
               <Accordion variant="separated">
                 <Accordion.Item value="compare">
                   <Accordion.Control>
-                    <Text fw={600} size="sm">Compare with another case</Text>
+                    <Text fw={600} size="sm">Compare with Parent Case</Text>
                   </Accordion.Control>
                   <Accordion.Panel>
                     <CompareSection caseData={caseData} />
