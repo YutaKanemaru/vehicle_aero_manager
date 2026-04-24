@@ -850,6 +850,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cases/{case_id}/runs/{run_id}/transform": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transform Run
+         * @description Apply ride-height + yaw transform for a Run.
+         *
+         *     All parameters are derived from the Run's linked Condition and Case
+         *     (Template + Assembly).  No request body required.
+         */
+        post: operations["transform_run_api_v1_cases__case_id__runs__run_id__transform_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cases/{case_id}/runs/{run_id}/reset": {
         parameters: {
             query?: never;
@@ -3040,6 +3063,16 @@ export interface components {
              * @default 0
              */
             condition_yaw: number;
+            /**
+             * Needs Transform
+             * @default false
+             */
+            needs_transform: boolean;
+            /**
+             * Transform Applied
+             * @default false
+             */
+            transform_applied: boolean;
         };
         /**
          * RunUpdate
@@ -6184,6 +6217,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transform_run_api_v1_cases__case_id__runs__run_id__transform_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

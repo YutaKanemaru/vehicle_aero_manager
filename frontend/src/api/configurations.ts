@@ -169,6 +169,11 @@ export const runsApi = {
   reset: (caseId: string, runId: string): Promise<RunResponse> =>
     client.post(`/cases/${caseId}/runs/${runId}/reset`, {}),
 
+  /** Apply ride-height + yaw transform for a Run. No body needed — backend derives all params. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  transform: (caseId: string, runId: string): Promise<any> =>
+    client.post(`/cases/${caseId}/runs/${runId}/transform`, {}),
+
   download: async (caseId: string, runId: string): Promise<Blob> => {
     const token = localStorage.getItem("vam_token");
     const res = await fetch(`/api/v1/cases/${caseId}/runs/${runId}/download`, {

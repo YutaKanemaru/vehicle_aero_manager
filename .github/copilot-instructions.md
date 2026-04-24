@@ -1135,7 +1135,7 @@ class SystemResponse(BaseModel):
 - `CaseCreate`, `CaseUpdate` (`name`, `description`, `template_id`, `assembly_id`, `map_id`, `folder_id`), `CaseResponse` (includes `run_count`, `case_number`, `template_name`, `assembly_name`, `map_name`, `parent_case_id`, `parent_case_number`, `parent_case_name`)
 - `CaseDuplicateRequest`: `{ name, description }` — copies active template/assembly/map from source case; auto-sets `parent_case_id`
 - `RunCreate`: `{ name: str = "", condition_id, comment: str = "" }` — if `name` is empty, auto-formats as `{case_number}_{case_name}_R{N:02d}_{condition_name}[_{comment}]`
-- `RunResponse` (includes `xml_path`, `stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`, `geometry_override_id`)
+- `RunResponse` (includes `xml_path`, `stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`, `geometry_override_id`, `needs_transform`, `transform_applied`)
 - `RunUpdate`: `{ geometry_override_id: str | None }` — used to set geometry override after ride-height transform
 - `DiffResult`: list of changed fields between two Runs
 - `PartsDiffResult`: `{ added: list[str], removed: list[str], common: list[str] }` — assembly parts comparison
@@ -1154,7 +1154,8 @@ class SystemResponse(BaseModel):
 - `delete_run(db, case_id, run_id, current_user)` — deletes Run row + `data/runs/{run_id}/` directory
 - `reset_run(db, case_id, run_id, current_user)` — clears `xml_path`, `stl_path`, `error_message`, sets `status="pending"`, deletes output dir
 - `update_run(db, case_id, run_id, data: RunUpdate, current_user)` — updates `geometry_override_id` on a Run (PATCH)
-- `trigger_xml_generation(db, case_id, run_id, current_user, background_tasks, geometry_only=False)` — triggers `_generate_xml_task(run_id, geometry_only)`
+- `trigger_xml_generation(db, case_id, run_id, current_user, background_tasks, geometry_only=False)` — triggers `_generate_xml_task(run_id, geometry_only)`; **guarded**: raises HTTP 400 when condition requires transform (`ride_height.enabled` or `yaw_angle != 0`) but `geometry_override_id` is not set, or when override geometry is not `ready`
+- `transform_run(db, case_id, run_id, current_user, background_tasks)` — derives all transform params from Run's Condition + Case (Template/Assembly); calls `ride_height_service.compute_transform()` + `create_system_and_geometry()`; patches `geometry_override_id` on the Run; returns dict with `system_id`, `geometry_id`, `geometry_name`, `geometry_status`, `transform_snapshot`
 - `_generate_xml_task(run_id, geometry_only=False)` — background task. When `geometry_only=True` and `case.parent_case_id` is set: finds parent's ready Run (same condition preferred), parses its XML via `parse_ufx()`, swaps `geometry.source_file` for the new assembly STL, serializes and saves — skips full re-assembly. Falls back to full generation if no parent ready run found.
 - `duplicate_case(db, source_case_id, data: CaseDuplicateRequest, current_user)` — copies Case row (same template/assembly/map); sets `parent_case_id = source_case_id`; does NOT copy Runs
 - `create_case_with_runs(db, case_data, current_user)` — creates Case + one Run per Condition; run names auto-formatted as `{case_number}_{case_name}_R{N:02d}_{condition_name}`
@@ -1190,7 +1191,8 @@ class SystemResponse(BaseModel):
 | `GET` | `/cases/{id}/sync-preview?new_map_id={id}` | Preview keep/add/orphan when map is changed (does not modify data) |
 | `GET` | `/cases/{id}/runs/` | List runs |
 | `POST` | `/cases/{id}/runs/` | Create run (condition_id + optional comment; auto-formats name) |
-| `POST` | `/cases/{id}/runs/{rid}/generate?geometry_only=false` | Trigger XML generation; `geometry_only=true` reuses parent Run's XML and swaps STL only |
+| `POST` | `/cases/{id}/runs/{rid}/generate?geometry_only=false` | Trigger XML generation; `geometry_only=true` reuses parent Run's XML and swaps STL only; **guarded**: returns HTTP 400 when `needs_transform` but `geometry_override_id` is not set or override geometry is not ready |
+| `POST` | `/cases/{id}/runs/{rid}/transform` | Apply ride-height + yaw transform for a Run; derives all params from Run's Condition + Case (Template/Assembly); creates System + Geometry, patches `geometry_override_id` on Run |
 | `PATCH` | `/cases/{id}/runs/{rid}` | Update run (set `geometry_override_id`) |
 | `DELETE` | `/cases/{id}/runs/{rid}` | Delete a single Run + output directory |
 | `POST` | `/cases/{id}/runs/{rid}/reset` | Reset Run to pending (clears xml/stl/error, deletes output dir) |
@@ -1315,7 +1317,7 @@ class ComputeOption(BaseModel):
           #   rotate_wheels / moving_ground → from ground_mode
           #   porous_media → from bool(template_settings.porous_coefficients)
           #   turbulence_generator → from tg_cfg.enable_ground_tg | enable_body_tg
-          # adjust_ride_height removed — ride height is triggered per-condition in CreateCaseFromBuilderModal
+          # adjust_ride_height removed — ride height is triggered per-Run via POST /cases/{id}/runs/{id}/transform
 ```
 
 **`SimulationParameter`** key fields:
@@ -1546,7 +1548,7 @@ turbulence_generator:
   → both off → no TG instances
 
 adjust_ride_height:
-  → NOT a compute flag anymore — triggered per-condition in CreateCaseFromBuilderModal
+  → NOT a compute flag anymore — triggered per-Run via `POST /cases/{id}/runs/{id}/transform` on CaseDetailPage
   → uses Template's RideHeightTemplateConfig ("how") + Condition's RideHeightConditionConfig ("targets")
 ```
 
@@ -1584,14 +1586,14 @@ adjust_ride_height:
 - `src/components/cases/CaseList.tsx` — folder-grouped table; row click navigates to `/cases/{id}` (dedicated page); **Compare mode**: toggle activates row-selection mode (up to 2 rows), "Compare" → `CaseCompareModal`; Duplicate button → `CaseDuplicateModal`
 - `src/components/cases/CaseDetailPage.tsx` — dedicated page at `/cases/:caseId`; 2 tabs:
   - **Case Info & Compare** tab: case number (read-only), editable Name/Description/Template/Assembly/Map/Parent Case; **Template/Assembly/Map locked** (disabled with lock icon) when any run has `status != "pending"` — backend returns HTTP 400; **Map change** (when not locked) triggers `MapChangeSyncModal` sync preview before applying; **Compare with Parent Case** accordion at bottom
-  - **Runs** tab: compact run table; per-run **"Open 3D Viewer"** button (`IconExternalLink`, violet, `status === "ready"` only) sets `viewerRun` state which renders a `position: fixed; inset: 0; z-index: 300` fullscreen overlay containing `RunViewer`; overlay has a header bar (run badge, case/condition info, close `IconX` button); "Generate All" button; per-run Generate / Download XML (`{run.name}.xml`) / Download STL (`{run.name}.stl`, fetch+blob with auth) / Reset / Delete actions
+  - **Runs** tab: compact run table; per-run **"Apply Transform"** button (`IconTransform`, teal, shown when `needs_transform && !transform_applied && (pending|error)`) triggers `POST /runs/{id}/transform`; per-run **"Generate XML"** button (`IconPlayerPlay`, disabled when `needs_transform && !transform_applied`); **"Transform All"** + **"Generate All"** bulk buttons; per-run Download XML (`{run.name}.xml`) / Download STL (`{run.name}.stl`, fetch+blob with auth) / Reset / Delete actions; **"Open 3D Viewer"** button (`IconExternalLink`, violet, `status === "ready"` only) opens fullscreen overlay
 - `src/components/cases/MapChangeSyncModal.tsx` — previews keep/add/orphan when a Case's Condition Map changes; calls `GET /cases/{id}/sync-preview?new_map_id=...`; confirm applies `PATCH` to update `map_id` which triggers backend `sync_runs_for_map()` (re-links kept runs, creates new pending runs, deletes orphan pending runs, preserves generated orphans)
 - `src/components/cases/RunViewer.tsx` — 3D viewer for a ready Run; 3-column layout (275px OverlayPanel | 255px PartListPanel with `"Parts"` label and padding | flex-1 SceneCanvas); overlay data fetched via `GET /cases/{id}/runs/{id}/overlay` which calls `parse_ufx(xml_path) → extract_overlay_data()` (based on actual generated XML); used as fullscreen overlay inside `CaseDetailPage` and as a standalone page via `RunViewerPage`
 - `src/components/cases/RunViewerPage.tsx` — full-page wrapper at `/cases/:caseId/runs/:runId/viewer`; fetches case + runs by params, renders `RunViewer`; opened in new browser tab via `window.open()` from CaseDetailPage
 - `src/components/cases/CaseCreateModal.tsx` — Two-tab modal: **New Case** (Template + Assembly + optional Map + `withRuns` Switch) / **Copy from Case** (source Case select + auto-fill name → `casesApi.duplicate()`)
 - `src/components/cases/CaseDuplicateModal.tsx` — standalone duplicate form; newly created case has `parent_case_id` automatically set to source case
 - `src/components/cases/CaseCompareModal.tsx` — 2-column `Grid` showing `CaseColumn` per selected case; each column: case info badges + scrollable Run list table (`run_number` / `condition_name` / velocity / yaw / status badge)
-- `src/components/cases/CreateCaseFromBuilderModal.tsx` — Modal opened from Template Builder to bulk-create a Case + Runs from a Condition Map; auto-generates case name; for `ride_height.enabled=True` conditions, fires `transformApi.transform()` using Template's `RideHeightTemplateConfig` then patches `Run.geometry_override_id` via `runsApi.update()`; navigates to `/cases` on success
+- `src/components/cases/CreateCaseFromBuilderModal.tsx` — Modal opened from Template Builder to bulk-create a Case + Runs from a Condition Map; auto-generates case name; **does NOT trigger transforms** — displays info text for conditions requiring transform; navigates to `/cases/:id` on success so user can apply transforms on the detail page
 - `src/components/runs/RunList.tsx` — legacy run list used in old Drawer (kept for reference); main run UI is now in `CaseDetailPage.tsx` Runs tab
 - `src/components/runs/DiffView.tsx` — side-by-side or diff-list view of two Run settings
 - Navigation: `AppShell.tsx` adds `Condition Maps` (IconList) and `Cases` (IconCar)
@@ -1962,7 +1964,7 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
   4. **Camera** — preset buttons (iso / front / rear / side / top) + theme toggle
 - `PartListPanel` receives `allParts` (all part names from assembly geometries) + `partInfo` (merged `analysis_result.part_info` — used for per-part Fit-to camera function)
 - **Overlay data flow** (2A-14): `useQuery(["preview", "overlay", selectedTemplateId, selectedAssemblyId])` → `previewApi.getOverlayData()` → `overlayData: OverlayData` passed to `ControlPanel` (→ `OverlayPanel`) and `SceneCanvas` (→ `OverlayObjects`). Backend calls `assemble_ufx_solver_deck()` in memory (no disk write) then `extract_overlay_data()` to return pre-computed absolute coordinates. **Reusable for future Case Viewer**: same `extract_overlay_data()` function works with `parse_ufx(xml_path)` output.
-- Template versions still fetched (`["templates", id, "versions"]`) for `templateSettings` which is used by `CreateCaseFromBuilderModal` and `TemplateVersionEditModal` — but no longer drives overlay rendering
+- Template versions still fetched (`["templates", id, "versions"]`) for `templateSettings` which is used by `TemplateVersionEditModal` — but no longer drives overlay rendering
 - `vehicleBbox`: union of `analysis_result.vehicle_bbox` across all geometries in selected assembly (still computed locally for `OriginAxes` and `PartListPanel` Fit-to-part)
 - `TemplateVersionEditModal` gated on `editTemplateOpen` (mounted only when open) to avoid TagsInput `_value.map` error
 - Query key for template versions: `["templates", selectedTemplateId, "versions"]` — matches `TemplateVersionEditModal`'s `invalidateQueries` so saves auto-refresh overlays (via query invalidation chain)

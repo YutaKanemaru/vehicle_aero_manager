@@ -6,9 +6,9 @@
  *   1. Name the Case
  *   2. Pick a Condition Map
  *   3. Preview the conditions that will create Runs
- *   4. For conditions with ride_height.enabled = true, a transform is triggered
- *      automatically using the Template's ride_height config, and the resulting
- *      geometry_override_id is patched onto the Run.
+ *
+ * Transforms (ride height / yaw) are NOT triggered here — they are applied
+ * per-Run on the CaseDetailPage via "Apply Transform" buttons.
  */
 import { useEffect, useState } from "react";
 import {
@@ -23,10 +23,9 @@ import {
   Group,
   Table,
   Divider,
-  Alert,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useNavigate } from "react-router-dom";
 import {
@@ -37,10 +36,8 @@ import {
   type ConditionResponse,
   type CaseResponse,
 } from "../../api/configurations";
-import { assembliesApi, type GeometryResponse } from "../../api/geometries";
+import { assembliesApi } from "../../api/geometries";
 import { templatesApi } from "../../api/templates";
-import { transformApi } from "../../api/systems";
-import { useJobsStore } from "../../stores/jobs";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -80,8 +77,6 @@ export function CreateCaseFromBuilderModal({
 }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const addJob = useJobsStore((s) => s.addJob);
-  const updateJob = useJobsStore((s) => s.updateJob);
 
   // Fetch context data
   const { data: assembly } = useQuery({
@@ -127,27 +122,6 @@ export function CreateCaseFromBuilderModal({
     enabled: !!form.values.mapId,
   });
 
-  // Assembly geometries (for ride-height transform source — use first ready one)
-  const geometries: GeometryResponse[] = assembly?.geometries ?? [];
-  const firstReadyGeometry = geometries.find((g) => g.status === "ready") ?? null;
-
-  // Template settings (for ride_height template config)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [templateSettings, setTemplateSettings] = useState<any>(null);
-  useEffect(() => {
-    if (!templateId || !opened) return;
-    templatesApi.listVersions(templateId).then((versions) => {
-      const active = versions.find((v: { is_active: boolean }) => v.is_active);
-      if (active?.settings) setTemplateSettings(active.settings);
-    }).catch(() => {});
-  }, [templateId, opened]);
-
-  const rhTemplate = templateSettings?.setup_option?.ride_height ?? {
-    reference_parts: [],
-    adjust_body_wheel_separately: false,
-    use_original_wheel_position: false,
-  };
-
   // ── Submission ───────────────────────────────────────────────────────────────
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -166,58 +140,25 @@ export function CreateCaseFromBuilderModal({
 
       // 2. Create a Run for each Condition (parallel)
       if (conditions.length > 0) {
-        const runs = await Promise.all(
+        await Promise.all(
           conditions.map((cond) =>
             runsApi.create(newCase.id, {
               name: cond.name,
               condition_id: cond.id,
+              comment: "",
             })
           )
         );
-
-        // 3. For conditions with ride_height.enabled=true, trigger transform
-        //    and patch geometry_override_id onto the Run (fire-and-forget)
-        const rhConditions = conditions.filter((c) => c.ride_height?.enabled);
-        if (rhConditions.length > 0 && firstReadyGeometry) {
-          for (const cond of rhConditions) {
-            const run = runs[conditions.indexOf(cond)];
-            // Start transform job (background)
-            transformApi.transform(firstReadyGeometry.id, {
-              name: `${firstReadyGeometry.name}_${cond.name}`,
-              condition_id: cond.id,
-              ride_height: cond.ride_height ?? { enabled: false },
-              rh_template: rhTemplate,
-              yaw_angle_deg: cond.yaw_angle,
-              yaw_config: cond.yaw_config ?? { center_mode: "wheel_center", center_x: 0, center_y: 0 },
-            }).then((result) => {
-              // Track in Jobs Drawer
-              addJob(result.geometry_id, result.geometry_name, "stl_analysis");
-              updateJob(result.geometry_id, "analyzing");
-              // Patch geometry_override_id onto the Run once we have the ID
-              // Poll until the geometry is ready, then patch
-              // For now: patch immediately with the geometry_id (may still be pending)
-              runsApi.update(newCase.id, run.id, {
-                geometry_override_id: result.geometry_id,
-              }).catch((err) => console.warn("patch geometry_override_id failed:", err));
-            }).catch((err) => {
-              console.warn(`Ride height transform failed for condition ${cond.name}:`, err);
-              notifications.show({
-                message: `Ride height transform failed for condition "${cond.name}": ${err.message}`,
-                color: "orange",
-              });
-            });
-          }
-        }
       }
 
-      // 4. Invalidate queries + navigate to /cases
+      // 3. Invalidate queries + navigate to /cases/:id
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       notifications.show({
         message: `Case "${newCase.name}" created with ${conditions.length} run(s)`,
         color: "green",
       });
       onClose();
-      navigate("/cases");
+      navigate(`/cases/${newCase.id}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       notifications.show({ message: `Failed to create case: ${msg}`, color: "red" });
@@ -226,7 +167,9 @@ export function CreateCaseFromBuilderModal({
     }
   }
 
-  const rhEnabledCount = conditions.filter((c) => c.ride_height?.enabled).length;
+  const transformCount = conditions.filter(
+    (c) => c.ride_height?.enabled || (c.yaw_angle !== 0 && c.yaw_angle !== undefined)
+  ).length;
 
   return (
     <Modal
@@ -274,6 +217,7 @@ export function CreateCaseFromBuilderModal({
                       <Table.Th>Velocity</Table.Th>
                       <Table.Th>Yaw</Table.Th>
                       <Table.Th>RH</Table.Th>
+                      <Table.Th>Transform</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
@@ -289,27 +233,24 @@ export function CreateCaseFromBuilderModal({
                             <Text size="xs" c="dimmed">—</Text>
                           )}
                         </Table.Td>
+                        <Table.Td>
+                          {(c.ride_height?.enabled || (c.yaw_angle !== 0 && c.yaw_angle !== undefined)) ? (
+                            <Badge size="xs" color="orange">Required</Badge>
+                          ) : (
+                            <Text size="xs" c="dimmed">—</Text>
+                          )}
+                        </Table.Td>
                       </Table.Tr>
                     ))}
                   </Table.Tbody>
                 </Table>
               )}
 
-              {rhEnabledCount > 0 && (
-                <Alert color={firstReadyGeometry ? "teal" : "orange"} radius="sm">
-                  {firstReadyGeometry ? (
-                    <Text size="xs">
-                      {rhEnabledCount} ride-height condition(s) will auto-transform geometry
-                      <Text span fw={600}> "{firstReadyGeometry.name}"</Text>.
-                      Transforms run in the background (visible in Jobs Drawer).
-                    </Text>
-                  ) : (
-                    <Text size="xs">
-                      {rhEnabledCount} ride-height condition(s) require a ready geometry in the
-                      assembly, but none is ready yet. Ride-height transforms will be skipped.
-                    </Text>
-                  )}
-                </Alert>
+              {transformCount > 0 && (
+                <Text size="xs" c="orange" fw={500}>
+                  {transformCount} run(s) require geometry transform (ride height / yaw).
+                  Apply transforms on the Case detail page before generating XML.
+                </Text>
               )}
             </>
           )}

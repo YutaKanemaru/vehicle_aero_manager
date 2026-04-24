@@ -705,6 +705,26 @@ def trigger_xml_generation(
     _check_owner_or_admin(run, current_user)
     if run.status == "generating":
         raise HTTPException(status_code=409, detail="XML generation already in progress")
+
+    # Guard: if conditions require transform, it must be applied first
+    condition = db.get(Condition, run.condition_id)
+    if condition:
+        rh = condition.ride_height  # parsed dict
+        needs_transform = bool(rh.get("enabled")) or condition.yaw_angle != 0
+        if needs_transform and not run.geometry_override_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Transform required before XML generation (ride_height or yaw). Apply Transform first.",
+            )
+        if needs_transform and run.geometry_override_id:
+            from app.models.geometry import Geometry as GeometryModel
+            override_geom = db.get(GeometryModel, run.geometry_override_id)
+            if override_geom and override_geom.status != "ready":
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Transform geometry is still processing (status: {override_geom.status}). Wait until it is ready.",
+                )
+
     run.status = "generating"
     db.commit()
     background_tasks.add_task(_generate_xml_task, run_id, geometry_only)
@@ -726,6 +746,124 @@ def update_run(
     db.commit()
     db.refresh(run)
     return run
+
+
+def transform_run(
+    db: Session,
+    case_id: str,
+    run_id: str,
+    current_user: User,
+    background_tasks: BackgroundTasks,
+) -> dict:
+    """Apply ride-height + yaw transform for a Run.
+
+    Derives all required parameters from the Run's linked Condition, Case
+    (Template + Assembly).  Creates a System + new Geometry and patches
+    ``geometry_override_id`` on the Run.
+
+    Returns a dict with ``system_id``, ``geometry_id``, ``geometry_name``,
+    ``geometry_status``, ``transform_snapshot``.
+    """
+    from app.models.geometry import Geometry as GeometryModel
+    from app.schemas.configuration import RideHeightConditionConfig, YawConditionConfig
+    from app.schemas.template_settings import RideHeightTemplateConfig
+    from app.services import ride_height_service
+
+    run = _get_run_or_404(db, case_id, run_id)
+    _check_owner_or_admin(run, current_user)
+
+    if run.status not in ("pending", "error"):
+        raise HTTPException(status_code=400, detail="Run must be pending or error to apply transform")
+
+    case = _get_case_or_404(db, case_id)
+    condition = db.get(Condition, run.condition_id)
+    if not condition:
+        raise HTTPException(status_code=404, detail="Condition not found for this run")
+
+    # Parse condition-level configs
+    rh_cfg = RideHeightConditionConfig.model_validate(condition.ride_height)
+    yaw_cfg = YawConditionConfig.model_validate(condition.yaw_config)
+    yaw_angle_deg = condition.yaw_angle
+
+    # Check whether transform is actually needed
+    if not rh_cfg.enabled and yaw_angle_deg == 0:
+        raise HTTPException(status_code=400, detail="No transform required for this run (ride_height disabled and yaw=0)")
+
+    # Load template ride-height config
+    active_version = db.scalar(
+        select(TemplateVersion).where(
+            TemplateVersion.template_id == case.template_id,
+            TemplateVersion.is_active == True,  # noqa: E712
+        )
+    )
+    if not active_version:
+        raise HTTPException(status_code=400, detail="No active template version found")
+    template_settings = TemplateSettings.model_validate(json.loads(active_version.settings))
+    rh_template = template_settings.setup_option.ride_height
+
+    # Find first ready geometry in assembly
+    assembly = db.scalar(
+        select(GeometryAssembly)
+        .options(selectinload(GeometryAssembly.geometries))
+        .where(GeometryAssembly.id == case.assembly_id)
+    )
+    if not assembly or not assembly.geometries:
+        raise HTTPException(status_code=400, detail="Assembly has no geometries")
+
+    source_geometry = next(
+        (g for g in assembly.geometries if g.status == "ready"), None
+    )
+    if not source_geometry:
+        raise HTTPException(status_code=400, detail="No ready geometry found in assembly")
+
+    if not source_geometry.analysis_result:
+        raise HTTPException(status_code=400, detail="Source geometry has no analysis result")
+
+    analysis_result = (
+        json.loads(source_geometry.analysis_result)
+        if isinstance(source_geometry.analysis_result, str)
+        else source_geometry.analysis_result
+    )
+
+    # Compute transform
+    transform_snapshot = ride_height_service.compute_transform(
+        analysis_result=analysis_result,
+        rh_cfg=rh_cfg,
+        yaw_angle_deg=yaw_angle_deg,
+        yaw_cfg=yaw_cfg,
+        rh_template_cfg=rh_template,
+    )
+
+    # Create System + result Geometry
+    system, result_geom = ride_height_service.create_system_and_geometry(
+        db=db,
+        source_geometry=source_geometry,
+        transform_snapshot=transform_snapshot,
+        name=f"{source_geometry.name}_{condition.name}",
+        current_user=current_user,
+        condition_id=condition.id,
+        background_tasks=background_tasks,
+    )
+
+    # Patch geometry_override_id on the Run
+    run.geometry_override_id = result_geom.id
+    db.commit()
+    db.refresh(run)
+
+    snap = None
+    if system.transform_snapshot:
+        try:
+            snap = json.loads(system.transform_snapshot)
+        except Exception:
+            snap = None
+
+    return {
+        "system_id": system.id,
+        "geometry_id": result_geom.id,
+        "geometry_name": result_geom.name,
+        "geometry_status": result_geom.status,
+        "transform_snapshot": snap,
+    }
 
 
 def _generate_xml_task(run_id: str, geometry_only: bool = False) -> None:
@@ -1188,11 +1326,14 @@ def enrich_case_response(db: Session, case: Case, run_count: int | None = None) 
 
 
 def enrich_run_response(db: Session, run: Run) -> RunResponse:
-    """Build RunResponse with condition display fields."""
+    """Build RunResponse with condition display fields + transform status."""
     out = RunResponse.model_validate(run)
     condition = db.get(Condition, run.condition_id)
     if condition:
         out.condition_name = condition.name
         out.condition_velocity = condition.inflow_velocity
         out.condition_yaw = condition.yaw_angle
+        rh = condition.ride_height  # parsed dict
+        out.needs_transform = bool(rh.get("enabled")) or condition.yaw_angle != 0
+    out.transform_applied = run.geometry_override_id is not None
     return out

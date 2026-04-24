@@ -357,6 +357,24 @@ def generate_xml(
     return configuration_service.enrich_run_response(db, run)
 
 
+@router.post("/cases/{case_id}/runs/{run_id}/transform", status_code=201)
+def transform_run(
+    case_id: str,
+    run_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Apply ride-height + yaw transform for a Run.
+
+    All parameters are derived from the Run's linked Condition and Case
+    (Template + Assembly).  No request body required.
+    """
+    return configuration_service.transform_run(
+        db, case_id, run_id, current_user, background_tasks
+    )
+
+
 @router.delete("/cases/{case_id}/runs/{run_id}", status_code=204)
 def delete_run(
     case_id: str,

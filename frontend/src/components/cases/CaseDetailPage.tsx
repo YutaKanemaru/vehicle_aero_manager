@@ -47,6 +47,7 @@ import {
   IconInfoCircle,
   IconExternalLink,
   IconLock,
+  IconTransform,
 } from "@tabler/icons-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -66,6 +67,7 @@ import { templatesApi } from "../../api/templates";
 import { assembliesApi } from "../../api/geometries";
 import { MapChangeSyncModal } from "./MapChangeSyncModal";
 import { RunViewer } from "./RunViewer";
+import { useJobsStore } from "../../stores/jobs";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -330,10 +332,15 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
     queryKey: ["runs", caseData.id],
     queryFn: () => runsApi.list(caseData.id),
     refetchInterval: (query) => {
-      const hasActive = (query.state.data ?? []).some(
+      const data = query.state.data ?? [];
+      const hasActive = data.some(
         (r: RunResponse) => r.status === "generating"
       );
-      return hasActive ? 3000 : false;
+      // Also poll when transforms were just applied (geometry may still be processing)
+      const hasTransformPending = data.some(
+        (r: RunResponse) => r.needs_transform && r.transform_applied && (r.status === "pending" || r.status === "error")
+      );
+      return (hasActive || hasTransformPending) ? 3000 : false;
     },
   });
 
@@ -349,8 +356,10 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
 
   const generateAllMutation = useMutation({
     mutationFn: async () => {
-      const pendingRuns = runs.filter((r) => r.status === "pending" || r.status === "error");
-      for (const run of pendingRuns) {
+      const generatableRuns = runs.filter(
+        (r) => (r.status === "pending" || r.status === "error") && (!r.needs_transform || r.transform_applied)
+      );
+      for (const run of generatableRuns) {
         await runsApi.generate(caseData.id, run.id, false);
       }
     },
@@ -376,6 +385,38 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
       queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
       queryClient.invalidateQueries({ queryKey: ["cases"] });
       notifications.show({ message: "Run deleted", color: "green" });
+    },
+    onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
+  });
+
+  const addJob = useJobsStore((s) => s.addJob);
+  const updateJob = useJobsStore((s) => s.updateJob);
+
+  const transformMutation = useMutation({
+    mutationFn: (runId: string) => runsApi.transform(caseData.id, runId),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
+      if (result?.geometry_id && result?.geometry_name) {
+        addJob(result.geometry_id, result.geometry_name, "stl_analysis");
+        updateJob(result.geometry_id, "analyzing");
+      }
+      notifications.show({ message: "Transform started — geometry building in background", color: "teal" });
+    },
+    onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
+  });
+
+  const transformAllMutation = useMutation({
+    mutationFn: async () => {
+      const needTransform = runs.filter(
+        (r) => r.needs_transform && !r.transform_applied && (r.status === "pending" || r.status === "error")
+      );
+      for (const run of needTransform) {
+        await runsApi.transform(caseData.id, run.id);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
+      notifications.show({ message: "Transforms started for all applicable runs", color: "teal" });
     },
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
@@ -409,7 +450,13 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
   }
 
   const hasParent = !!caseData.parent_case_id;
-  const pendingCount = runs.filter((r) => r.status === "pending" || r.status === "error").length;
+  const transformNeededCount = runs.filter(
+    (r) => r.needs_transform && !r.transform_applied && (r.status === "pending" || r.status === "error")
+  ).length;
+  // Generate All: only runs that are ready to generate (pending/error + no transform needed OR transform already applied)
+  const generatableCount = runs.filter(
+    (r) => (r.status === "pending" || r.status === "error") && (!r.needs_transform || r.transform_applied)
+  ).length;
 
   if (!caseData.map_id) {
     return (
@@ -423,18 +470,32 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "auto" }}>
       <Group px="sm" py={6} justify="space-between">
           <Text size="sm" fw={600}>Runs ({runs.length})</Text>
-          {pendingCount > 0 && (
-            <Button
-              size="xs"
-              variant="light"
-              color="blue"
-              leftSection={<IconPlayerPlay size={12} />}
-              loading={generateAllMutation.isPending}
-              onClick={() => generateAllMutation.mutate()}
-            >
-              Generate All ({pendingCount})
-            </Button>
-          )}
+          <Group gap={4}>
+            {transformNeededCount > 0 && (
+              <Button
+                size="xs"
+                variant="light"
+                color="teal"
+                leftSection={<IconTransform size={12} />}
+                loading={transformAllMutation.isPending}
+                onClick={() => transformAllMutation.mutate()}
+              >
+                Transform All ({transformNeededCount})
+              </Button>
+            )}
+            {generatableCount > 0 && (
+              <Button
+                size="xs"
+                variant="light"
+                color="blue"
+                leftSection={<IconPlayerPlay size={12} />}
+                loading={generateAllMutation.isPending}
+                onClick={() => generateAllMutation.mutate()}
+              >
+                Generate All ({generatableCount})
+              </Button>
+            )}
+          </Group>
         </Group>
 
         {isLoading ? (
@@ -497,13 +558,40 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                               />
                             </Tooltip>
                           )}
-                          {/* Generate */}
+                          {/* Apply Transform */}
+                          {run.needs_transform && !run.transform_applied && (run.status === "pending" || run.status === "error") && (
+                            <Tooltip label="Apply Transform (ride height / yaw)">
+                              <ActionIcon
+                                size="xs"
+                                variant="light"
+                                color="teal"
+                                loading={transformMutation.isPending && transformMutation.variables === run.id}
+                                onClick={() => transformMutation.mutate(run.id)}
+                              >
+                                <IconTransform size={12} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                          {/* Transform applied badge */}
+                          {run.needs_transform && run.transform_applied && (
+                            <Tooltip label="Transform applied">
+                              <Badge size="xs" color="teal" variant="dot">T</Badge>
+                            </Tooltip>
+                          )}
+                          {/* Generate — disabled when transform required but not applied */}
                           {(run.status === "pending" || run.status === "error") && (
-                            <Tooltip label="Generate XML">
+                            <Tooltip
+                              label={
+                                run.needs_transform && !run.transform_applied
+                                  ? "Apply Transform first"
+                                  : "Generate XML"
+                              }
+                            >
                               <ActionIcon
                                 size="xs"
                                 variant="light"
                                 color="blue"
+                                disabled={run.needs_transform && !run.transform_applied}
                                 loading={generateMutation.isPending && generateMutation.variables?.runId === run.id}
                                 onClick={() => generateMutation.mutate({ runId: run.id, gOnly: !!geometryOnly[run.id] })}
                               >
