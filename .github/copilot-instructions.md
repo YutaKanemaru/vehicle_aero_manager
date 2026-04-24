@@ -88,6 +88,7 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | 2A-11 | Template Builder redesign — `RideHeightTemplateConfig` in Template schema; `Run.geometry_override_id`; remove Axis Visualisation + Ride Height Transform sections from Template Builder; add `CreateCaseFromBuilderModal`; Ride Height tab in `TemplateSettingsForm` | ✅ Complete |
 | 2A-12 | Edit Template button in Template Builder — `IconPencil` ActionIcon beside Template Select opens `TemplateVersionEditModal` for active version; query key unified to `["templates", id, "versions"]` so edits auto-refresh 3D overlays | ✅ Complete |
 | 2A-13 | Tabbed Overlay Panel — `OverlayPanel.tsx` replaces flat Switch list; 4 tabs (Parts / Box / Plane / Probe); `overlayVisibility: Record<string, boolean>` in `viewerStore`; per-item visibility keys; Parts tab badges click-to-filter `PartListPanel` | ✅ Complete |
+| 2A-14 | Backend-driven overlay data — `GET /api/v1/preview/overlay`; `preview_service.py` calls `assemble_ufx_solver_deck()` → `extract_overlay_data()` → `OverlayData` (absolute coords); frontend `OverlayObjects`/`OverlayPanel` rewritten to render from backend response (zero calculation logic); `OverlayDomainPartItem` for belt patches + uFX_ground; reusable for future Case Viewer | ✅ Complete |
 | 2B | Post-processing EnSight viewer (PyVista backend) | 🔲 Planned |
 
 ---
@@ -111,12 +112,14 @@ vehicle_aero_manager/
 │       ├── services/            # Business logic — DB operations belong here, not in routers
 │       │   ├── viewer_service.py      # GLB generation, decimation, cache management
 │       │   ├── ride_height_service.py # Ride height / yaw STL transform + System creation
+│       │   ├── preview_service.py     # Overlay data: assemble_ufx_solver_deck() → extract_overlay_data() → OverlayData
 │       ├── storage/             # StorageBackend abstraction
 │       └── ultrafluid/          # XML schema (Pydantic), parser, serializer — isolated module
 ├── frontend/
 │   └── src/
 │       ├── api/                 # API client — generated schema.d.ts + templateDefaults.ts + typed wrappers
 │       │   ├── systems.ts         # systemsApi + transformApi (Phase 2A-5)
+│       │   ├── preview.ts         # previewApi.getOverlayData() + OverlayData types
 │       ├── components/          # UI components
 │       │   ├── cases/
 │       │   │   ├── CaseList.tsx             # table with compare-mode toggle; row click → /cases/:id
@@ -1774,7 +1777,36 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 - Calls `viewer_service.build_axes_glb(template_settings, merged_analysis, stl_paths, condition.inflow_velocity)`
 - Raises 400 on `ValueError` (no geometry found)
 
+**`backend/app/schemas/overlay.py`** (new — 2A-14)
+- Pydantic schemas for the overlay API response
+- `OverlayBoxItem`: `name`, `vis_key`, `level`, `x_min/x_max/y_min/y_max/z_min/z_max`, `color`, `category` (`"domain"` / `"refinement"` / `"porous"` / `"partial_volume"`)
+- `OverlayPlaneItem`: `name`, `vis_key`, `type` (`"tg_ground"` / `"tg_body"` / `"section_cut"`), `position` [x,y,z], `normal` [x,y,z], `width`, `height`, `color`
+- `OverlayDomainPartItem`: `name`, `vis_key`, `location`, `export_mesh`, `x_min/x_max/y_min/y_max`, `z_position`, `color`
+- `OverlayProbeItem`: `name`, `vis_key`, `points` (list of `{x,y,z}`), `radius`
+- `OverlayPartsGroup`: `label`, `patterns` (list[str]), `matched_parts` (int count)
+- `OverlayData`: top-level response — `boxes`, `planes`, `domain_parts`, `probes`, `parts_groups`, `ground_z`
+
+**`backend/app/services/preview_service.py`** (new — 2A-14)
+- `extract_overlay_data(deck: UfxSolverDeck, template_settings: TemplateSettings, all_part_names: list[str]) -> OverlayData` — extracts overlay primitives from assembled `UfxSolverDeck` with absolute coordinates. **Reusable for future Case Viewer** via `parse_ufx(xml_path)`.
+- `compute_overlay_data(db, template_id, assembly_id) -> OverlayData` — loads Template + Assembly from DB, calls `assemble_ufx_solver_deck(pca_axes=None)`, then `extract_overlay_data()`
+- `RL_COLORS` dict (refinement level → hex color) moved here from frontend
+- Porous vs refinement box distinction uses `part_based_box_refinement` entry names + `per_coefficient` flag
+- Domain parts: resolves `z_position` from `location` field + domain bounding box; colors: Belt (export_mesh=True) → `#00cc66`, uFX_ground (export_mesh=False) → `#ff8800`
+
+**`backend/app/api/v1/preview.py`** (new — 2A-14)
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/preview/overlay` | Returns `OverlayData` for a Template × Assembly pair |
+
+- Query params: `template_id: str`, `assembly_id: str`
+- Uses `get_current_user` dep for auth
+- Registered in `router.py` with `prefix=""`, `tags=["preview"]`
+
 ### Frontend
+
+**`src/api/preview.ts`** (new — 2A-14)
+- `previewApi.getOverlayData(templateId, assemblyId) -> Promise<OverlayData>` — GET request with query params
+- Re-exports types from `schema.d.ts`: `OverlayData`, `OverlayBoxItem`, `OverlayPlaneItem`, `OverlayDomainPartItem`, `OverlayProbeItem`, `OverlayPartsGroup`
 
 **`src/stores/viewerStore.ts`** (Zustand)
 ```typescript
@@ -1795,7 +1827,7 @@ viewerTheme: "dark" | "light"
 flatShading: boolean                 // default false; MeshStandardMaterial.flatShading
 showEdges: boolean                   // default false; THREE.EdgesGeometry overlay
 // Per-item overlay visibility — key absent = visible (true) by default
-// Key naming: "domain_box" | "ground_plane" | "box_{name}" | "pv_{name}" | "sc_{name}" | "probe_{name}"
+// Key naming: "domain_box" | "box_{name}" | "pv_{name}" | "sc_{name}" | "probe_{name}" | "dp_{name}" | "tg_ground" | "tg_body"
 overlayVisibility: Record<string, boolean>;
 setOverlayVisibility: (key: string, value: boolean) => void;
 // Global master switch — hides ALL template overlays in SceneCanvas (OverlayObjects returns null)
@@ -1863,21 +1895,18 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
 - Accepts array of `GeometryResponse` (Assembly support) — fetches and overlays all GLBs in parallel
 - Shows `<Loader>` while fetching, error text on failure, placeholder text when no assembly selected
 
-**`src/components/viewer/OverlayObjects.tsx`**
-- Renders Three.js overlays from `templateSettings` + `vehicleBbox` + `partInfo`
-- `partInfo` prop: merged `analysis_result.part_info` from all assembly geometries (passed from `TemplateBuilderPage` via `SceneCanvas`)
-- `matchesPattern(partName, pattern)`: TS helper mirroring backend `_matches_pattern` — `*` in pattern → ordered-segment wildcard; no `*` → `startsWith OR endsWith`; case-insensitive. `matchesAny(partName, patterns[])` checks any match.
+**`src/components/viewer/OverlayObjects.tsx`** (rewritten — 2A-14: backend-driven)
+- Props: `overlayData: OverlayData | null` — receives pre-computed absolute coordinates from `GET /api/v1/preview/overlay`
+- **Zero calculation logic** — all coordinate math (domain bbox multipliers, porous box union, TG positioning, partial volume resolution) is performed by the backend in `preview_service.extract_overlay_data()`; the frontend only renders the coordinates it receives
 - Visibility controlled per-item via `overlayVisibility` store (key absent = visible by default):
-  - **Domain Box** (key `"domain_box"`): `setup.domain_bounding_box` × vehicle bbox → white wireframe `<boxGeometry>`
-  - **Refinement Boxes** (key `"box_{name}"`): `setup.meshing.box_refinement` — per-level color (RL1=light blue → RL7=red) wireframe boxes; each box individually toggleable
-  - **Porous Boxes** (key `"box_{entryName}"` or `"box_{entryName}_{coeff_part_name}"`): `setup.meshing.part_based_box_refinement` — rendered only when `setup_option.meshing.box_refinement_porous=true` and `partInfo` available; per-level color; per-coefficient=false → 1 box (union of all matched parts), visibility key `box_{entryName}`; per-coefficient=true → 1 box per `porous_coefficients` entry (parts matching both `pbr.parts` AND `coeff.part_name`), visibility key `box_{entryName}_{coeff.part_name.replace("*","")}` — each sub-box has its own toggle; offsets `pbr.offset_x/y/zmin/max` applied
-  - **TG Ground** (key `"tg_ground"`): cyan semi-transparent YZ plane at `x_pos = noSlipXminPos − 0.01` (or `vb.x_min − 0.01` as fallback), extents `y ≈ ±42.5% vehicle width`, `z = [groundZ, groundZ + coarsest/8]`; shown only when `enable_ground_tg = true`. Matches `TurbulenceInstance.point.x_pos` in XML.
-  - **TG Body** (key `"tg_body"`): cyan semi-transparent YZ plane at `x_pos = vb.x_min − 5%`, extents `y = car_center ± 45%`, `z = vb.z_min + 10%…65%`; shown only when `enable_body_tg = true`. Both TG overlays are **YZ planes only** (not 3D boxes) — matches the ultraFluidX spec where `<point><x_pos>` defines the x-position and `<bounding_box>` contains only y/z extents.
-  - **Probe Spheres** (key `"probe_{name}"`): `output.probe_files[].points[]` → yellow sphere (r=0.04) per point; per-probe-file toggle
-  - **Partial Volume Boxes** (key `"pv_{name}"`): `output.partial_volumes[]` → orange wireframe boxes; `bbox_mode` selects coordinates (`user_defined`: `[xm,xp,ym,yp,zm,zp]` vehicle-relative multipliers applied as `bMin=vb_min+m*vLen`, `bMax=vb_max+p*vLen`; `from_meshing_box`: looks up `bbox_source_box_name` key in `setup.meshing.box_refinement` dict, applies same multiplier formula; `around_parts`: not rendered in 3D viewer); per-volume toggle; **field name**: `bbox_source_box_name` (not `bbox_source_box`)
-  - **Section Cuts** (key `"sc_{name}"`): `output.section_cuts[]` → magenta semi-transparent `PlaneGeometry` (10×10 m); per-cut toggle
-- `vehicleBbox` is union of all geometries in the assembly (computed in `TemplateBuilderPage`)
-- `partInfo` is merged `part_info` from all assembly geometries (computed in `TemplateBuilderPage`)
+  - **Domain Box** (key `"domain_box"`): `overlayData.boxes` item with `category="domain"` → white wireframe `WireBox`
+  - **Refinement Boxes** (key `"box_{name}"`): `category="refinement"` items → per-level color wireframe `WireBox`; each individually toggleable
+  - **Porous Boxes** (key `"box_{name}"`): `category="porous"` items → per-level color wireframe `WireBox`; per-coefficient visibility keys set by backend
+  - **Partial Volume Boxes** (key `"pv_{name}"`): `category="partial_volume"` items → orange wireframe `WireBox`; all bbox modes resolved by backend
+  - **TG Ground / Body** (keys `"tg_ground"` / `"tg_body"`): `overlayData.planes` items with `type="tg_ground"` / `"tg_body"` → cyan semi-transparent `PlaneGeometry` positioned via `position + normal + width + height`. TG overlays are **YZ planes only** — matches ultraFluidX spec.
+  - **Section Cuts** (key `"sc_{name}"`): `type="section_cut"` planes → magenta semi-transparent `PlaneGeometry` (10×10 m)
+  - **Probe Spheres** (key `"probe_{name}"`): `overlayData.probes[].points[]` → yellow sphere (r=`probe.radius || 0.04`) per point
+  - **Domain Parts** (key `"dp_{name}"`): `overlayData.domain_parts[]` → `FloorRect` component: XY plane at `z_position`; green (`#00cc66`) for belt (export_mesh=true), orange (`#ff8800`) for uFX_ground (export_mesh=false)
 
 **`src/components/viewer/PartListPanel.tsx`**
 - Props: `parts: string[]`; `partInfo?: Record<string, unknown> | null` (merged `analysis_result.part_info` from all assembly geometries)
@@ -1886,31 +1915,33 @@ setFitToTarget: (t: ...) => void     // triggers FitToPartController inside Canv
 - Search bar + `SegmentedControl` (Include / Exclude) — filters visible list
 - Toolbar buttons: **Toggle all filtered** (eye/eye-off) · **Show Only** (`IconEyeCheck` — hide everything except filtered parts) · **Invert** (`IconArrowsExchange` — flip visibility of all parts) · **Show all** (`IconEye` → `parts.forEach(n => setPartState(n, { visible: true }))` — correctly handles parts never clicked, unlike `showAllParts()` which only acts on existing `partStates` entries)
 
-**`src/components/viewer/OverlayPanel.tsx`** (new — 2A-13)
-- 4-tab `Tabs` component (`pills` variant) rendered inside `ControlPanel`; replaces old flat Switch list
-- **Parts tab**: reads `setup.meshing.offset_refinement[].parts`, `setup.meshing.custom_refinement[].parts`, `target_names.wheel/rim/baffle/windtunnel`, `setup_option.ride_height.reference_parts`, `porous_coefficients[].part_name`, `setup_option.meshing.triangle_splitting_instances[].parts` → groups of pattern `Badge` elements. Click any badge → `setSearchQuery(pattern)` → `PartListPanel` search bar filters to matching parts.
-- **Box tab**: `OverlaySwitch` rows for Domain Bounding Box (key `"domain_box"`), each `box_refinement` item (key `"box_{name}"`), `part_based_box_refinement` items — when `per_coefficient=False`: one switch per entry (key `"box_{entryName}"`); when `per_coefficient=True`: one switch per porous coefficient (key `"box_{entryName}_{coeff.part_name}"`), label `"{entryName} / {coeff.part_name}"`; each `partial_volumes` item (key `"pv_{name}"`). **`TabMasterSwitch`** at top toggles all items at once.
-- **Plane tab**: `OverlaySwitch` for TG Ground (key `"tg_ground"`, sub-text shows `x_pos = noSlipXminPos − 0.01`, shown when `enable_ground_tg=true`), TG Body (key `"tg_body"`, shown when `enable_body_tg=true`), each `section_cuts` item (key `"sc_{name}"`). Ground Plane removed — domain bounding box in Box tab is sufficient for ground height reference. **`TabMasterSwitch`** at top.
-- **Probe tab**: `OverlaySwitch` per `probe_files` item (key `"probe_{name}"`) — sub-text shows point count. **`TabMasterSwitch`** at top.
+**`src/components/viewer/OverlayPanel.tsx`** (rewritten — 2A-14: backend-driven)
+- Props: `overlayData: OverlayData | null` — reads backend data directly; no frontend parsing of `templateSettings`
+- 4-tab `Tabs` component (`pills` variant) rendered inside `ControlPanel`
+- **Parts tab**: reads `overlayData.parts_groups[]` → groups of `Badge` elements with `matched_parts` count. Click any badge → `setSearchQuery(pattern)` → `PartListPanel` search bar filters to matching parts.
+- **Box tab**: `OverlaySwitch` rows for each `overlayData.boxes[]` item: domain (key `"domain_box"`), refinement (key `"box_{name}"`), porous (key `"box_{name}"`), partial_volume (key `"pv_{name}"`); **Domain Parts** section: `OverlaySwitch` per `overlayData.domain_parts[]` (key `"dp_{name}"`), sub-text shows location + bounding range. **`TabMasterSwitch`** at top toggles all items at once.
+- **Plane tab**: `OverlaySwitch` for each `overlayData.planes[]` item: TG Ground (key `"tg_ground"`), TG Body (key `"tg_body"`), section cuts (key `"sc_{name}"`). **`TabMasterSwitch`** at top.
+- **Probe tab**: `OverlaySwitch` per `overlayData.probes[]` item (key `"probe_{name}"`) — sub-text shows point count. **`TabMasterSwitch`** at top.
 - `OverlaySwitch` reads/writes `overlayVisibility` store directly; key-absent → default visible.
-- **`TabMasterSwitch({ visKeys })`**: computes `allVisible = visKeys.every(k => overlayVisibility[k] !== false)`; single `Switch` toggles all keys; placed at top of Box/Plane/Probe tabs.
-- No template selected → placeholder text shown.
+- **`TabMasterSwitch({ visKeys })`**: computes `allVisible = visKeys.every(k => overlayVisibility[k] !== false)`; single `Switch` toggles all keys.
+- No overlay data → placeholder text shown.
 
 **`src/components/viewer/TemplateBuilderPage.tsx`**
 - Route: `/template-builder`
 - **3-column layout**: 275px `ControlPanel` | 255px `PartListPanel` | flex-1 `<SceneCanvas>`
 - **`ViewerToolbar`** (floating, top-right of 3D panel, `position:absolute`): `SegmentedControl` Persp/Ortho → `setCameraProjection()` · `Switch` Flat → `setFlatShading()` · `Switch` Edges → `setShowEdges()`
 - **`CameraOverlay`** (floating, bottom-right of 3D panel, `position:absolute`, `bottom:8, right:4`): camera preset buttons (iso/front/rear/side/top) + **theme toggle** (`IconSun`/`IconMoon`) + **origin axes toggle** (`IconAxisX`, filled=blue when ON, light when OFF → `setShowOriginAxes()`)
-- `ControlPanel` sections (275px left, scrollable) — receives `geometries` + `templateSettings` props:
+- `ControlPanel` sections (275px left, scrollable) — receives `geometries` + `overlayData` props:
   1. Assembly `Select` (+ `IconPackage` ActionIcon → `AssemblyGeometriesDrawer`) → Template `Select` (+ `IconPencil` ActionIcon → `TemplateVersionEditModal` for active version; enabled only when template + version loaded)
   2. **Create Case** button (`IconPlus`, enabled when both assembly + template selected) → `CreateCaseFromBuilderModal`
-  3. **Overlays** header (`Group`: `Text` + `Divider` + `Switch` → `setOverlaysAllVisible`, global on/off for all 3D overlays) → `<OverlayPanel templateSettings={templateSettings} />`
+  3. **Overlays** header (`Group`: `Text` + `Divider` + `Switch` → `setOverlaysAllVisible`, global on/off for all 3D overlays) → `<OverlayPanel overlayData={overlayData} />`
   4. **Camera** — preset buttons (iso / front / rear / side / top) + theme toggle
 - `PartListPanel` receives `allParts` (all part names from assembly geometries) + `partInfo` (merged `analysis_result.part_info` — used for per-part Fit-to camera function)
-- Template overlay: fetches `["templates", id, "versions"]`, finds active version, passes `settings` (as `templateSettings`) to `ControlPanel` and `<OverlayObjects>`
-- `vehicleBbox`: union of `analysis_result.vehicle_bbox` across all geometries in selected assembly
+- **Overlay data flow** (2A-14): `useQuery(["preview", "overlay", selectedTemplateId, selectedAssemblyId])` → `previewApi.getOverlayData()` → `overlayData: OverlayData` passed to `ControlPanel` (→ `OverlayPanel`) and `SceneCanvas` (→ `OverlayObjects`). Backend calls `assemble_ufx_solver_deck()` in memory (no disk write) then `extract_overlay_data()` to return pre-computed absolute coordinates. **Reusable for future Case Viewer**: same `extract_overlay_data()` function works with `parse_ufx(xml_path)` output.
+- Template versions still fetched (`["templates", id, "versions"]`) for `templateSettings` which is used by `CreateCaseFromBuilderModal` and `TemplateVersionEditModal` — but no longer drives overlay rendering
+- `vehicleBbox`: union of `analysis_result.vehicle_bbox` across all geometries in selected assembly (still computed locally for `OriginAxes` and `PartListPanel` Fit-to-part)
 - `TemplateVersionEditModal` gated on `editTemplateOpen` (mounted only when open) to avoid TagsInput `_value.map` error
-- Query key for template versions: `["templates", selectedTemplateId, "versions"]` — matches `TemplateVersionEditModal`'s `invalidateQueries` so saves auto-refresh 3D overlays
+- Query key for template versions: `["templates", selectedTemplateId, "versions"]` — matches `TemplateVersionEditModal`'s `invalidateQueries` so saves auto-refresh overlays (via query invalidation chain)
 
 **`src/components/geometries/GeometryUploadModal.tsx`** — Decimation Ratio Slider:
 - `form.initialValues.decimationRatio: 0.05`

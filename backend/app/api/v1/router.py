@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import auth, templates, geometries, assemblies, configurations, systems
+from app.api.v1 import auth, templates, geometries, assemblies, configurations, systems, preview
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -9,3 +9,4 @@ api_router.include_router(geometries.router, prefix="/geometries", tags=["geomet
 api_router.include_router(assemblies.router, prefix="/assemblies", tags=["assemblies"])
 api_router.include_router(configurations.router, prefix="", tags=["cases", "runs"])
 api_router.include_router(systems.router, prefix="", tags=["systems"])
+api_router.include_router(preview.router, prefix="", tags=["preview"])

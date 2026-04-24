@@ -18,6 +18,7 @@ import { IconSun, IconMoon, IconCamera, IconPackage, IconPlus, IconPencil, IconA
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { assembliesApi, type AssemblyResponse, type GeometryResponse } from "../../api/geometries";
 import { templatesApi, type TemplateResponse } from "../../api/templates";
+import { previewApi, type OverlayData } from "../../api/preview";
 import { useViewerStore } from "../../stores/viewerStore";
 import { SceneCanvas } from "./SceneCanvas";
 import { PartListPanel } from "./PartListPanel";
@@ -31,9 +32,11 @@ import { OverlayPanel } from "./OverlayPanel";
 function ControlPanel({
   // geometries kept for potential future use
   geometries: _geometries,
+  overlayData,
   templateSettings,
 }: {
   geometries: GeometryResponse[];
+  overlayData: OverlayData | null;
   templateSettings: Record<string, unknown> | null;
 }) {
   const {
@@ -167,7 +170,7 @@ function ControlPanel({
           />
         </Tooltip>
       </Group>
-      <OverlayPanel templateSettings={templateSettings} />
+      <OverlayPanel overlayData={overlayData} />
 
       <AssemblyGeometriesDrawer
         assemblyId={selectedAssemblyId}
@@ -351,6 +354,16 @@ export function TemplateBuilderPage() {
 
   const templateSettings = activeVersion?.settings ?? null;
 
+  // Overlay data from backend (single source of truth)
+  const { data: overlayData = null } = useQuery<OverlayData | null>({
+    queryKey: ["preview", "overlay", selectedTemplateId, selectedAssemblyId],
+    queryFn: () =>
+      selectedTemplateId && selectedAssemblyId
+        ? previewApi.getOverlayData(selectedTemplateId, selectedAssemblyId)
+        : Promise.resolve(null),
+    enabled: !!selectedTemplateId && !!selectedAssemblyId,
+  });
+
   // part_info: 全ジオメトリの analysis_result.part_info をマージ
   const partInfo = useMemo(() => {
     const merged: Record<string, unknown> = {};
@@ -378,7 +391,7 @@ export function TemplateBuilderPage() {
         style={{ width: 275, flexShrink: 0, overflow: "hidden", display: "flex", flexDirection: "column" }}
       >
         <ScrollArea style={{ flex: 1 }} type="auto">
-          <ControlPanel geometries={geometries} templateSettings={templateSettings as Record<string, unknown> | null} />
+          <ControlPanel geometries={geometries} overlayData={overlayData} templateSettings={templateSettings as Record<string, unknown> | null} />
         </ScrollArea>
       </Paper>
 
@@ -402,7 +415,7 @@ export function TemplateBuilderPage() {
         <SceneCanvas
           geometries={geometries}
           ratio={ratio}
-          templateSettings={templateSettings as Record<string, unknown> | null}
+          overlayData={overlayData}
           vehicleBbox={vehicleBbox}
           partInfo={partInfo}
         />

@@ -1,22 +1,9 @@
 import { Tabs, Stack, Switch, Badge, Text, Group, Tooltip } from "@mantine/core";
 import { useViewerStore } from "../../stores/viewerStore";
+import type { OverlayData } from "../../api/preview";
 
 interface OverlayPanelProps {
-  templateSettings: Record<string, unknown> | null;
-}
-
-// ─── Typed helpers ───────────────────────────────────────────────────────────
-
-type AnyRecord = Record<string, unknown>;
-
-function asRecord(v: unknown): AnyRecord | undefined {
-  return v && typeof v === "object" && !Array.isArray(v) ? (v as AnyRecord) : undefined;
-}
-function asArray<T = unknown>(v: unknown): T[] {
-  return Array.isArray(v) ? (v as T[]) : [];
-}
-function asStringArray(v: unknown): string[] {
-  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  overlayData: OverlayData | null;
 }
 
 // ─── OverlaySwitch — single row with label + optional sub-text ────────────────
@@ -47,6 +34,7 @@ function OverlaySwitch({
     </Group>
   );
 }
+
 // ─── TabMasterSwitch — master toggle for all items in a tab ──────────────────
 
 function TabMasterSwitch({ visKeys }: { visKeys: string[] }) {
@@ -64,65 +52,12 @@ function TabMasterSwitch({ visKeys }: { visKeys: string[] }) {
     </Group>
   );
 }
-// ─── Parts tab ───────────────────────────────────────────────────────────────
 
-function PartsTab({ ts }: { ts: AnyRecord }) {
+// ─── Parts tab — pattern badge groups ────────────────────────────────────────
+
+function PartsTab({ overlayData }: { overlayData: OverlayData }) {
   const { setSearchQuery } = useViewerStore();
-
-  const setupOption = asRecord(ts.setup_option);
-  const setup = asRecord(ts.setup);
-  const tn = asRecord(ts.target_names);
-  const meshingSetup = asRecord(asRecord(setup?.meshing)?.offset_refinement) ?? {};
-  const customRefinement = asRecord(asRecord(setup?.meshing)?.custom_refinement) ?? {};
-  const rhParts = asStringArray(asRecord(setupOption?.ride_height)?.reference_parts);
-
-  // Collect sections
-  type PatternGroup = { label: string; patterns: string[] };
-  const groups: PatternGroup[] = [];
-
-  // target_names groups
-  const tnGroups: [string, string][] = [
-    ["Wheel", "wheel"],
-    ["Rim", "rim"],
-    ["Baffle", "baffle"],
-    ["Wind tunnel", "windtunnel"],
-  ];
-  for (const [label, key] of tnGroups) {
-    const pats = asStringArray(tn?.[key]);
-    if (pats.length > 0) groups.push({ label, patterns: pats });
-  }
-
-  // Offset refinement parts
-  for (const [name, v] of Object.entries(meshingSetup)) {
-    const pats = asStringArray(asRecord(v)?.parts);
-    if (pats.length > 0) groups.push({ label: `Offset: ${name}`, patterns: pats });
-  }
-
-  // Custom refinement parts
-  for (const [name, v] of Object.entries(customRefinement)) {
-    const pats = asStringArray(asRecord(v)?.parts);
-    if (pats.length > 0) groups.push({ label: `Custom: ${name}`, patterns: pats });
-  }
-
-  // Ride height reference parts
-  if (rhParts.length > 0) groups.push({ label: "RH Reference", patterns: rhParts });
-
-  // Porous coefficients — part_name can be a glob pattern e.g. "Porous_Media_*"
-  const porousCoeffs = asArray<AnyRecord>(ts.porous_coefficients);
-  for (const pc of porousCoeffs) {
-    const partName = pc.part_name as string | undefined;
-    if (partName) groups.push({ label: `Porous: ${partName}`, patterns: [partName] });
-  }
-
-  // Triangle splitting per-part instances
-  const triInstances = asArray<AnyRecord>(
-    asRecord(setupOption?.meshing)?.triangle_splitting_instances
-  );
-  for (const inst of triInstances) {
-    const name = (inst.name as string | undefined) ?? "instance";
-    const parts = asStringArray(inst.parts);
-    if (parts.length > 0) groups.push({ label: `TS: ${name}`, patterns: parts });
-  }
+  const groups = overlayData.parts_groups;
 
   if (groups.length === 0) {
     return <Text size="xs" c="dimmed">No part patterns defined in template.</Text>;
@@ -135,7 +70,14 @@ function PartsTab({ ts }: { ts: AnyRecord }) {
       </Text>
       {groups.map((g) => (
         <div key={g.label}>
-          <Text size="xs" fw={600} mb={4}>{g.label}</Text>
+          <Text size="xs" fw={600} mb={4}>
+            {g.label}
+            {g.matched_parts.length > 0 && (
+              <Text component="span" size="xs" c="dimmed" ml={4}>
+                ({g.matched_parts.length} parts)
+              </Text>
+            )}
+          </Text>
           <Group gap={4} wrap="wrap">
             {g.patterns.map((p) => (
               <Tooltip key={p} label="Set as Part List filter" position="top" withArrow>
@@ -156,240 +98,168 @@ function PartsTab({ ts }: { ts: AnyRecord }) {
   );
 }
 
-// ─── Box tab ─────────────────────────────────────────────────────────────────
+// ─── Box tab — Domain / Refinement / Porous / PV / Domain Parts ──────────────
 
-function BoxTab({ ts }: { ts: AnyRecord }) {
-  const setup = asRecord(ts.setup);
-  const meshing = asRecord(asRecord(setup?.meshing));
-  const boxRefinement = asRecord(meshing?.box_refinement) ?? {};
-  const partBasedBox = asRecord(meshing?.part_based_box_refinement) ?? {};
-  const output = asRecord(ts.output);
-  const pvs = asArray<AnyRecord>(output?.partial_volumes);
-
-  // Collect all vis keys for master switch
-  const allVisKeys: string[] = ["domain_box"];
-  Object.keys(boxRefinement).forEach((name) => allVisKeys.push(`box_${name}`));
-  const soMeshingForKeys = asRecord(asRecord(ts.setup_option)?.meshing);
-  const perCoeffForKeys = !!soMeshingForKeys?.box_refinement_porous_per_coefficient;
-  const porousCoeffsForKeys = asArray<AnyRecord>(ts.porous_coefficients);
-  Object.keys(partBasedBox).forEach((name) => {
-    if (perCoeffForKeys && porousCoeffsForKeys.length > 0) {
-      porousCoeffsForKeys.forEach((pc) => {
-        const partName = pc.part_name as string | undefined;
-        if (partName) allVisKeys.push(`box_${name}_${partName.replace(/\*/g, "")}`);
-      });
-    } else {
-      allVisKeys.push(`box_${name}`);
-    }
-  });
-  pvs.forEach((pv) => allVisKeys.push(`pv_${(pv.name as string) ?? "partial_volume"}`));
+function BoxTab({ overlayData }: { overlayData: OverlayData }) {
+  const allVisKeys: string[] = [];
+  if (overlayData.domain_box) allVisKeys.push("domain_box");
+  overlayData.refinement_boxes.forEach((b) => allVisKeys.push(`box_${b.name}`));
+  overlayData.porous_boxes.forEach((b) => allVisKeys.push(`box_${b.name}`));
+  overlayData.partial_volume_boxes.forEach((b) => allVisKeys.push(`pv_${b.name}`));
+  overlayData.domain_parts.forEach((b) => allVisKeys.push(`dp_${b.name}`));
 
   return (
     <Stack gap="sm">
       <TabMasterSwitch visKeys={allVisKeys} />
 
       {/* Domain bounding box */}
-      <OverlaySwitch label="Domain bounding box" sub="Setup domain extents" visKey="domain_box" />
+      {overlayData.domain_box && (
+        <OverlaySwitch label="Domain bounding box" sub="Setup domain extents" visKey="domain_box" />
+      )}
 
-      {/* Box refinements */}
-      {Object.keys(boxRefinement).length > 0 && (
+      {/* Refinement boxes */}
+      {overlayData.refinement_boxes.length > 0 && (
         <>
           <Text size="xs" fw={600} c="dimmed">Box Refinements</Text>
-          {Object.entries(boxRefinement).map(([name, v]) => {
-            const br = asRecord(v);
-            const level = br?.level as number | undefined;
-            return (
-              <OverlaySwitch
-                key={name}
-                label={name}
-                sub={level !== undefined ? `RL${level}` : undefined}
-                visKey={`box_${name}`}
-              />
-            );
-          })}
+          {overlayData.refinement_boxes.map((b) => (
+            <OverlaySwitch
+              key={b.name}
+              label={b.name}
+              sub={b.level != null ? `RL${b.level}` : undefined}
+              visKey={`box_${b.name}`}
+            />
+          ))}
         </>
       )}
 
-      {/* Part-based box refinements */}
-      {Object.keys(partBasedBox).length > 0 && (() => {
-        const soMeshing = asRecord(asRecord(ts.setup_option)?.meshing);
-        const perCoeff = !!soMeshing?.box_refinement_porous_per_coefficient;
-        const porousCoeffs = asArray<AnyRecord>(ts.porous_coefficients);
-        return (
-          <>
-            <Text size="xs" fw={600} c="dimmed">Part-based Boxes</Text>
-            {Object.entries(partBasedBox).map(([name, v]) => {
-              const br = asRecord(v);
-              const level = br?.level as number | undefined;
-              const sub = level !== undefined ? `RL${level}` : undefined;
-              if (perCoeff && porousCoeffs.length > 0) {
-                // One toggle per porous coefficient
-                return porousCoeffs.map((pc) => {
-                  const partName = pc.part_name as string | undefined;
-                  if (!partName) return null;
-                  const suffix = partName.replace(/\*/g, "");
-                  const visKey = `box_${name}_${suffix}`;
-                  return (
-                    <OverlaySwitch
-                      key={visKey}
-                      label={`${name} / ${partName}`}
-                      sub={sub}
-                      visKey={visKey}
-                    />
-                  );
-                });
-              }
-              return (
-                <OverlaySwitch
-                  key={name}
-                  label={name}
-                  sub={sub}
-                  visKey={`box_${name}`}
-                />
-              );
-            })}
-          </>
-        );
-      })()}
+      {/* Porous boxes */}
+      {overlayData.porous_boxes.length > 0 && (
+        <>
+          <Text size="xs" fw={600} c="dimmed">Part-based Boxes</Text>
+          {overlayData.porous_boxes.map((b) => (
+            <OverlaySwitch
+              key={b.name}
+              label={b.name}
+              sub={b.level != null ? `RL${b.level}` : undefined}
+              visKey={`box_${b.name}`}
+            />
+          ))}
+        </>
+      )}
 
       {/* Partial volumes */}
-      {pvs.length > 0 && (
+      {overlayData.partial_volume_boxes.length > 0 && (
         <>
           <Text size="xs" fw={600} c="dimmed">Partial Volumes</Text>
-          {pvs.map((pv) => {
-            const name = pv.name as string ?? "partial_volume";
-            return (
-              <OverlaySwitch
-                key={name}
-                label={name}
-                sub={pv.bbox_mode as string | undefined}
-                visKey={`pv_${name}`}
-              />
-            );
-          })}
+          {overlayData.partial_volume_boxes.map((b) => (
+            <OverlaySwitch
+              key={b.name}
+              label={b.name}
+              visKey={`pv_${b.name}`}
+            />
+          ))}
         </>
       )}
 
-      {Object.keys(boxRefinement).length === 0 && Object.keys(partBasedBox).length === 0 && pvs.length === 0 && (
+      {/* Domain parts (belt patches + uFX_ground) */}
+      {overlayData.domain_parts.length > 0 && (
+        <>
+          <Text size="xs" fw={600} c="dimmed">Domain Parts</Text>
+          {overlayData.domain_parts.map((dp) => (
+            <OverlaySwitch
+              key={dp.name}
+              label={dp.name}
+              sub={`${dp.location} | x: ${dp.x_min.toFixed(2)}→${dp.x_max.toFixed(2)}, y: ${dp.y_min.toFixed(2)}→${dp.y_max.toFixed(2)}`}
+              visKey={`dp_${dp.name}`}
+            />
+          ))}
+        </>
+      )}
+
+      {allVisKeys.length === 0 && (
         <Text size="xs" c="dimmed">No boxes defined in template.</Text>
       )}
     </Stack>
   );
 }
 
-// ─── Plane tab ────────────────────────────────────────────────────────────────
+// ─── Plane tab — TG + Section cuts ───────────────────────────────────────────
 
-function PlaneTab({ ts }: { ts: AnyRecord }) {
-  const output = asRecord(ts.output);
-  const scs = asArray<AnyRecord>(output?.section_cuts);
-
-  // Ground / TG config
-  const setupOption = asRecord(ts.setup_option);
-  const gc = asRecord(asRecord(setupOption?.boundary_condition)?.ground);
-
-  // TG config
-  const tgCfg = asRecord(asRecord(setupOption?.boundary_condition)?.turbulence_generator);
-  const enableGroundTg = tgCfg?.enable_ground_tg === true;
-  const enableBodyTg = tgCfg?.enable_body_tg === true;
-  const blSuction = asRecord(gc?.bl_suction);
-  const noSlipXminPos = blSuction?.no_slip_xmin_pos;
-  const tgGroundSub = noSlipXminPos != null
-    ? `x_pos = ${((noSlipXminPos as number) - 0.01).toFixed(3)} m`
-    : "x_pos = vehicle x_min − 0.01 m (auto)";
-  const simParam = asRecord(ts.simulation_parameter);
-  const coarsest = (simParam?.coarsest_voxel_size as number) ?? 0.192;
-  const h_rl6 = coarsest / 8;
-
-  // Collect all vis keys for master switch
+function PlaneTab({ overlayData }: { overlayData: OverlayData }) {
   const allVisKeys: string[] = [];
-  if (enableGroundTg) allVisKeys.push("tg_ground");
-  if (enableBodyTg) allVisKeys.push("tg_body");
-  scs.forEach((sc) => allVisKeys.push(`sc_${(sc.name as string) ?? "section_cut"}`));
+  overlayData.tg_planes.forEach((p) => allVisKeys.push(p.type));
+  overlayData.section_cut_planes.forEach((p) => allVisKeys.push(`sc_${p.name}`));
 
   return (
     <Stack gap="sm">
       <TabMasterSwitch visKeys={allVisKeys} />
-      {(enableGroundTg || enableBodyTg) && (
+
+      {overlayData.tg_planes.length > 0 && (
         <>
           <Text size="xs" fw={600} c="dimmed">Turbulence Generators</Text>
-          {enableGroundTg && (
+          {overlayData.tg_planes.map((tg) => (
             <OverlaySwitch
-              label="TG Ground"
-              sub={`${tgGroundSub}, h = ${h_rl6.toFixed(4)} m`}
-              visKey="tg_ground"
+              key={tg.name}
+              label={tg.name}
+              sub={`x = ${tg.position[0].toFixed(3)} m, w = ${tg.width.toFixed(3)}, h = ${tg.height.toFixed(4)}`}
+              visKey={tg.type}
             />
-          )}
-          {enableBodyTg && (
-            <OverlaySwitch
-              label="TG Body"
-              sub="y ±45%, z 10–65% of height"
-              visKey="tg_body"
-            />
-          )}
+          ))}
         </>
       )}
 
-      {scs.length > 0 && (
+      {overlayData.section_cut_planes.length > 0 && (
         <>
           <Text size="xs" fw={600} c="dimmed">Section Cuts</Text>
-          {scs.map((sc) => {
-            const name = sc.name as string ?? "section_cut";
-            const ax = sc.axis_x as number | undefined;
-            const ay = sc.axis_y as number | undefined;
-            const az = sc.axis_z as number | undefined;
-            const sub = ax !== undefined ? `axis (${ax}, ${ay}, ${az})` : undefined;
-            return (
-              <OverlaySwitch key={name} label={name} sub={sub} visKey={`sc_${name}`} />
-            );
-          })}
+          {overlayData.section_cut_planes.map((sc) => (
+            <OverlaySwitch
+              key={sc.name}
+              label={sc.name}
+              sub={`axis (${sc.normal[0]}, ${sc.normal[1]}, ${sc.normal[2]})`}
+              visKey={`sc_${sc.name}`}
+            />
+          ))}
         </>
       )}
 
-      {scs.length === 0 && !enableGroundTg && !enableBodyTg && (
-        <Text size="xs" c="dimmed" mt={4}>No section cuts or TGs defined in template.</Text>
+      {allVisKeys.length === 0 && (
+        <Text size="xs" c="dimmed" mt={4}>No section cuts or TGs defined.</Text>
       )}
     </Stack>
   );
 }
 
-// ─── Probe tab ────────────────────────────────────────────────────────────────
+// ─── Probe tab ───────────────────────────────────────────────────────────────
 
-function ProbeTab({ ts }: { ts: AnyRecord }) {
-  const output = asRecord(ts.output);
-  const probeFiles = asArray<AnyRecord>(output?.probe_files);
-
-  if (probeFiles.length === 0) {
+function ProbeTab({ overlayData }: { overlayData: OverlayData }) {
+  if (overlayData.probes.length === 0) {
     return <Text size="xs" c="dimmed">No probe files defined in template.</Text>;
   }
 
-  const allVisKeys = probeFiles.map((pf) => `probe_${(pf.name as string) ?? "probe"}`);
+  const allVisKeys = overlayData.probes.map((pf) => `probe_${pf.name}`);
 
   return (
     <Stack gap="sm">
       <TabMasterSwitch visKeys={allVisKeys} />
-      {probeFiles.map((pf) => {
-        const name = pf.name as string ?? "probe";
-        const pts = asArray(pf.points);
-        return (
-          <OverlaySwitch
-            key={name}
-            label={name}
-            sub={`${pts.length} point${pts.length !== 1 ? "s" : ""}`}
-            visKey={`probe_${name}`}
-          />
-        );
-      })}
+      {overlayData.probes.map((pf) => (
+        <OverlaySwitch
+          key={pf.name}
+          label={pf.name}
+          sub={`${pf.points.length} point${pf.points.length !== 1 ? "s" : ""}`}
+          visKey={`probe_${pf.name}`}
+        />
+      ))}
     </Stack>
   );
 }
 
 // ─── Main export ─────────────────────────────────────────────────────────────
 
-export function OverlayPanel({ templateSettings }: OverlayPanelProps) {
-  if (!templateSettings) {
+export function OverlayPanel({ overlayData }: OverlayPanelProps) {
+  if (!overlayData) {
     return (
       <Text size="xs" c="dimmed" ta="center" py="sm">
-        Select a template to see overlay options.
+        Select a template and assembly to see overlay options.
       </Text>
     );
   }
@@ -405,16 +275,16 @@ export function OverlayPanel({ templateSettings }: OverlayPanelProps) {
 
       <div>
         <Tabs.Panel value="parts">
-          <PartsTab ts={templateSettings} />
+          <PartsTab overlayData={overlayData} />
         </Tabs.Panel>
         <Tabs.Panel value="box">
-          <BoxTab ts={templateSettings} />
+          <BoxTab overlayData={overlayData} />
         </Tabs.Panel>
         <Tabs.Panel value="plane">
-          <PlaneTab ts={templateSettings} />
+          <PlaneTab overlayData={overlayData} />
         </Tabs.Panel>
         <Tabs.Panel value="probe">
-          <ProbeTab ts={templateSettings} />
+          <ProbeTab overlayData={overlayData} />
         </Tabs.Panel>
       </div>
     </Tabs>

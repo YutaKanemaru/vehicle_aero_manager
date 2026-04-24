@@ -7,7 +7,8 @@ import { Center, Text, Stack } from "@mantine/core";
 import { Loader } from "@mantine/core";
 import { geometriesApi, type GeometryResponse } from "../../api/geometries";
 import { useViewerStore } from "../../stores/viewerStore";
-import { OverlayObjects, type VehicleBbox } from "./OverlayObjects";
+import { OverlayObjects } from "./OverlayObjects";
+import type { OverlayData } from "../../api/preview";
 
 // ─── Helper: build Box3 from GLB meshes only (excludes Grid, axes, gizmos) ───
 // Grid args={[200,200]} would dominate setFromObject(scene) for m-unit models.
@@ -434,6 +435,9 @@ function FitToPartController() {
   return null;
 }
 
+// ─── Local type for vehicle bounding box ─────────────────────────────────────
+type VehicleBbox = { x_min: number; x_max: number; y_min: number; y_max: number; z_min: number; z_max: number };
+
 // ─── Origin coordinate axes + XY ground plane ───────────────────────────────
 
 function OriginAxes({ vehicleBbox }: { vehicleBbox?: VehicleBbox | null }) {
@@ -478,8 +482,8 @@ function OriginAxes({ vehicleBbox }: { vehicleBbox?: VehicleBbox | null }) {
 interface SceneCanvasProps {
   geometries: GeometryResponse[];
   ratio: number;
-  templateSettings?: Record<string, unknown> | null;
-  vehicleBbox?: VehicleBbox | null;
+  overlayData?: OverlayData | null;
+  vehicleBbox?: { x_min: number; x_max: number; y_min: number; y_max: number; z_min: number; z_max: number } | null;
   partInfo?: Record<string, unknown> | null;
 }
 
@@ -489,7 +493,7 @@ interface BlobEntry {
   parts: string[];
 }
 
-export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, partInfo }: SceneCanvasProps) {
+export function SceneCanvas({ geometries, ratio, overlayData, vehicleBbox, partInfo }: SceneCanvasProps) {
   const [blobEntries, setBlobEntries] = useState<BlobEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -604,9 +608,7 @@ export function SceneCanvas({ geometries, ratio, templateSettings, vehicleBbox, 
         {showOriginAxes && <OriginAxes vehicleBbox={vehicleBbox} />}
 
         <OverlayObjects
-          templateSettings={templateSettings}
-          vehicleBbox={vehicleBbox}
-          partInfo={partInfo}
+          overlayData={overlayData}
         />
 
         <Grid

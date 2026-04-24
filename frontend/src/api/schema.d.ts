@@ -996,6 +996,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/preview/overlay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Overlay Data
+         * @description Compute overlay data from Template + Assembly for the 3-D viewer.
+         *
+         *     No XML file is written to disk — the solver deck is assembled in memory
+         *     and overlay primitives are extracted from it.
+         */
+        get: operations["get_overlay_data_api_v1_preview_overlay_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -2241,6 +2264,155 @@ export interface components {
              * @default false
              */
             window_avg_temperature: boolean;
+        };
+        /**
+         * OverlayBoxItem
+         * @description Axis-aligned wireframe box (domain, refinement, porous, partial-volume).
+         */
+        OverlayBoxItem: {
+            /** Name */
+            name: string;
+            /** Level */
+            level?: number | null;
+            /** X Min */
+            x_min: number;
+            /** X Max */
+            x_max: number;
+            /** Y Min */
+            y_min: number;
+            /** Y Max */
+            y_max: number;
+            /** Z Min */
+            z_min: number;
+            /** Z Max */
+            z_max: number;
+            /** Color */
+            color?: string | null;
+            /**
+             * Category
+             * @default refinement
+             */
+            category: string;
+        };
+        /**
+         * OverlayData
+         * @description Complete overlay payload for the 3-D viewer.
+         */
+        OverlayData: {
+            domain_box?: components["schemas"]["OverlayBoxItem"] | null;
+            /**
+             * Refinement Boxes
+             * @default []
+             */
+            refinement_boxes: components["schemas"]["OverlayBoxItem"][];
+            /**
+             * Porous Boxes
+             * @default []
+             */
+            porous_boxes: components["schemas"]["OverlayBoxItem"][];
+            /**
+             * Partial Volume Boxes
+             * @default []
+             */
+            partial_volume_boxes: components["schemas"]["OverlayBoxItem"][];
+            /**
+             * Domain Parts
+             * @default []
+             */
+            domain_parts: components["schemas"]["OverlayDomainPartItem"][];
+            /**
+             * Tg Planes
+             * @default []
+             */
+            tg_planes: components["schemas"]["OverlayPlaneItem"][];
+            /**
+             * Section Cut Planes
+             * @default []
+             */
+            section_cut_planes: components["schemas"]["OverlayPlaneItem"][];
+            /**
+             * Probes
+             * @default []
+             */
+            probes: components["schemas"]["OverlayProbeItem"][];
+            /**
+             * Parts Groups
+             * @default []
+             */
+            parts_groups: components["schemas"]["OverlayPartsGroup"][];
+            /**
+             * Ground Z
+             * @default 0
+             */
+            ground_z: number;
+        };
+        /**
+         * OverlayDomainPartItem
+         * @description domain_part_instance — belt patch / uFX_ground on the floor.
+         */
+        OverlayDomainPartItem: {
+            /** Name */
+            name: string;
+            /** Location */
+            location: string;
+            /** Export Mesh */
+            export_mesh: boolean;
+            /** X Min */
+            x_min: number;
+            /** X Max */
+            x_max: number;
+            /** Y Min */
+            y_min: number;
+            /** Y Max */
+            y_max: number;
+            /** Z Position */
+            z_position: number;
+            /** Color */
+            color?: string | null;
+        };
+        /**
+         * OverlayPartsGroup
+         * @description One group of part-name patterns (Parts tab badges).
+         */
+        OverlayPartsGroup: {
+            /** Label */
+            label: string;
+            /** Patterns */
+            patterns: string[];
+            /** Matched Parts */
+            matched_parts: string[];
+        };
+        /**
+         * OverlayPlaneItem
+         * @description Semi-transparent plane (TG, section-cut).
+         */
+        OverlayPlaneItem: {
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
+            /** Position */
+            position: number[];
+            /** Normal */
+            normal: number[];
+            /** Width */
+            width: number;
+            /** Height */
+            height: number;
+            /** Color */
+            color?: string | null;
+        };
+        /**
+         * OverlayProbeItem
+         * @description Probe file — list of points.
+         */
+        OverlayProbeItem: {
+            /** Name */
+            name: string;
+            /** Points */
+            points: number[][];
+            /** Radius */
+            radius: number;
         };
         /** PartInfo */
         PartInfo: {
@@ -6200,6 +6372,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_overlay_data_api_v1_preview_overlay_get: {
+        parameters: {
+            query: {
+                template_id: string;
+                assembly_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlayData"];
                 };
             };
             /** @description Validation Error */
