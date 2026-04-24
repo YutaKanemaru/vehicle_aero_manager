@@ -1134,7 +1134,7 @@ class SystemResponse(BaseModel):
 
 - `CaseCreate`, `CaseUpdate` (`name`, `description`, `template_id`, `assembly_id`, `map_id`, `folder_id`), `CaseResponse` (includes `run_count`, `case_number`, `template_name`, `assembly_name`, `map_name`, `parent_case_id`, `parent_case_number`, `parent_case_name`)
 - `CaseDuplicateRequest`: `{ name, description }` — copies active template/assembly/map from source case; auto-sets `parent_case_id`
-- `RunCreate`: `{ name: str = "", condition_id, comment: str = "" }` — if `name` is empty, auto-formats as `{case_number}_{run_number}_{condition_name}[_{comment}]`
+- `RunCreate`: `{ name: str = "", condition_id, comment: str = "" }` — if `name` is empty, auto-formats as `{case_number}_{case_name}_R{N:02d}_{condition_name}[_{comment}]`
 - `RunResponse` (includes `xml_path`, `stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`, `geometry_override_id`)
 - `RunUpdate`: `{ geometry_override_id: str | None }` — used to set geometry override after ride-height transform
 - `DiffResult`: list of changed fields between two Runs
@@ -1149,7 +1149,7 @@ class SystemResponse(BaseModel):
 - `list_cases`, `get_case`, `create_case`, `update_case`, `delete_case`
 - `update_case()`: accepts `template_id` and `assembly_id` updates (validates existence); **template/assembly/map locked** — raises HTTP 400 when non-pending runs exist and `template_id`/`assembly_id`/`map_id` change is requested; `map_id` change (when allowed) triggers `sync_runs_for_map()`
 - `delete_case()`: cascades DB delete to Runs; also deletes `data/runs/{run_id}/` output directories
-- `create_run(case_id, data: RunCreate, current_user)`: auto-name = `{case_number}_R{n:02d}_{condition_name}[_{comment}]` when `data.name` is empty; `data.comment` appended as suffix
+- `create_run(case_id, data: RunCreate, current_user)`: auto-name = `{case_number}_{case_name}_R{N:02d}_{condition_name}[_{comment}]` when `data.name` is empty; `data.comment` appended as suffix
 - `list_runs(case_id)`
 - `delete_run(db, case_id, run_id, current_user)` — deletes Run row + `data/runs/{run_id}/` directory
 - `reset_run(db, case_id, run_id, current_user)` — clears `xml_path`, `stl_path`, `error_message`, sets `status="pending"`, deletes output dir
@@ -1157,7 +1157,7 @@ class SystemResponse(BaseModel):
 - `trigger_xml_generation(db, case_id, run_id, current_user, background_tasks, geometry_only=False)` — triggers `_generate_xml_task(run_id, geometry_only)`
 - `_generate_xml_task(run_id, geometry_only=False)` — background task. When `geometry_only=True` and `case.parent_case_id` is set: finds parent's ready Run (same condition preferred), parses its XML via `parse_ufx()`, swaps `geometry.source_file` for the new assembly STL, serializes and saves — skips full re-assembly. Falls back to full generation if no parent ready run found.
 - `duplicate_case(db, source_case_id, data: CaseDuplicateRequest, current_user)` — copies Case row (same template/assembly/map); sets `parent_case_id = source_case_id`; does NOT copy Runs
-- `create_case_with_runs(db, case_data, current_user)` — creates Case + one Run per Condition; run names auto-formatted as `{case_number}_R{n:02d}_{condition_name}`
+- `create_case_with_runs(db, case_data, current_user)` — creates Case + one Run per Condition; run names auto-formatted as `{case_number}_{case_name}_R{N:02d}_{condition_name}`
 - `compare_cases(db, base_case_id, compare_case_id) -> CaseCompareResult`: deep-diffs active template settings JSON, flat map condition values, and assembly `analysis_result.parts` sets
 - `get_axes_glb(db, case_id, run_id) -> bytes`: resolves Run → Condition → Assembly → `viewer_service.build_axes_glb()`; raises 400 on ValueError
 - `get_run_overlay(db, case_id, run_id) -> OverlayData`: parses Run's generated XML via `parse_ufx()` → `extract_overlay_data()` — reuses same pipeline as Template Builder but from actual XML output

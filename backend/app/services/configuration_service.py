@@ -458,7 +458,7 @@ def create_case_with_runs(db: Session, data: CaseCreate, current_user: User) -> 
         )
         for idx, cond in enumerate(conditions, start=1):
             run_number = f"{case.case_number}_R{idx:02d}"
-            auto_name = f"{case.case_number}_R{idx:02d}_{cond.name}"
+            auto_name = f"{case.case_number}_{case.name}_R{idx:02d}_{cond.name}"
             run = Run(
                 run_number=run_number,
                 name=auto_name,
@@ -594,7 +594,7 @@ def sync_runs_for_map(db: Session, case: Case, new_map_id: str, current_user: Us
     idx = existing_count + 1
     for item in preview.add:
         run_number = f"{case.case_number}_R{idx:02d}"
-        auto_name = f"{case.case_number}_R{idx:02d}_{item.condition_name}"
+        auto_name = f"{case.case_number}_{case.name}_R{idx:02d}_{item.condition_name}"
         run = Run(
             run_number=run_number,
             name=auto_name,
@@ -639,8 +639,8 @@ def create_run(db: Session, case_id: str, data: RunCreate, current_user: User) -
     run_count = db.scalar(select(func.count()).select_from(Run).where(Run.case_id == case_id)) or 0
     run_idx = run_count + 1
     run_number = f"{case.case_number}_R{run_idx:02d}"
-    # Auto-format run name: {case_number}_{run_number_suffix}_{condition_name}[_{comment}]
-    auto_name = f"{case.case_number}_R{run_idx:02d}_{condition.name}"
+    # Auto-format run name: {case_number}_{case_name}_{run_number_suffix}_{condition_name}[_{comment}]
+    auto_name = f"{case.case_number}_{case.name}_R{run_idx:02d}_{condition.name}"
     if data.comment:
         auto_name = f"{auto_name}_{data.comment}"
     run = Run(
