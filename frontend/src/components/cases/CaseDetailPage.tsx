@@ -380,13 +380,27 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
 
-  async function downloadXml(runId: string) {
+  async function downloadXml(runId: string, runName: string) {
     try {
       const blob = await runsApi.download(caseData.id, runId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "output.xml";
+      a.download = `${runName}.xml`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      notifications.show({ message: (e as Error).message, color: "red" });
+    }
+  }
+
+  async function downloadStl(runId: string, runName: string) {
+    try {
+      const blob = await runsApi.downloadStl(caseData.id, runId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${runName}.stl`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e: unknown) {
@@ -500,7 +514,7 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                           {/* Download XML */}
                           {run.status === "ready" && run.xml_path && (
                             <Tooltip label="Download XML">
-                              <ActionIcon size="xs" variant="light" color="teal" onClick={() => downloadXml(run.id)}>
+                              <ActionIcon size="xs" variant="light" color="teal" onClick={() => downloadXml(run.id, run.name)}>
                                 <IconDownload size={12} />
                               </ActionIcon>
                             </Tooltip>
@@ -512,8 +526,7 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                                 size="xs"
                                 variant="light"
                                 color="cyan"
-                                component="a"
-                                href={`/api/v1/cases/${caseData.id}/runs/${run.id}/download-stl`}
+                                onClick={() => downloadStl(run.id, run.name)}
                               >
                                 <IconFileTypography size={12} />
                               </ActionIcon>
