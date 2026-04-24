@@ -398,7 +398,7 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
       queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
       if (result?.geometry_id && result?.geometry_name) {
         addJob(result.geometry_id, result.geometry_name, "stl_analysis");
-        updateJob(result.geometry_id, "analyzing");
+        updateJob(result.geometry_id, "pending");
       }
       notifications.show({ message: "Transform started — geometry building in background", color: "teal" });
     },
@@ -410,13 +410,37 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
       const needTransform = runs.filter(
         (r) => r.needs_transform && !r.transform_applied && (r.status === "pending" || r.status === "error")
       );
-      for (const run of needTransform) {
-        await runsApi.transform(caseData.id, run.id);
-      }
+      // Use allSettled so one failure doesn't abort the rest
+      const results = await Promise.allSettled(
+        needTransform.map((run) => runsApi.transform(caseData.id, run.id))
+      );
+      return { results, runs: needTransform };
     },
-    onSuccess: () => {
+    onSuccess: ({ results, runs: transformedRuns }) => {
       queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
-      notifications.show({ message: "Transforms started for all applicable runs", color: "teal" });
+      let successCount = 0;
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") {
+          successCount++;
+          const result = r.value;
+          if (result?.geometry_id && result?.geometry_name) {
+            addJob(result.geometry_id, result.geometry_name, "stl_analysis");
+            updateJob(result.geometry_id, "pending");
+          }
+        } else {
+          const run = transformedRuns[i];
+          notifications.show({
+            message: `Transform failed for run "${run.name}": ${r.reason?.message ?? r.reason}`,
+            color: "red",
+          });
+        }
+      });
+      if (successCount > 0) {
+        notifications.show({
+          message: `${successCount} transform(s) started — geometries building in background`,
+          color: "teal",
+        });
+      }
     },
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
