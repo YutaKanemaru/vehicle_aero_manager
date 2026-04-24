@@ -760,6 +760,26 @@ export interface paths {
         patch: operations["update_case_api_v1_cases__case_id__patch"];
         trace?: never;
     };
+    "/api/v1/cases/{case_id}/sync-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sync Preview
+         * @description Preview what happens to Runs when this Case switches to a different map.
+         */
+        get: operations["sync_preview_api_v1_cases__case_id__sync_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cases/{case_id}/duplicate": {
         parameters: {
             query?: never;
@@ -896,6 +916,26 @@ export interface paths {
          * @description Return a GLB file containing wheel-rotation-axis arrows and porous-flow-axis arrows.
          */
         get: operations["get_axes_glb_api_v1_cases__case_id__runs__run_id__axes_glb_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/runs/{run_id}/overlay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Run Overlay
+         * @description Return OverlayData for a ready Run — parsed from its generated XML.
+         */
+        get: operations["get_run_overlay_api_v1_cases__case_id__runs__run_id__overlay_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3336,6 +3376,41 @@ export interface components {
              * @default 0
              */
             yaw_angle: number;
+        };
+        /**
+         * SyncRunsPreview
+         * @description Preview of what will happen when a Case's map_id changes.
+         */
+        SyncRunsPreview: {
+            /** Keep */
+            keep: components["schemas"]["SyncRunsPreviewItem"][];
+            /** Add */
+            add: components["schemas"]["SyncRunsPreviewItem"][];
+            /** Orphan */
+            orphan: components["schemas"]["SyncRunsPreviewItem"][];
+        };
+        /**
+         * SyncRunsPreviewItem
+         * @description One row in the sync preview: a condition that will be kept, added, or orphaned.
+         */
+        SyncRunsPreviewItem: {
+            /** Condition Id */
+            condition_id: string;
+            /** Condition Name */
+            condition_name: string;
+            /** Inflow Velocity */
+            inflow_velocity: number;
+            /** Yaw Angle */
+            yaw_angle: number;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "keep" | "add" | "orphan";
+            /** Existing Run Id */
+            existing_run_id?: string | null;
+            /** Existing Run Status */
+            existing_run_status?: string | null;
         };
         /** SystemResponse */
         SystemResponse: {
@@ -5876,6 +5951,40 @@ export interface operations {
             };
         };
     };
+    sync_preview_api_v1_cases__case_id__sync_preview_get: {
+        parameters: {
+            query: {
+                /** @description ID of the target ConditionMap */
+                new_map_id: string;
+            };
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRunsPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     duplicate_case_api_v1_cases__case_id__duplicate_post: {
         parameters: {
             query?: never;
@@ -6175,6 +6284,38 @@ export interface operations {
         };
     };
     get_axes_glb_api_v1_cases__case_id__runs__run_id__axes_glb_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_overlay_api_v1_cases__case_id__runs__run_id__overlay_get: {
         parameters: {
             query?: never;
             header?: never;

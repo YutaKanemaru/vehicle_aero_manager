@@ -19,6 +19,7 @@ from app.schemas.configuration import (
     ConditionMapFolderCreate, ConditionMapFolderUpdate, ConditionMapFolderResponse,
     DiffResult,
     RunCreate, RunResponse, RunUpdate,
+    SyncRunsPreview,
 )
 from app.services import configuration_service
 
@@ -262,6 +263,17 @@ def get_case(
     return configuration_service.enrich_case_response(db, c)
 
 
+@router.get("/cases/{case_id}/sync-preview", response_model=SyncRunsPreview)
+def sync_preview(
+    case_id: str,
+    new_map_id: str = Query(..., description="ID of the target ConditionMap"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Preview what happens to Runs when this Case switches to a different map."""
+    return configuration_service.compute_sync_preview(db, case_id, new_map_id)
+
+
 @router.patch("/cases/{case_id}", response_model=CaseResponse)
 def update_case(
     case_id: str,
@@ -410,6 +422,17 @@ def get_axes_glb(
     """Return a GLB file containing wheel-rotation-axis arrows and porous-flow-axis arrows."""
     glb_bytes = configuration_service.get_axes_glb(db, case_id, run_id)
     return Response(content=glb_bytes, media_type="model/gltf-binary")
+
+
+@router.get("/cases/{case_id}/runs/{run_id}/overlay")
+def get_run_overlay(
+    case_id: str,
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return OverlayData for a ready Run — parsed from its generated XML."""
+    return configuration_service.get_run_overlay(db, case_id, run_id)
 
 
 @router.get("/cases/{case_id}/compare", response_model=CaseCompareResult)

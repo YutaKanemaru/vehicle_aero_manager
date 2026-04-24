@@ -321,3 +321,25 @@ class CaseCompareResult(BaseModel):
     template_settings_diff: list[DiffField]
     map_diff: list[DiffField]
     parts_diff: PartsDiffResult
+
+
+# ---------------------------------------------------------------------------
+# Sync Runs Preview (map change)
+# ---------------------------------------------------------------------------
+
+class SyncRunsPreviewItem(BaseModel):
+    """One row in the sync preview: a condition that will be kept, added, or orphaned."""
+    condition_id: str
+    condition_name: str
+    inflow_velocity: float
+    yaw_angle: float
+    action: Literal["keep", "add", "orphan"]
+    existing_run_id: str | None = None  # set for keep/orphan
+    existing_run_status: str | None = None
+
+
+class SyncRunsPreview(BaseModel):
+    """Preview of what will happen when a Case's map_id changes."""
+    keep: list[SyncRunsPreviewItem]
+    add: list[SyncRunsPreviewItem]
+    orphan: list[SyncRunsPreviewItem]

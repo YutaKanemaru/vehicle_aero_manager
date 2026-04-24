@@ -30,6 +30,7 @@ from app.schemas.configuration import (
     ConditionMapFolderCreate, ConditionMapFolderUpdate,
     DiffField, DiffResult,
     RunCreate, RunUpdate,
+    SyncRunsPreview, SyncRunsPreviewItem,
 )
 from app.schemas.template_settings import TemplateSettings
 
@@ -296,6 +297,26 @@ def create_case(db: Session, data: CaseCreate, current_user: User) -> Case:
 def update_case(db: Session, case_id: str, data: CaseUpdate, current_user: User) -> Case:
     case = _get_case_or_404(db, case_id)
     _check_owner_or_admin(case, current_user)
+
+    # Lock: disallow template/assembly change when any run is non-pending
+    has_generated = db.scalar(
+        select(func.count()).select_from(Run).where(
+            Run.case_id == case_id,
+            Run.status != "pending",
+        )
+    ) or 0
+    if has_generated > 0:
+        if "template_id" in data.model_fields_set and data.template_id is not None and data.template_id != case.template_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot change template: runs with generated data exist. Reset or delete them first.",
+            )
+        if "assembly_id" in data.model_fields_set and data.assembly_id is not None and data.assembly_id != case.assembly_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot change assembly: runs with generated data exist. Reset or delete them first.",
+            )
+
     if data.name is not None:
         case.name = data.name
     if data.description is not None:
@@ -309,9 +330,16 @@ def update_case(db: Session, case_id: str, data: CaseUpdate, current_user: User)
             raise HTTPException(status_code=404, detail="Assembly not found")
         case.assembly_id = data.assembly_id
     if "map_id" in data.model_fields_set:
-        if data.map_id and not db.get(ConditionMap, data.map_id):
+        new_map_id = data.map_id
+        if new_map_id and not db.get(ConditionMap, new_map_id):
             raise HTTPException(status_code=404, detail="ConditionMap not found")
-        case.map_id = data.map_id
+        old_map_id = case.map_id
+        if new_map_id != old_map_id:
+            case.map_id = new_map_id
+            if new_map_id:
+                # Sync runs to match new map's conditions
+                sync_runs_for_map(db, case, new_map_id, current_user)
+            # If map cleared (None), existing runs stay as-is (orphaned)
     if "folder_id" in data.model_fields_set:
         case.folder_id = data.folder_id
     if "parent_case_id" in data.model_fields_set:
@@ -434,6 +462,143 @@ def create_case_with_runs(db: Session, data: CaseCreate, current_user: User) -> 
             db.add(run)
         db.commit()
     return case
+
+
+# ---------------------------------------------------------------------------
+# Sync Runs to Map (map change)
+# ---------------------------------------------------------------------------
+
+def _condition_match_key(cond: Condition) -> tuple:
+    """Identity key: two conditions are the 'same' if name+velocity+yaw match."""
+    return (cond.name.strip().lower(), round(cond.inflow_velocity, 6), round(cond.yaw_angle, 6))
+
+
+def compute_sync_preview(db: Session, case_id: str, new_map_id: str) -> SyncRunsPreview:
+    """Preview what happens to Runs when the Case switches to *new_map_id*.
+
+    Returns lists of keep/add/orphan items.
+    """
+    case = _get_case_or_404(db, case_id)
+    new_map = _get_map_or_404(db, new_map_id)  # validates existence
+
+    # Existing runs for this case
+    existing_runs: list[Run] = list(
+        db.scalars(
+            select(Run).where(Run.case_id == case_id).order_by(Run.created_at.asc())
+        ).all()
+    )
+    # New conditions from the target map
+    new_conditions: list[Condition] = list(
+        db.scalars(
+            select(Condition).where(Condition.map_id == new_map_id).order_by(Condition.created_at.asc())
+        ).all()
+    )
+    # Build lookup from existing run → condition key
+    run_by_key: dict[tuple, Run] = {}
+    cond_cache: dict[str, Condition] = {}
+    for run in existing_runs:
+        if run.condition_id not in cond_cache:
+            c = db.get(Condition, run.condition_id)
+            if c:
+                cond_cache[run.condition_id] = c
+        c = cond_cache.get(run.condition_id)
+        if c:
+            key = _condition_match_key(c)
+            if key not in run_by_key:
+                run_by_key[key] = run  # first run per key wins
+
+    matched_run_ids: set[str] = set()
+    keep: list[SyncRunsPreviewItem] = []
+    add: list[SyncRunsPreviewItem] = []
+
+    for nc in new_conditions:
+        key = _condition_match_key(nc)
+        existing_run = run_by_key.get(key)
+        if existing_run:
+            matched_run_ids.add(existing_run.id)
+            keep.append(SyncRunsPreviewItem(
+                condition_id=nc.id,
+                condition_name=nc.name,
+                inflow_velocity=nc.inflow_velocity,
+                yaw_angle=nc.yaw_angle,
+                action="keep",
+                existing_run_id=existing_run.id,
+                existing_run_status=existing_run.status,
+            ))
+        else:
+            add.append(SyncRunsPreviewItem(
+                condition_id=nc.id,
+                condition_name=nc.name,
+                inflow_velocity=nc.inflow_velocity,
+                yaw_angle=nc.yaw_angle,
+                action="add",
+            ))
+
+    orphan: list[SyncRunsPreviewItem] = []
+    for run in existing_runs:
+        if run.id not in matched_run_ids:
+            c = cond_cache.get(run.condition_id)
+            orphan.append(SyncRunsPreviewItem(
+                condition_id=run.condition_id,
+                condition_name=c.name if c else "",
+                inflow_velocity=c.inflow_velocity if c else 0,
+                yaw_angle=c.yaw_angle if c else 0,
+                action="orphan",
+                existing_run_id=run.id,
+                existing_run_status=run.status,
+            ))
+
+    return SyncRunsPreview(keep=keep, add=add, orphan=orphan)
+
+
+def sync_runs_for_map(db: Session, case: Case, new_map_id: str, current_user: User) -> None:
+    """Apply the sync: re-link kept runs, create new runs, delete orphan pending runs.
+
+    Ready/error orphans are preserved (kept in DB).
+    """
+    preview = compute_sync_preview(db, case.id, new_map_id)
+
+    # 1. Re-link kept runs to the new condition_id
+    for item in preview.keep:
+        if item.existing_run_id:
+            run = db.get(Run, item.existing_run_id)
+            if run:
+                run.condition_id = item.condition_id  # point to new map's condition
+
+    # 2. Delete orphan runs that are still pending (no generated data)
+    from app.services.geometry_service import _rmtree_force
+    for item in preview.orphan:
+        if item.existing_run_id and item.existing_run_status == "pending":
+            run = db.get(Run, item.existing_run_id)
+            if run:
+                db.delete(run)
+                run_dir = settings.runs_dir / item.existing_run_id
+                try:
+                    if run_dir.exists() and run_dir != settings.runs_dir:
+                        _rmtree_force(run_dir)
+                except Exception as e:
+                    logger.warning("Failed to delete orphan run directory %s: %s", run_dir, e)
+
+    # 3. Create runs for new conditions
+    existing_count = db.scalar(
+        select(func.count()).select_from(Run).where(Run.case_id == case.id)
+    ) or 0
+    idx = existing_count + 1
+    for item in preview.add:
+        run_number = f"{case.case_number}_R{idx:02d}"
+        auto_name = f"{case.case_number}_R{idx:02d}_{item.condition_name}"
+        run = Run(
+            run_number=run_number,
+            name=auto_name,
+            case_id=case.id,
+            condition_id=item.condition_id,
+            status="pending",
+            created_by=current_user.id,
+        )
+        db.add(run)
+        idx += 1
+
+    db.flush()  # let caller commit
 
 
 # ---------------------------------------------------------------------------
@@ -825,6 +990,50 @@ def get_axes_glb(db: Session, case_id: str, run_id: str) -> bytes:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def get_run_overlay(db: Session, case_id: str, run_id: str):
+    """Return OverlayData for a Run that has generated XML.
+
+    Uses ``parse_ufx`` → ``extract_overlay_data`` — same pipeline as Template
+    Builder but based on actual XML output rather than in-memory assembly.
+    """
+    from app.ultrafluid.parser import parse_ufx
+    from app.services.preview_service import extract_overlay_data
+
+    run = _get_run_or_404(db, case_id, run_id)
+    if run.status != "ready" or not run.xml_path:
+        raise HTTPException(status_code=400, detail="Run XML is not ready")
+
+    xml_path = Path(run.xml_path)
+    if not xml_path.exists():
+        raise HTTPException(status_code=404, detail="XML file not found on disk")
+
+    case = db.get(Case, run.case_id)
+    active_version = db.scalar(
+        select(TemplateVersion).where(
+            TemplateVersion.template_id == case.template_id,
+            TemplateVersion.is_active == True,  # noqa: E712
+        )
+    )
+    if not active_version:
+        raise HTTPException(status_code=404, detail="No active template version found")
+
+    template_settings = TemplateSettings.model_validate(json.loads(active_version.settings))
+
+    # Merge assembly analysis for part names
+    assembly = db.scalar(
+        select(GeometryAssembly)
+        .options(selectinload(GeometryAssembly.geometries))
+        .where(GeometryAssembly.id == case.assembly_id)
+    )
+    merged = _merge_analysis_results(assembly)
+    all_part_names: list[str] = merged.get("parts", [])
+
+    # Parse the actual generated XML
+    deck = parse_ufx(xml_path.read_bytes())
+
+    return extract_overlay_data(deck, template_settings, all_part_names)
 
 
 # ---------------------------------------------------------------------------

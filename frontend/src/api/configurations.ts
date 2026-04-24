@@ -1,5 +1,6 @@
 import { client } from "./client";
 import type { components } from "./schema";
+import type { OverlayData } from "./preview";
 
 // ---- Type exports --------------------------------------------------------
 
@@ -35,6 +36,9 @@ export type ConditionMapFolderUpdate = components["schemas"]["ConditionMapFolder
 export type CaseFolderResponse = components["schemas"]["CaseFolderResponse"];
 export type CaseFolderCreate = components["schemas"]["CaseFolderCreate"];
 export type CaseFolderUpdate = components["schemas"]["CaseFolderUpdate"];
+
+export type SyncRunsPreview = components["schemas"]["SyncRunsPreview"];
+export type SyncRunsPreviewItem = components["schemas"]["SyncRunsPreviewItem"];
 
 // ---- ConditionMap API ---------------------------------------------------
 
@@ -123,6 +127,9 @@ export const casesApi = {
 
   compare: (caseId: string, withCaseId: string): Promise<CaseCompareResult> =>
     client.get(`/cases/${caseId}/compare?with=${withCaseId}`),
+
+  syncPreview: (caseId: string, newMapId: string): Promise<SyncRunsPreview> =>
+    client.get(`/cases/${caseId}/sync-preview?new_map_id=${encodeURIComponent(newMapId)}`),
 };
 
 // ---- Case Folder API ----------------------------------------------------
@@ -189,4 +196,8 @@ export const runsApi = {
     }
     return URL.createObjectURL(await res.blob());
   },
+
+  /** Fetch overlay data for a ready Run (parsed from its generated XML). */
+  getOverlayData: (caseId: string, runId: string): Promise<OverlayData> =>
+    client.get<OverlayData>(`/cases/${caseId}/runs/${runId}/overlay`),
 };

@@ -123,7 +123,7 @@ vehicle_aero_manager/
 │       ├── components/          # UI components
 │       │   ├── cases/
 │       │   │   ├── CaseList.tsx             # table with compare-mode toggle; row click → /cases/:id
-│       │   │   ├── CaseDetailPage.tsx       # /cases/:caseId — 4 tabs: Info / Runs / Compare / Viewer
+│       │   │   ├── CaseDetailPage.tsx       # /cases/:caseId — 2 tabs: Case Info & Compare / Runs & Viewer
 │       │   │   ├── CaseCreateModal.tsx      # New Case tab + Copy from Case tab
 │       │   │   ├── CaseDuplicateModal.tsx
 │       │   │   └── CaseCompareModal.tsx     # 2-column run list comparison
@@ -1147,7 +1147,7 @@ class SystemResponse(BaseModel):
 - `list_conditions(map_id)`, `get_condition`, `create_condition`, `update_condition`, `delete_condition` — JSON fields serialized via `json.dumps(data.ride_height.model_dump())`
 - `delete_condition()`: raises HTTP 400 if any `Run.condition_id` references this condition — delete those runs first
 - `list_cases`, `get_case`, `create_case`, `update_case`, `delete_case`
-- `update_case()`: accepts `template_id` and `assembly_id` updates (validates existence)
+- `update_case()`: accepts `template_id` and `assembly_id` updates (validates existence); **template/assembly locked** — raises HTTP 400 when non-pending runs exist and `template_id`/`assembly_id` change is requested; `map_id` change triggers `sync_runs_for_map()`
 - `delete_case()`: cascades DB delete to Runs; also deletes `data/runs/{run_id}/` output directories
 - `create_run(case_id, data: RunCreate, current_user)`: auto-name = `{case_number}_R{n:02d}_{condition_name}[_{comment}]` when `data.name` is empty; `data.comment` appended as suffix
 - `list_runs(case_id)`
@@ -1160,6 +1160,9 @@ class SystemResponse(BaseModel):
 - `create_case_with_runs(db, case_data, current_user)` — creates Case + one Run per Condition; run names auto-formatted as `{case_number}_R{n:02d}_{condition_name}`
 - `compare_cases(db, base_case_id, compare_case_id) -> CaseCompareResult`: deep-diffs active template settings JSON, flat map condition values, and assembly `analysis_result.parts` sets
 - `get_axes_glb(db, case_id, run_id) -> bytes`: resolves Run → Condition → Assembly → `viewer_service.build_axes_glb()`; raises 400 on ValueError
+- `get_run_overlay(db, case_id, run_id) -> OverlayData`: parses Run's generated XML via `parse_ufx()` → `extract_overlay_data()` — reuses same pipeline as Template Builder but from actual XML output
+- `compute_sync_preview(db, case_id, new_map_id) -> SyncRunsPreview`: previews keep/add/orphan when map changes; condition matching by `(name, inflow_velocity, yaw_angle)` tuple
+- `sync_runs_for_map(db, case, new_map_id, current_user)`: applies sync — re-links kept runs, creates new pending runs, deletes orphan pending runs, preserves generated orphans
 - `get_diff(run_id_a, run_id_b, db)` → `DiffResult`
 - `enrich_case_response(db, case)` — populates `parent_case_number` + `parent_case_name` when `parent_case_id` is set
 - Permission check: `resource.created_by == current_user.id OR current_user.is_admin`
@@ -1181,9 +1184,10 @@ class SystemResponse(BaseModel):
 | `GET` | `/cases/` | List all cases |
 | `POST` | `/cases/` | Create case (template_id + assembly_id required) |
 | `GET` | `/cases/{id}` | Get case with run_count, parent_case_number/name |
-| `PATCH` | `/cases/{id}` | Update name/description/template_id/assembly_id/map_id |
+| `PATCH` | `/cases/{id}` | Update name/description/template_id/assembly_id/map_id; **template/assembly locked** (HTTP 400) when non-pending runs exist; map change triggers `sync_runs_for_map()` |
 | `DELETE` | `/cases/{id}` | Delete case + cascade |
 | `GET` | `/cases/{id}/compare?with={id2}` | Compare two cases: template settings diff, map conditions diff, assembly parts diff |
+| `GET` | `/cases/{id}/sync-preview?new_map_id={id}` | Preview keep/add/orphan when map is changed (does not modify data) |
 | `GET` | `/cases/{id}/runs/` | List runs |
 | `POST` | `/cases/{id}/runs/` | Create run (condition_id + optional comment; auto-formats name) |
 | `POST` | `/cases/{id}/runs/{rid}/generate?geometry_only=false` | Trigger XML generation; `geometry_only=true` reuses parent Run's XML and swaps STL only |
@@ -1193,6 +1197,7 @@ class SystemResponse(BaseModel):
 | `GET` | `/cases/{id}/runs/{rid}/download` | Download generated XML |
 | `GET` | `/cases/{id}/runs/{rid}/download-stl` | Download input STL used for XML generation |
 | `GET` | `/cases/{id}/runs/{rid}/axes-glb` | On-demand axis-visualisation GLB |
+| `GET` | `/cases/{id}/runs/{rid}/overlay` | OverlayData parsed from Run's generated XML (`parse_ufx → extract_overlay_data`) |
 | `POST` | `/cases/{id}/duplicate` | Duplicate a Case; sets `parent_case_id = source_case_id` |
 | `GET` | `/runs/diff?a={rid}&b={rid}` | Diff two runs' settings |
 
@@ -1566,11 +1571,11 @@ adjust_ride_height:
   - **Ride Height Transform**: enabled switch → target front/rear wheel axis heights → optional per-wheel RH targets (only active when Template's `adjust_body_wheel_separately=True`; note shown in UI)
   - **Yaw Center Configuration**: `center_mode` Select (`wheel_center` / `user_input`) → center X/Y inputs when `user_input`
 - `src/components/cases/CaseList.tsx` — folder-grouped table; row click navigates to `/cases/{id}` (dedicated page); **Compare mode**: toggle activates row-selection mode (up to 2 rows), "Compare" → `CaseCompareModal`; Duplicate button → `CaseDuplicateModal`
-- `src/components/cases/CaseDetailPage.tsx` — dedicated page at `/cases/:caseId`; 4 tabs:
-  - **Information** tab: case number (read-only), editable Name/Description/Template/Assembly/Map; Parent Case display (badge + link when `parent_case_id` exists)
-  - **Runs** tab: create-run form (Condition Select + Comment TextInput + auto-name preview + "+ New Run"); run table with per-run actions: Generate (with "Geom only" checkbox when `parent_case_id` exists) / Download XML / Download STL / Reset (→ pending) / Delete
-  - **Compare** tab: "Compare with" Case Select (pre-filled with parent case); Template Settings diff table (yellow-highlighted rows); Map Conditions diff table; Assembly Parts three-column view (Added green / Removed red / Common gray)
-  - **Viewer** tab: placeholder ("coming soon")
+- `src/components/cases/CaseDetailPage.tsx` — dedicated page at `/cases/:caseId`; 2 tabs:
+  - **Case Info & Compare** tab: case number (read-only), editable Name/Description/Template/Assembly/Map/Parent Case; **Template/Assembly locked** (disabled with lock icon) when any run has `status != "pending"` — backend returns HTTP 400; **Map change** triggers `MapChangeSyncModal` sync preview before applying; Compare accordion at bottom
+  - **Runs & Viewer** tab: upper split = compact run table (click row → select for viewer, "Generate All" button, per-run actions); lower split = 3D `RunViewer` for selected ready run (3-column layout like Template Builder)
+- `src/components/cases/MapChangeSyncModal.tsx` — previews keep/add/orphan when a Case's Condition Map changes; calls `GET /cases/{id}/sync-preview?new_map_id=...`; confirm applies `PATCH` to update `map_id` which triggers backend `sync_runs_for_map()` (re-links kept runs, creates new pending runs, deletes orphan pending runs, preserves generated orphans)
+- `src/components/cases/RunViewer.tsx` — 3D viewer for a ready Run; reuses `SceneCanvas`/`PartListPanel`/`OverlayPanel` from Template Builder; overlay data fetched via `GET /cases/{id}/runs/{id}/overlay` which calls `parse_ufx(xml_path) → extract_overlay_data()` (based on actual generated XML)
 - `src/components/cases/CaseCreateModal.tsx` — Two-tab modal: **New Case** (Template + Assembly + optional Map + `withRuns` Switch) / **Copy from Case** (source Case select + auto-fill name → `casesApi.duplicate()`)
 - `src/components/cases/CaseDuplicateModal.tsx` — standalone duplicate form; newly created case has `parent_case_id` automatically set to source case
 - `src/components/cases/CaseCompareModal.tsx` — 2-column `Grid` showing `CaseColumn` per selected case; each column: case info badges + scrollable Run list table (`run_number` / `condition_name` / velocity / yaw / status badge)

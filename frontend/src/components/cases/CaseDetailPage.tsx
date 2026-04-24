@@ -1,6 +1,12 @@
 /**
  * CaseDetailPage — dedicated page at /cases/:caseId
- * 4 tabs: Information | Runs | Compare | Viewer
+ *
+ * 2 tabs:
+ *   [Case Info & Compare]  — case metadata edit form + compare accordion
+ *   [Runs & Viewer]        — upper: run table, lower: 3D RunViewer for selected run
+ *
+ * Template/Assembly are locked (disabled) when any run has status != "pending".
+ * Map changes trigger MapChangeSyncModal for sync preview before applying.
  */
 import {
   Stack,
@@ -16,6 +22,7 @@ import {
   Textarea,
   Select,
   Table,
+  Tabs,
   Loader,
   Checkbox,
   Paper,
@@ -38,17 +45,18 @@ import {
   IconFileTypography,
   IconAlertCircle,
   IconInfoCircle,
+  IconEye,
+  IconLock,
 } from "@tabler/icons-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm } from "@mantine/form";
 
 import {
   casesApi,
   runsApi,
-  conditionsApi,
   mapsApi,
   type CaseResponse,
   type RunResponse,
@@ -56,6 +64,8 @@ import {
 } from "../../api/configurations";
 import { templatesApi } from "../../api/templates";
 import { assembliesApi } from "../../api/geometries";
+import { MapChangeSyncModal } from "./MapChangeSyncModal";
+import { RunViewer } from "./RunViewer";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,17 +83,26 @@ function statusLabel(s: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Information Tab
+// Information Tab (with lock + map sync)
 // ---------------------------------------------------------------------------
 
-function InformationTab({ caseData }: { caseData: CaseResponse }) {
+function InformationTab({ caseData, runs }: { caseData: CaseResponse; runs: RunResponse[] }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const [mapSyncModalOpen, setMapSyncModalOpen] = useState(false);
+  const [pendingMapId, setPendingMapId] = useState<string | null>(null);
+  const [pendingMapName, setPendingMapName] = useState("");
 
   const { data: templates = [] } = useQuery({ queryKey: ["templates"], queryFn: templatesApi.list });
   const { data: assemblies = [] } = useQuery({ queryKey: ["assemblies"], queryFn: assembliesApi.list });
   const { data: maps = [] } = useQuery({ queryKey: ["maps"], queryFn: mapsApi.list });
   const { data: allCases = [] } = useQuery({ queryKey: ["cases"], queryFn: casesApi.list });
+
+  // Lock: template/assembly locked when any run is non-pending
+  const hasGenerated = useMemo(
+    () => runs.some((r) => r.status !== "pending"),
+    [runs],
+  );
 
   const form = useForm({
     initialValues: {
@@ -91,8 +110,8 @@ function InformationTab({ caseData }: { caseData: CaseResponse }) {
       description: caseData.description ?? "",
       template_id: caseData.template_id,
       assembly_id: caseData.assembly_id,
-      map_id: caseData.map_id ?? null as string | null,
-      parent_case_id: caseData.parent_case_id ?? null as string | null,
+      map_id: caseData.map_id ?? (null as string | null),
+      parent_case_id: caseData.parent_case_id ?? (null as string | null),
     },
   });
 
@@ -105,7 +124,7 @@ function InformationTab({ caseData }: { caseData: CaseResponse }) {
       map_id: caseData.map_id ?? null,
       parent_case_id: caseData.parent_case_id ?? null,
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseData.id]);
 
   const updateMutation = useMutation({
@@ -115,7 +134,7 @@ function InformationTab({ caseData }: { caseData: CaseResponse }) {
         description: v.description || undefined,
         template_id: v.template_id,
         assembly_id: v.assembly_id,
-        map_id: v.map_id,
+        // map_id handled separately via MapChangeSyncModal
         parent_case_id: v.parent_case_id,
       }),
     onSuccess: () => {
@@ -127,99 +146,174 @@ function InformationTab({ caseData }: { caseData: CaseResponse }) {
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
 
+  function handleMapChange(newMapId: string | null) {
+    if (newMapId === caseData.map_id) {
+      form.setFieldValue("map_id", newMapId);
+      return;
+    }
+    if (!newMapId) {
+      // Clearing map — just update directly
+      casesApi.update(caseData.id, { map_id: null }).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["case", caseData.id] });
+        queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
+        notifications.show({ message: "Map cleared", color: "green" });
+        form.setFieldValue("map_id", null);
+      });
+      return;
+    }
+    // Has runs? Show sync preview
+    if (runs.length > 0) {
+      const mapObj = maps.find((m) => m.id === newMapId);
+      setPendingMapId(newMapId);
+      setPendingMapName(mapObj?.name ?? "");
+      setMapSyncModalOpen(true);
+    } else {
+      // No runs — just set the map + auto-create runs
+      casesApi.update(caseData.id, { map_id: newMapId }).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["case", caseData.id] });
+        queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
+        notifications.show({ message: "Map set", color: "green" });
+        form.setFieldValue("map_id", newMapId);
+      });
+    }
+  }
+
   return (
-    <Stack gap="md" maw={640} pt="md">
-      <Group justify="space-between">
-        <Text fw={600} size="lg">Case Information</Text>
-        {editing ? (
-          <Group gap="xs">
-            <Button
-              size="xs"
-              leftSection={<IconCheck size={12} />}
-              loading={updateMutation.isPending}
-              onClick={() => updateMutation.mutate(form.values)}
-            >Save</Button>
-            <Button size="xs" variant="subtle" leftSection={<IconX size={12} />} onClick={() => { form.reset(); setEditing(false); }}>
-              Cancel
-            </Button>
-          </Group>
-        ) : (
-          <ActionIcon variant="subtle" onClick={() => setEditing(true)}>
-            <IconEdit size={16} />
-          </ActionIcon>
-        )}
-      </Group>
+    <>
+      <Stack gap="md" maw={640} pt="md">
+        <Group justify="space-between">
+          <Text fw={600} size="lg">Case Information</Text>
+          {editing ? (
+            <Group gap="xs">
+              <Button
+                size="xs"
+                leftSection={<IconCheck size={12} />}
+                loading={updateMutation.isPending}
+                onClick={() => updateMutation.mutate(form.values)}
+              >Save</Button>
+              <Button size="xs" variant="subtle" leftSection={<IconX size={12} />} onClick={() => { form.reset(); setEditing(false); }}>
+                Cancel
+              </Button>
+            </Group>
+          ) : (
+            <ActionIcon variant="subtle" onClick={() => setEditing(true)}>
+              <IconEdit size={16} />
+            </ActionIcon>
+          )}
+        </Group>
 
-      {/* Case number (read-only) */}
-      <Group gap="xs">
-        <Text size="sm" c="dimmed" w={120}>Case Number</Text>
-        <Badge variant="outline" color="gray">{caseData.case_number || "—"}</Badge>
-      </Group>
+        {/* Case number (read-only) */}
+        <Group gap="xs">
+          <Text size="sm" c="dimmed" w={120}>Case Number</Text>
+          <Badge variant="outline" color="gray">{caseData.case_number || "—"}</Badge>
+        </Group>
 
-      {/* Editable fields */}
-      <TextInput
-        label="Name"
-        required
-        disabled={!editing}
-        {...form.getInputProps("name")}
-      />
-      <Textarea
-        label="Description"
-        autosize
-        minRows={2}
-        disabled={!editing}
-        {...form.getInputProps("description")}
-      />
-      <Select
-        label="Template"
-        required
-        disabled={!editing}
-        data={templates.map((t) => ({ value: t.id, label: t.name }))}
-        {...form.getInputProps("template_id")}
-      />
-      <Select
-        label="Assembly"
-        required
-        disabled={!editing}
-        data={assemblies.map((a) => ({ value: a.id, label: a.name }))}
-        {...form.getInputProps("assembly_id")}
-      />
-      <Select
-        label="Condition Map"
-        clearable
-        disabled={!editing}
-        data={maps.map((m) => ({ value: m.id, label: m.name }))}
-        {...form.getInputProps("map_id")}
-      />
-      <Select
-        label="Parent Case"
-        description="Branch origin — set automatically when using Create Child Case"
-        clearable
-        disabled={!editing}
-        data={allCases
-          .filter((c) => c.id !== caseData.id)
-          .map((c) => ({ value: c.id, label: `${c.case_number ? c.case_number + " — " : ""}${c.name}` }))}
-        {...form.getInputProps("parent_case_id")}
-      />
-    </Stack>
+        {/* Editable fields */}
+        <TextInput
+          label="Name"
+          required
+          disabled={!editing}
+          {...form.getInputProps("name")}
+        />
+        <Textarea
+          label="Description"
+          autosize
+          minRows={2}
+          disabled={!editing}
+          {...form.getInputProps("description")}
+        />
+
+        {/* Template — locked when generated runs exist */}
+        <Select
+          label={
+            <Group gap={4}>
+              <Text size="sm">Template</Text>
+              {hasGenerated && editing && (
+                <Tooltip label="Locked — runs with generated data exist. Reset or delete them to change.">
+                  <ThemeIcon size="xs" color="orange" variant="transparent">
+                    <IconLock size={12} />
+                  </ThemeIcon>
+                </Tooltip>
+              )}
+            </Group>
+          }
+          required
+          disabled={!editing || hasGenerated}
+          data={templates.map((t) => ({ value: t.id, label: t.name }))}
+          {...form.getInputProps("template_id")}
+        />
+
+        {/* Assembly — locked when generated runs exist */}
+        <Select
+          label={
+            <Group gap={4}>
+              <Text size="sm">Assembly</Text>
+              {hasGenerated && editing && (
+                <Tooltip label="Locked — runs with generated data exist. Reset or delete them to change.">
+                  <ThemeIcon size="xs" color="orange" variant="transparent">
+                    <IconLock size={12} />
+                  </ThemeIcon>
+                </Tooltip>
+              )}
+            </Group>
+          }
+          required
+          disabled={!editing || hasGenerated}
+          data={assemblies.map((a) => ({ value: a.id, label: a.name }))}
+          {...form.getInputProps("assembly_id")}
+        />
+
+        {/* Condition Map — always editable, triggers sync modal */}
+        <Select
+          label="Condition Map"
+          clearable
+          disabled={!editing}
+          data={maps.map((m) => ({ value: m.id, label: m.name }))}
+          value={form.values.map_id}
+          onChange={handleMapChange}
+        />
+
+        <Select
+          label="Parent Case"
+          description="Branch origin — set automatically when using Create Child Case"
+          clearable
+          disabled={!editing}
+          data={allCases
+            .filter((c) => c.id !== caseData.id)
+            .map((c) => ({ value: c.id, label: `${c.case_number ? c.case_number + " — " : ""}${c.name}` }))}
+          {...form.getInputProps("parent_case_id")}
+        />
+      </Stack>
+
+      {/* Map Change Sync Modal */}
+      {pendingMapId && (
+        <MapChangeSyncModal
+          opened={mapSyncModalOpen}
+          onClose={() => {
+            setMapSyncModalOpen(false);
+            setPendingMapId(null);
+          }}
+          caseId={caseData.id}
+          newMapId={pendingMapId}
+          newMapName={pendingMapName}
+          onSuccess={() => {
+            form.setFieldValue("map_id", pendingMapId);
+            setPendingMapId(null);
+          }}
+        />
+      )}
+    </>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Runs Tab
+// Runs & Viewer Tab
 // ---------------------------------------------------------------------------
 
-function RunsTab({ caseData }: { caseData: CaseResponse }) {
+function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
   const queryClient = useQueryClient();
-  const [selectedConditionId, setSelectedConditionId] = useState<string | null>(null);
-  const [comment, setComment] = useState("");
   const [geometryOnly, setGeometryOnly] = useState<Record<string, boolean>>({});
-
-  const { data: conditions = [] } = useQuery({
-    queryKey: ["conditions", caseData.map_id],
-    queryFn: () => conditionsApi.list(caseData.map_id!),
-    enabled: !!caseData.map_id,
-  });
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
   const { data: runs = [], isLoading } = useQuery({
     queryKey: ["runs", caseData.id],
@@ -232,27 +326,15 @@ function RunsTab({ caseData }: { caseData: CaseResponse }) {
     },
   });
 
-  const selectedCond = conditions.find((c) => c.id === selectedConditionId);
-  const previewName = selectedCond
-    ? `${caseData.case_number}_R${(runs.length + 1).toString().padStart(2, "0")}_${selectedCond.name}${comment ? `_${comment}` : ""}`
-    : "";
+  // Auto-select first ready run when none is selected
+  useEffect(() => {
+    if (!selectedRunId && runs.length > 0) {
+      const readyRun = runs.find((r) => r.status === "ready");
+      if (readyRun) setSelectedRunId(readyRun.id);
+    }
+  }, [runs, selectedRunId]);
 
-  const createRun = useMutation({
-    mutationFn: () =>
-      runsApi.create(caseData.id, {
-        name: "",
-        condition_id: selectedConditionId!,
-        comment,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
-      queryClient.invalidateQueries({ queryKey: ["cases"] });
-      notifications.show({ message: "Run created", color: "green" });
-      setSelectedConditionId(null);
-      setComment("");
-    },
-    onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
-  });
+  const selectedRun = runs.find((r) => r.id === selectedRunId);
 
   const generateMutation = useMutation({
     mutationFn: ({ runId, gOnly }: { runId: string; gOnly: boolean }) =>
@@ -260,6 +342,20 @@ function RunsTab({ caseData }: { caseData: CaseResponse }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
       notifications.show({ message: "XML generation started", color: "blue" });
+    },
+    onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
+  });
+
+  const generateAllMutation = useMutation({
+    mutationFn: async () => {
+      const pendingRuns = runs.filter((r) => r.status === "pending" || r.status === "error");
+      for (const run of pendingRuns) {
+        await runsApi.generate(caseData.id, run.id, false);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
+      notifications.show({ message: "XML generation started for all pending runs", color: "blue" });
     },
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
@@ -275,9 +371,10 @@ function RunsTab({ caseData }: { caseData: CaseResponse }) {
 
   const deleteMutation = useMutation({
     mutationFn: (runId: string) => runsApi.delete(caseData.id, runId),
-    onSuccess: () => {
+    onSuccess: (_, runId) => {
       queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
       queryClient.invalidateQueries({ queryKey: ["cases"] });
+      if (selectedRunId === runId) setSelectedRunId(null);
       notifications.show({ message: "Run deleted", color: "green" });
     },
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
@@ -297,204 +394,213 @@ function RunsTab({ caseData }: { caseData: CaseResponse }) {
     }
   }
 
-  const conditionOptions = conditions.map((c) => ({
-    value: c.id,
-    label: `${c.name} — ${c.inflow_velocity} m/s, yaw ${c.yaw_angle}°`,
-  }));
-
   const hasParent = !!caseData.parent_case_id;
+  const pendingCount = runs.filter((r) => r.status === "pending" || r.status === "error").length;
 
   if (!caseData.map_id) {
     return (
-      <Text c="dimmed" size="sm" pt="md">
-        No Condition Map assigned. Go to Information tab to assign a map.
+      <Text c="dimmed" size="sm" p="md">
+        No Condition Map assigned. Go to Case Info tab to assign a map.
       </Text>
     );
   }
 
   return (
-    <Stack gap="md" pt="md">
-      {/* Create Run Form */}
-      <Paper withBorder p="sm" radius="sm">
-        <Text size="sm" fw={600} mb="xs">New Run</Text>
-        <Group align="flex-end" wrap="wrap">
-          <Select
-            label="Condition"
-            placeholder="Select condition"
-            data={conditionOptions}
-            value={selectedConditionId}
-            onChange={setSelectedConditionId}
-            w={280}
-          />
-          <TextInput
-            label="Comment (optional)"
-            placeholder="e.g. draft_v2"
-            value={comment}
-            onChange={(e) => setComment(e.currentTarget.value)}
-            w={200}
-          />
-          <Button
-            size="sm"
-            disabled={!selectedConditionId}
-            loading={createRun.isPending}
-            onClick={() => createRun.mutate()}
-          >
-            + New Run
-          </Button>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Upper: Run Table */}
+      <div style={{ borderBottom: "1px solid var(--mantine-color-default-border)", maxHeight: "40%", overflow: "auto" }}>
+        <Group px="sm" py={6} justify="space-between">
+          <Text size="sm" fw={600}>Runs ({runs.length})</Text>
+          {pendingCount > 0 && (
+            <Button
+              size="xs"
+              variant="light"
+              color="blue"
+              leftSection={<IconPlayerPlay size={12} />}
+              loading={generateAllMutation.isPending}
+              onClick={() => generateAllMutation.mutate()}
+            >
+              Generate All ({pendingCount})
+            </Button>
+          )}
         </Group>
-        {previewName && (
-          <Text size="xs" c="dimmed" mt={6}>
-            Auto name: <Code>{previewName}</Code>
-          </Text>
-        )}
-      </Paper>
 
-      {/* Run List */}
-      {isLoading ? (
-        <Loader size="sm" />
-      ) : runs.length === 0 ? (
-        <Text c="dimmed" size="sm">
-          No runs yet. Select a condition and click &ldquo;+ New Run&rdquo;.
-        </Text>
-      ) : (
-        <ScrollArea>
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th style={{ width: 100 }}>#</Table.Th>
-                <Table.Th>Name</Table.Th>
-                <Table.Th>Condition</Table.Th>
-                <Table.Th style={{ width: 100 }}>Status</Table.Th>
-                <Table.Th>Actions</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {runs.map((run) => {
-                const condLabel = run.condition_name
-                  ? `${run.condition_name} — ${run.condition_velocity} m/s, yaw ${run.condition_yaw}°`
-                  : run.condition_id.slice(0, 8);
-                return (
-                  <Table.Tr key={run.id}>
-                    <Table.Td>
-                      <Badge variant="outline" color="gray" size="sm">
-                        {run.run_number || "—"}
-                      </Badge>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="sm">{run.name}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="xs" c="dimmed">{condLabel}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge color={STATUS_COLOR[run.status] ?? "gray"} size="sm">
-                        {statusLabel(run.status)}
-                      </Badge>
-                      {run.status === "error" && run.error_message && (
-                        <Tooltip label={run.error_message} multiline w={320}>
-                          <ThemeIcon size="xs" color="red" variant="transparent" ml={4}>
-                            <IconAlertCircle size={12} />
+        {isLoading ? (
+          <Loader size="sm" mx="md" />
+        ) : runs.length === 0 ? (
+          <Text c="dimmed" size="sm" mx="md" mb="sm">
+            No runs. Assign a Condition Map to auto-create runs.
+          </Text>
+        ) : (
+          <ScrollArea>
+            <Table striped highlightOnHover fz="xs">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th style={{ width: 30 }} />
+                  <Table.Th style={{ width: 80 }}>#</Table.Th>
+                  <Table.Th>Condition</Table.Th>
+                  <Table.Th style={{ width: 90 }}>Velocity</Table.Th>
+                  <Table.Th style={{ width: 60 }}>Yaw</Table.Th>
+                  <Table.Th style={{ width: 90 }}>Status</Table.Th>
+                  <Table.Th>Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {runs.map((run) => {
+                  const isSelected = run.id === selectedRunId;
+                  return (
+                    <Table.Tr
+                      key={run.id}
+                      style={{
+                        cursor: "pointer",
+                        background: isSelected ? "var(--mantine-color-blue-light)" : undefined,
+                      }}
+                      onClick={() => setSelectedRunId(run.id)}
+                    >
+                      {/* View indicator */}
+                      <Table.Td>
+                        {isSelected && (
+                          <ThemeIcon size="xs" color="blue" variant="light">
+                            <IconEye size={10} />
                           </ThemeIcon>
-                        </Tooltip>
-                      )}
-                    </Table.Td>
-                    <Table.Td>
-                      <Group gap={4} wrap="nowrap">
-                        {/* Geometry-only checkbox (only when parent exists and run is pending/error) */}
-                        {hasParent && (run.status === "pending" || run.status === "error") && (
-                          <Tooltip label="Only replace geometry (reuse parent XML settings)">
-                            <Checkbox
+                        )}
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge variant="outline" color="gray" size="xs">
+                          {run.run_number || "—"}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>{run.condition_name || run.condition_id.slice(0, 8)}</Table.Td>
+                      <Table.Td>{run.condition_velocity} m/s</Table.Td>
+                      <Table.Td>{run.condition_yaw}°</Table.Td>
+                      <Table.Td>
+                        <Group gap={2} wrap="nowrap">
+                          <Badge color={STATUS_COLOR[run.status] ?? "gray"} size="xs">
+                            {statusLabel(run.status)}
+                          </Badge>
+                          {run.status === "error" && run.error_message && (
+                            <Tooltip label={run.error_message} multiline w={320}>
+                              <ThemeIcon size="xs" color="red" variant="transparent">
+                                <IconAlertCircle size={10} />
+                              </ThemeIcon>
+                            </Tooltip>
+                          )}
+                        </Group>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap={2} wrap="nowrap" onClick={(e) => e.stopPropagation()}>
+                          {/* Geometry-only checkbox */}
+                          {hasParent && (run.status === "pending" || run.status === "error") && (
+                            <Tooltip label="Only replace geometry (reuse parent XML settings)">
+                              <Checkbox
+                                size="xs"
+                                label="Geom"
+                                checked={!!geometryOnly[run.id]}
+                                onChange={(e) =>
+                                  setGeometryOnly((prev) => ({ ...prev, [run.id]: e.currentTarget.checked }))
+                                }
+                              />
+                            </Tooltip>
+                          )}
+                          {/* Generate */}
+                          {(run.status === "pending" || run.status === "error") && (
+                            <Tooltip label="Generate XML">
+                              <ActionIcon
+                                size="xs"
+                                variant="light"
+                                color="blue"
+                                loading={generateMutation.isPending && generateMutation.variables?.runId === run.id}
+                                onClick={() => generateMutation.mutate({ runId: run.id, gOnly: !!geometryOnly[run.id] })}
+                              >
+                                <IconPlayerPlay size={12} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                          {/* Download XML */}
+                          {run.status === "ready" && run.xml_path && (
+                            <Tooltip label="Download XML">
+                              <ActionIcon size="xs" variant="light" color="teal" onClick={() => downloadXml(run.id)}>
+                                <IconDownload size={12} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                          {/* Download STL */}
+                          {run.status === "ready" && run.stl_path && (
+                            <Tooltip label="Download STL">
+                              <ActionIcon
+                                size="xs"
+                                variant="light"
+                                color="cyan"
+                                component="a"
+                                href={`/api/v1/cases/${caseData.id}/runs/${run.id}/download-stl`}
+                              >
+                                <IconFileTypography size={12} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                          {/* Reset */}
+                          {(run.status === "ready" || run.status === "error") && (
+                            <Tooltip label="Reset to pending">
+                              <ActionIcon
+                                size="xs"
+                                variant="light"
+                                color="orange"
+                                loading={resetMutation.isPending && resetMutation.variables === run.id}
+                                onClick={() => {
+                                  if (confirm(`Reset run "${run.name}"? XML/STL files will be deleted.`))
+                                    resetMutation.mutate(run.id);
+                                }}
+                              >
+                                <IconRefresh size={12} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                          {/* Delete */}
+                          <Tooltip label="Delete run">
+                            <ActionIcon
                               size="xs"
-                              label="Geom only"
-                              checked={!!geometryOnly[run.id]}
-                              onChange={(e) =>
-                                setGeometryOnly((prev) => ({ ...prev, [run.id]: e.currentTarget.checked }))
-                              }
-                            />
-                          </Tooltip>
-                        )}
-                        {/* Generate */}
-                        {(run.status === "pending" || run.status === "error") && (
-                          <Tooltip label="Generate XML">
-                            <ActionIcon
-                              size="sm"
                               variant="light"
-                              color="blue"
-                              loading={generateMutation.isPending && generateMutation.variables?.runId === run.id}
-                              onClick={() => generateMutation.mutate({ runId: run.id, gOnly: !!geometryOnly[run.id] })}
-                            >
-                              <IconPlayerPlay size={14} />
-                            </ActionIcon>
-                          </Tooltip>
-                        )}
-                        {/* Download XML */}
-                        {run.status === "ready" && run.xml_path && (
-                          <Tooltip label="Download XML">
-                            <ActionIcon size="sm" variant="light" color="teal" onClick={() => downloadXml(run.id)}>
-                              <IconDownload size={14} />
-                            </ActionIcon>
-                          </Tooltip>
-                        )}
-                        {/* Download STL */}
-                        {run.status === "ready" && run.stl_path && (
-                          <Tooltip label="Download STL">
-                            <ActionIcon
-                              size="sm"
-                              variant="light"
-                              color="cyan"
-                              component="a"
-                              href={`/api/v1/cases/${caseData.id}/runs/${run.id}/download-stl`}
-                            >
-                              <IconFileTypography size={14} />
-                            </ActionIcon>
-                          </Tooltip>
-                        )}
-                        {/* Reset */}
-                        {(run.status === "ready" || run.status === "error") && (
-                          <Tooltip label="Reset to pending">
-                            <ActionIcon
-                              size="sm"
-                              variant="light"
-                              color="orange"
-                              loading={resetMutation.isPending && resetMutation.variables === run.id}
+                              color="red"
+                              loading={deleteMutation.isPending && deleteMutation.variables === run.id}
                               onClick={() => {
-                                if (confirm(`Reset run "${run.name}"? XML/STL files will be deleted.`))
-                                  resetMutation.mutate(run.id);
+                                if (confirm(`Delete run "${run.name}"?`)) deleteMutation.mutate(run.id);
                               }}
                             >
-                              <IconRefresh size={14} />
+                              <IconTrash size={12} />
                             </ActionIcon>
                           </Tooltip>
-                        )}
-                        {/* Delete */}
-                        <Tooltip label="Delete run">
-                          <ActionIcon
-                            size="sm"
-                            variant="light"
-                            color="red"
-                            loading={deleteMutation.isPending && deleteMutation.variables === run.id}
-                            onClick={() => {
-                              if (confirm(`Delete run "${run.name}"?`)) deleteMutation.mutate(run.id);
-                            }}
-                          >
-                            <IconTrash size={14} />
-                          </ActionIcon>
-                        </Tooltip>
-                      </Group>
-                    </Table.Td>
-                  </Table.Tr>
-                );
-              })}
-            </Table.Tbody>
-          </Table>
-        </ScrollArea>
-      )}
-    </Stack>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </ScrollArea>
+        )}
+      </div>
+
+      {/* Lower: 3D RunViewer */}
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {selectedRun ? (
+          <RunViewer
+            caseId={caseData.id}
+            assemblyId={caseData.assembly_id}
+            run={selectedRun}
+          />
+        ) : (
+          <Group gap="xs" p="md" justify="center" style={{ height: "100%" }}>
+            <ThemeIcon color="gray" variant="light" size="sm"><IconInfoCircle size={12} /></ThemeIcon>
+            <Text c="dimmed" size="sm">Click a run above to view its 3D setup.</Text>
+          </Group>
+        )}
+      </div>
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Compare Tab
+// Compare Section (inside accordion)
 // ---------------------------------------------------------------------------
 
 function DiffTable({ title, items }: { title: string; items: DiffField[] }) {
@@ -532,7 +638,7 @@ function DiffTable({ title, items }: { title: string; items: DiffField[] }) {
   );
 }
 
-function CompareTab({ caseData }: { caseData: CaseResponse }) {
+function CompareSection({ caseData }: { caseData: CaseResponse }) {
   const [withCaseId, setWithCaseId] = useState<string | null>(
     caseData.parent_case_id ?? null
   );
@@ -582,13 +688,9 @@ function CompareTab({ caseData }: { caseData: CaseResponse }) {
 
       {result && (
         <Stack gap="xl">
-          {/* Template settings diff */}
           <DiffTable title="Template Settings" items={result.template_settings_diff} />
-
-          {/* Map / conditions diff */}
           <DiffTable title="Map Conditions" items={result.map_diff} />
 
-          {/* Assembly parts diff */}
           <Stack gap="xs">
             <Text fw={600} size="sm">Assembly Parts</Text>
             <SimpleGrid cols={3} spacing="xs">
@@ -602,9 +704,7 @@ function CompareTab({ caseData }: { caseData: CaseResponse }) {
                   <ScrollArea h={160}>
                     <Stack gap={2}>
                       {result.parts_diff.added.map((p) => (
-                        <Badge key={p} variant="light" color="green" size="xs" style={{ display: "block" }}>
-                          {p}
-                        </Badge>
+                        <Badge key={p} variant="light" color="green" size="xs" style={{ display: "block" }}>{p}</Badge>
                       ))}
                     </Stack>
                   </ScrollArea>
@@ -620,9 +720,7 @@ function CompareTab({ caseData }: { caseData: CaseResponse }) {
                   <ScrollArea h={160}>
                     <Stack gap={2}>
                       {result.parts_diff.removed.map((p) => (
-                        <Badge key={p} variant="light" color="red" size="xs" style={{ display: "block" }}>
-                          {p}
-                        </Badge>
+                        <Badge key={p} variant="light" color="red" size="xs" style={{ display: "block" }}>{p}</Badge>
                       ))}
                     </Stack>
                   </ScrollArea>
@@ -635,9 +733,7 @@ function CompareTab({ caseData }: { caseData: CaseResponse }) {
                 <ScrollArea h={160}>
                   <Stack gap={2}>
                     {result.parts_diff.common.map((p) => (
-                      <Badge key={p} variant="outline" color="gray" size="xs" style={{ display: "block" }}>
-                        {p}
-                      </Badge>
+                      <Badge key={p} variant="outline" color="gray" size="xs" style={{ display: "block" }}>{p}</Badge>
                     ))}
                   </Stack>
                 </ScrollArea>
@@ -671,6 +767,13 @@ export function CaseDetailPage() {
     enabled: !!caseId,
   });
 
+  // Always fetch runs so we can pass to InformationTab for lock check
+  const { data: runs = [] } = useQuery({
+    queryKey: ["runs", caseId],
+    queryFn: () => runsApi.list(caseId!),
+    enabled: !!caseId,
+  });
+
   if (isLoading) return <LoadingOverlay visible />;
   if (!caseData) return <Text p="md" c="dimmed">Case not found.</Text>;
 
@@ -697,42 +800,38 @@ export function CaseDetailPage() {
         {caseData.map_id && <Badge variant="dot" color="cyan" size="sm">{caseData.map_name}</Badge>}
       </Group>
 
-      {/* Single-page scroll layout */}
-      <ScrollArea style={{ flex: 1 }}>
-        <Stack gap={0} px="md">
-          {/* Information */}
-          <InformationTab caseData={caseData} />
+      {/* Tabs */}
+      <Tabs defaultValue="runs" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <Tabs.List px="md">
+          <Tabs.Tab value="info">Case Info &amp; Compare</Tabs.Tab>
+          <Tabs.Tab value="runs">Runs &amp; Viewer</Tabs.Tab>
+        </Tabs.List>
 
-          <Divider my="lg" />
+        <Tabs.Panel value="info" style={{ flex: 1, overflow: "auto" }}>
+          <ScrollArea style={{ height: "100%" }}>
+            <Stack gap={0} px="md" pb="xl">
+              <InformationTab caseData={caseData} runs={runs} />
 
-          {/* Runs */}
-          <RunsTab caseData={caseData} />
+              <Divider my="lg" />
 
-          {/* Compare & Viewer — collapsible accordions */}
-          <Accordion mt="lg" variant="separated">
-            <Accordion.Item value="compare">
-              <Accordion.Control>
-                <Text fw={600} size="sm">Compare with another case</Text>
-              </Accordion.Control>
-              <Accordion.Panel>
-                <CompareTab caseData={caseData} />
-              </Accordion.Panel>
-            </Accordion.Item>
+              <Accordion variant="separated">
+                <Accordion.Item value="compare">
+                  <Accordion.Control>
+                    <Text fw={600} size="sm">Compare with another case</Text>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <CompareSection caseData={caseData} />
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
+            </Stack>
+          </ScrollArea>
+        </Tabs.Panel>
 
-            <Accordion.Item value="viewer">
-              <Accordion.Control>
-                <Text fw={600} size="sm">3D Viewer</Text>
-              </Accordion.Control>
-              <Accordion.Panel>
-                <Group gap="xs" py="sm">
-                  <ThemeIcon color="gray" variant="light" size="sm"><IconInfoCircle size={12} /></ThemeIcon>
-                  <Text c="dimmed" size="sm">3D Viewer — coming soon (will reuse Template Builder canvas).</Text>
-                </Group>
-              </Accordion.Panel>
-            </Accordion.Item>
-          </Accordion>
-        </Stack>
-      </ScrollArea>
+        <Tabs.Panel value="runs" style={{ flex: 1, minHeight: 0 }}>
+          <RunsViewerTab caseData={caseData} />
+        </Tabs.Panel>
+      </Tabs>
     </Stack>
   );
 }
