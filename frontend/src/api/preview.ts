@@ -19,9 +19,7 @@ export const previewApi = {
     templateId: string,
     assemblyId: string,
   ): Promise<OverlayData> =>
-    client
-      .get("/api/v1/preview/overlay", {
-        params: { template_id: templateId, assembly_id: assemblyId },
-      })
-      .then((r) => r.data),
+    client.get<OverlayData>(
+      `/preview/overlay?template_id=${encodeURIComponent(templateId)}&assembly_id=${encodeURIComponent(assemblyId)}`
+    ),
 };

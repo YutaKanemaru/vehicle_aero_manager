@@ -1805,7 +1805,7 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 ### Frontend
 
 **`src/api/preview.ts`** (new — 2A-14)
-- `previewApi.getOverlayData(templateId, assemblyId) -> Promise<OverlayData>` — GET request with query params
+- `previewApi.getOverlayData(templateId, assemblyId) -> Promise<OverlayData>` — `client.get<OverlayData>("/preview/overlay?template_id=...&assembly_id=...")` with `encodeURIComponent`; query params inlined in URL string (no second arg — `client.get` only accepts path)
 - Re-exports types from `schema.d.ts`: `OverlayData`, `OverlayBoxItem`, `OverlayPlaneItem`, `OverlayDomainPartItem`, `OverlayProbeItem`, `OverlayPartsGroup`
 
 **`src/stores/viewerStore.ts`** (Zustand)
