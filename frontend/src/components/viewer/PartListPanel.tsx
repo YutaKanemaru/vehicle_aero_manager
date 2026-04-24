@@ -23,6 +23,7 @@ import {
   IconFocusCentered,
 } from "@tabler/icons-react";
 import { useViewerStore } from "../../stores/viewerStore";
+import { partColor } from "../../stores/viewerStore";
 
 interface PartBbox {
   x_min: number; x_max: number;
@@ -167,7 +168,7 @@ export function PartListPanel({ parts, partInfo }: PartListPanelProps) {
       <ScrollArea style={{ flex: 1 }} type="auto">
         <Stack gap={4}>
           {filtered.map((name) => {
-            const state = partStates[name] ?? { visible: true, color: "#88aabb", opacity: 1.0 };
+            const state = partStates[name] ?? { visible: true, color: partColor(name), opacity: 1.0 };
             const isSelected = selectedPartName === name;
             const bbox = (partInfo?.[name] as { bbox?: PartBbox } | undefined)?.bbox;
             function handleFitTo() {

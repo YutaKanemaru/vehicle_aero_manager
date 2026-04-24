@@ -1809,8 +1809,11 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 - Re-exports types from `schema.d.ts`: `OverlayData`, `OverlayBoxItem`, `OverlayPlaneItem`, `OverlayDomainPartItem`, `OverlayProbeItem`, `OverlayPartsGroup`
 
 **`src/stores/viewerStore.ts`** (Zustand)
+
+`partColor(name: string): string` — exported pure function; deterministic per-part color from 12-color SWATCHES palette (hsl, 75% sat, 58% lightness); uses djb2-style hash of part name. Used by `initParts`, `SceneCanvas` partStates effect fallback, and `PartListPanel` ColorSwatch fallback. Ensures consistent color across renders without `partStates` entry.
+
 ```typescript
-partStates: Record<string, { visible, color, opacity }>  // per-part 3D state
+partStates: Record<string, { visible, color, opacity }>  // per-part 3D state; default color = partColor(name) (hash-based, varies per part)
 resetParts: () => void            // clears partStates entirely (all parts revert to defaults)
 showAllParts: () => void          // sets visible:true for all entries in partStates, preserves color/opacity
 searchQuery: string

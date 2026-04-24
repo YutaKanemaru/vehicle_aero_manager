@@ -7,6 +7,7 @@ import { Center, Text, Stack } from "@mantine/core";
 import { Loader } from "@mantine/core";
 import { geometriesApi, type GeometryResponse } from "../../api/geometries";
 import { useViewerStore } from "../../stores/viewerStore";
+import { partColor } from "../../stores/viewerStore";
 import { OverlayObjects } from "./OverlayObjects";
 import type { OverlayData } from "../../api/preview";
 
@@ -51,7 +52,7 @@ function GLBModel({
         : null;
       const next = new THREE.MeshStandardMaterial({
         flatShading,
-        color: old?.color ?? new THREE.Color("#88aabb"),
+        color: old?.color ?? new THREE.Color(partColor(obj.name)),
         opacity: old?.opacity ?? 1.0,
         transparent: old ? old.transparent : false,
         emissive: old?.emissive ?? new THREE.Color(0, 0, 0),
@@ -73,12 +74,9 @@ function GLBModel({
       const mat = obj.material as THREE.MeshStandardMaterial;
 
       const state = partStates[obj.name] ?? partStates[obj.parent?.name ?? ""];
-      if (!state) {
-        mat.needsUpdate = true;
-        return;
-      }
+      const partName = obj.name || obj.parent?.name || "";
 
-      obj.visible = state.visible;
+      obj.visible = state ? state.visible : true;
 
       const isSelected = obj.name === selectedPartName || obj.parent?.name === selectedPartName;
       if (isSelected) {
@@ -86,11 +84,11 @@ function GLBModel({
         if (!mat.emissive) mat.emissive = new THREE.Color(0, 0, 0);
         mat.emissive.set("#444400");
       } else {
-        mat.color.set(state.color);
+        mat.color.set(state?.color ?? partColor(partName));
         if (mat.emissive) mat.emissive.set("#000000");
       }
-      mat.opacity = state.opacity;
-      mat.transparent = state.opacity < 1.0;
+      mat.opacity = state?.opacity ?? 1.0;
+      mat.transparent = (state?.opacity ?? 1.0) < 1.0;
       mat.needsUpdate = true;
     });
   }, [scene, partStates, selectedPartName]); // eslint-disable-line react-hooks/exhaustive-deps

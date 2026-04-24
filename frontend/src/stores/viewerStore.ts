@@ -8,6 +8,18 @@ export interface PartState {
   opacity: number;
 }
 
+// ─── Deterministic per-part color from SWATCHES (middle brightness l=58%) ────
+// 12 hues × 75% saturation × 58% lightness — matches PartListPanel SWATCHES row 5
+const _PART_PALETTE: string[] = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map(
+  (h) => `hsl(${h}, 75%, 58%)`
+);
+
+export function partColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return _PART_PALETTE[hash % _PART_PALETTE.length];
+}
+
 export interface ViewerOverlays {
   domainBox: boolean;
   refinementBoxes: boolean;
@@ -141,7 +153,7 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
     const current = get().partStates;
     const next: Record<string, PartState> = {};
     for (const name of names) {
-      next[name] = current[name] ?? { visible: true, color: "#88aabb", opacity: 1.0 };
+      next[name] = current[name] ?? { visible: true, color: partColor(name), opacity: 1.0 };
     }
     set({ partStates: next });
   },
