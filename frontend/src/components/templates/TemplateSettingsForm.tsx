@@ -558,15 +558,6 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
             <Accordion.Item value="box-refinement">
               <Accordion.Control><Text fw={500}>Box Refinement</Text></Accordion.Control>
               <Accordion.Panel><Stack gap="xs">
-            <Switch label="Add box refinement for porous media" {...form.getInputProps("box_refinement_porous", { type: "checkbox" })} />
-            {form.values.box_refinement_porous && (
-              <Switch
-                label="Box per porous media (one box per heat exchanger)"
-                description="Off: all matched porous parts share one combined box. On: each porous coefficient entry gets its own box (union of its matched parts)."
-                ml="md"
-                {...form.getInputProps("box_refinement_porous_per_coefficient", { type: "checkbox" })}
-              />
-            )}
             <Group justify="space-between">
               <Text size="sm" fw={500}>Box refinement zones ({form.values.box_refinements.length})</Text>
               <Group gap="xs">
@@ -958,6 +949,24 @@ export function TemplateSettingsForm({ form, simType, generalContent, readOnly }
             <Accordion.Item value="porous-media">
               <Accordion.Control><Text fw={500}>Porous Media Coefficients (template defaults)</Text></Accordion.Control>
               <Accordion.Panel><Stack gap="xs">
+                {/* Porous Box Refinement */}
+                <Stack gap="xs">
+                  <Text size="sm" fw={600}>Porous Box Refinement</Text>
+                  <Switch
+                    label="Add box refinement for porous media"
+                    description="Auto-generates a RL7 around-parts box refinement for matched porous parts (name: Box_Porous_RL7, offset 0 m)."
+                    {...form.getInputProps("box_refinement_porous", { type: "checkbox" })}
+                  />
+                  {form.values.box_refinement_porous && (
+                    <Switch
+                      label="One box per porous media"
+                      description="Off: all matched porous parts share one combined box. On: each porous coefficient entry gets its own box (union of its matched parts)."
+                      ml="md"
+                      {...form.getInputProps("box_refinement_porous_per_coefficient", { type: "checkbox" })}
+                    />
+                  )}
+                </Stack>
+                <Divider />
                 <Group justify="space-between">
                   <Text size="sm" fw={500}>Porous parts ({form.values.porous_coefficients.length})</Text>
                   <Button size="xs" leftSection={<IconPlus size={12} />}

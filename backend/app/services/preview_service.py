@@ -98,13 +98,14 @@ def extract_overlay_data(
     pbr_dict = template_settings.setup.meshing.part_based_box_refinement
     per_coeff = template_settings.setup_option.meshing.box_refinement_porous_per_coefficient
     porous_coeffs = template_settings.porous_coefficients
-    for entry_name in pbr_dict:
-        if per_coeff and porous_coeffs:
-            for coeff in porous_coeffs:
-                suffix = coeff.part_name.replace("*", "")
-                porous_entry_names.add(f"{entry_name}_{suffix}")
-        else:
-            porous_entry_names.add(entry_name)
+    if template_settings.setup_option.meshing.box_refinement_porous:
+        for entry_name in pbr_dict:
+            if per_coeff and porous_coeffs:
+                for coeff in porous_coeffs:
+                    suffix = coeff.part_name.replace("*", "")
+                    porous_entry_names.add(f"{entry_name}_{suffix}")
+            else:
+                porous_entry_names.add(entry_name)
 
     refinement_boxes: list[OverlayBoxItem] = []
     porous_boxes: list[OverlayBoxItem] = []

@@ -354,7 +354,8 @@ export const FORM_DEFAULTS = {
   bbox_ymax: D.setup.domain_bounding_box[3] as number,
   bbox_zmin: D.setup.domain_bounding_box[4] as number,
   bbox_zmax: D.setup.domain_bounding_box[5] as number,
-  // Box refinement dynamic list — sourced from D.setup.meshing.box_refinement + part_based_box_refinement
+  // Box refinement dynamic list — sourced from D.setup.meshing.box_refinement only
+  // (part_based_box_refinement is auto-generated in buildSettings() from box_refinement_porous switches)
   box_refinements: [
     ...Object.entries(D.setup.meshing.box_refinement as unknown as Record<string, { level: number; box: number[] }>).map(
       ([name, v]) => ({
@@ -368,18 +369,6 @@ export const FORM_DEFAULTS = {
         offset_xmin: 0.5, offset_xmax: 0.5,
         offset_ymin: 0.5, offset_ymax: 0.5,
         offset_zmin: 0.5, offset_zmax: 0.5,
-      })
-    ),
-    ...Object.entries(D.setup.meshing.part_based_box_refinement as unknown as Record<string, { level: number; parts: string[]; offset_xmin: number; offset_xmax: number; offset_ymin: number; offset_ymax: number; offset_zmin: number; offset_zmax: number }>).map(
-      ([name, v]) => ({
-        name,
-        level: v.level,
-        box_type: "around_parts" as const,
-        box_xmin: 0, box_xmax: 0, box_ymin: 0, box_ymax: 0, box_zmin: 0, box_zmax: 0,
-        parts: Array.isArray(v.parts) ? [...v.parts] : [],
-        offset_xmin: v.offset_xmin ?? 0.0, offset_xmax: v.offset_xmax ?? 0.0,
-        offset_ymin: v.offset_ymin ?? 0.0, offset_ymax: v.offset_ymax ?? 0.0,
-        offset_zmin: v.offset_zmin ?? 0.0, offset_zmax: v.offset_zmax ?? 0.0,
       })
     ),
   ] as BoxRefinementFormItem[],
@@ -635,21 +624,6 @@ export function valuesFromSettings(settings: any): FormValues {
       offset_xmin: 0.5, offset_xmax: 0.5,
       offset_ymin: 0.5, offset_ymax: 0.5,
       offset_zmin: 0.5, offset_zmax: 0.5,
-    })),
-    ...Object.entries(
-      meshingSetup.part_based_box_refinement ?? {}
-    ).map(([name, v]: [string, any]) => ({
-      name,
-      level: v.level ?? 1,
-      box_type: "around_parts" as const,
-      box_xmin: 0, box_xmax: 0, box_ymin: 0, box_ymax: 0, box_zmin: 0, box_zmax: 0,
-      parts: Array.isArray(v.parts) ? [...v.parts] : [],
-      offset_xmin: v.offset_xmin ?? 0.0,
-      offset_xmax: v.offset_xmax ?? 0.0,
-      offset_ymin: v.offset_ymin ?? 0.0,
-      offset_ymax: v.offset_ymax ?? 0.0,
-      offset_zmin: v.offset_zmin ?? 0.0,
-      offset_zmax: v.offset_zmax ?? 0.0,
     })),
   ];
 
@@ -913,29 +887,26 @@ export function buildSettings(values: FormValues, existingSettings?: any): objec
     };
   }
 
-  // Build box refinement dicts from form list (split by box_type)
+  // Build box refinement dict from form list (vehicle_bbox_factors + user_defined only)
   const boxRefinementDict: Record<string, object> = {};
-  const partBasedBoxRefinementDict: Record<string, object> = {};
   for (const item of values.box_refinements) {
     if (!item.name) continue;
-    if (item.box_type === "around_parts") {
-      partBasedBoxRefinementDict[item.name] = {
-        level: item.level,
-        parts: item.parts,
-        offset_xmin: item.offset_xmin,
-        offset_xmax: item.offset_xmax,
-        offset_ymin: item.offset_ymin,
-        offset_ymax: item.offset_ymax,
-        offset_zmin: item.offset_zmin,
-        offset_zmax: item.offset_zmax,
-      };
-    } else {
-      boxRefinementDict[item.name] = {
-        level: item.level,
-        mode: item.box_type,
-        box: [item.box_xmin, item.box_xmax, item.box_ymin, item.box_ymax, item.box_zmin, item.box_zmax],
-      };
-    }
+    boxRefinementDict[item.name] = {
+      level: item.level,
+      mode: item.box_type,
+      box: [item.box_xmin, item.box_xmax, item.box_ymin, item.box_ymax, item.box_zmin, item.box_zmax],
+    };
+  }
+  // Auto-generate part_based_box_refinement from porous switches (BC tab > Porous Media)
+  const partBasedBoxRefinementDict: Record<string, object> = {};
+  if (values.box_refinement_porous) {
+    partBasedBoxRefinementDict["Box_Porous_RL7"] = {
+      level: 7,
+      parts: ["Porous_"],
+      offset_xmin: 0.0, offset_xmax: 0.0,
+      offset_ymin: 0.0, offset_ymax: 0.0,
+      offset_zmin: 0.0, offset_zmax: 0.0,
+    };
   }
 
   // Preserve box_refinement from existing (not editable in form yet)
