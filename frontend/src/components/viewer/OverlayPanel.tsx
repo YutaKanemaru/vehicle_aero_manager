@@ -1,4 +1,4 @@
-import { Tabs, Stack, Switch, Badge, Text, Group, Tooltip } from "@mantine/core";
+import { Tabs, Stack, Switch, Badge, Text, Group, Tooltip, Divider } from "@mantine/core";
 import { useViewerStore } from "../../stores/viewerStore";
 import type { OverlayData } from "../../api/preview";
 
@@ -58,42 +58,69 @@ function TabMasterSwitch({ visKeys }: { visKeys: string[] }) {
 function PartsTab({ overlayData }: { overlayData: OverlayData }) {
   const { setSearchQuery } = useViewerStore();
   const groups = overlayData.parts_groups;
+  const domainParts = overlayData.domain_parts;
+  const dpVisKeys = domainParts.map((dp) => `dp_${dp.name}`);
 
-  if (groups.length === 0) {
+  const hasGroups = groups.length > 0;
+  const hasDomainParts = domainParts.length > 0;
+
+  if (!hasGroups && !hasDomainParts) {
     return <Text size="xs" c="dimmed">No part patterns defined in template.</Text>;
   }
 
   return (
     <Stack gap="sm">
-      <Text size="xs" c="dimmed">
-        Click a pattern to filter the Part List.
-      </Text>
-      {groups.map((g) => (
-        <div key={g.label}>
-          <Text size="xs" fw={600} mb={4}>
-            {g.label}
-            {g.matched_parts.length > 0 && (
-              <Text component="span" size="xs" c="dimmed" ml={4}>
-                ({g.matched_parts.length} parts)
-              </Text>
-            )}
+      {hasGroups && (
+        <>
+          <Text size="xs" c="dimmed">
+            Click a pattern to filter the Part List.
           </Text>
-          <Group gap={4} wrap="wrap">
-            {g.patterns.map((p) => (
-              <Tooltip key={p} label="Set as Part List filter" position="top" withArrow>
-                <Badge
-                  size="sm"
-                  variant="light"
-                  style={{ cursor: "pointer" }}
-                  onClick={() => setSearchQuery(p)}
-                >
-                  {p}
-                </Badge>
-              </Tooltip>
-            ))}
+          {groups.map((g) => (
+            <div key={g.label}>
+              <Text size="xs" fw={600} mb={4}>
+                {g.label}
+                {g.matched_parts.length > 0 && (
+                  <Text component="span" size="xs" c="dimmed" ml={4}>
+                    ({g.matched_parts.length} parts)
+                  </Text>
+                )}
+              </Text>
+              <Group gap={4} wrap="wrap">
+                {g.patterns.map((p) => (
+                  <Tooltip key={p} label="Set as Part List filter" position="top" withArrow>
+                    <Badge
+                      size="sm"
+                      variant="light"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setSearchQuery(p)}
+                    >
+                      {p}
+                    </Badge>
+                  </Tooltip>
+                ))}
+              </Group>
+            </div>
+          ))}
+        </>
+      )}
+
+      {hasDomainParts && (
+        <>
+          {hasGroups && <Divider />}
+          <Group justify="space-between" align="center">
+            <Text size="xs" fw={600} c="dimmed">Domain Parts</Text>
+            <TabMasterSwitch visKeys={dpVisKeys} />
           </Group>
-        </div>
-      ))}
+          {domainParts.map((dp) => (
+            <OverlaySwitch
+              key={dp.name}
+              label={dp.name}
+              sub={`${dp.export_mesh ? "Belt" : "Ground patch"} | ${dp.location}`}
+              visKey={`dp_${dp.name}`}
+            />
+          ))}
+        </>
+      )}
     </Stack>
   );
 }
@@ -106,7 +133,6 @@ function BoxTab({ overlayData }: { overlayData: OverlayData }) {
   overlayData.refinement_boxes.forEach((b) => allVisKeys.push(`box_${b.name}`));
   overlayData.porous_boxes.forEach((b) => allVisKeys.push(`box_${b.name}`));
   overlayData.partial_volume_boxes.forEach((b) => allVisKeys.push(`pv_${b.name}`));
-  overlayData.domain_parts.forEach((b) => allVisKeys.push(`dp_${b.name}`));
 
   return (
     <Stack gap="sm">
@@ -156,21 +182,6 @@ function BoxTab({ overlayData }: { overlayData: OverlayData }) {
               key={b.name}
               label={b.name}
               visKey={`pv_${b.name}`}
-            />
-          ))}
-        </>
-      )}
-
-      {/* Domain parts (belt patches + uFX_ground) */}
-      {overlayData.domain_parts.length > 0 && (
-        <>
-          <Text size="xs" fw={600} c="dimmed">Domain Parts</Text>
-          {overlayData.domain_parts.map((dp) => (
-            <OverlaySwitch
-              key={dp.name}
-              label={dp.name}
-              sub={`${dp.location} | x: ${dp.x_min.toFixed(2)}→${dp.x_max.toFixed(2)}, y: ${dp.y_min.toFixed(2)}→${dp.y_max.toFixed(2)}`}
-              visKey={`dp_${dp.name}`}
             />
           ))}
         </>
