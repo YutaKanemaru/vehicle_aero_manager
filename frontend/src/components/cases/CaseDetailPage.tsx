@@ -3,7 +3,7 @@
  *
  * 2 tabs:
  *   [Case Info & Compare]  — case metadata edit form + compare accordion
- *   [Runs]                 — run table; "Launch Viewer" opens /cases/:id/runs/:id/viewer in a new tab
+ *   [Runs]                 — run table; "Launch Viewer" button opens a fixed fullscreen overlay
  *
  * Template/Assembly are locked (disabled) when any run has status != "pending".
  * Map changes trigger MapChangeSyncModal for sync preview before applying.
@@ -65,6 +65,7 @@ import {
 import { templatesApi } from "../../api/templates";
 import { assembliesApi } from "../../api/geometries";
 import { MapChangeSyncModal } from "./MapChangeSyncModal";
+import { RunViewer } from "./RunViewer";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -312,6 +313,7 @@ function InformationTab({ caseData, runs }: { caseData: CaseResponse; runs: RunR
 function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
   const queryClient = useQueryClient();
   const [geometryOnly, setGeometryOnly] = useState<Record<string, boolean>>({});
+  const [viewerRun, setViewerRun] = useState<RunResponse | null>(null);
 
   const { data: runs = [], isLoading } = useQuery({
     queryKey: ["runs", caseData.id],
@@ -539,12 +541,12 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                           </Tooltip>
                           {/* Launch Viewer */}
                           {run.status === "ready" && (
-                            <Tooltip label="Launch 3D Viewer">
+                            <Tooltip label="Open 3D Viewer">
                               <ActionIcon
                                 size="xs"
                                 variant="filled"
                                 color="violet"
-                                onClick={() => window.open(`/cases/${caseData.id}/runs/${run.id}/viewer`, "_blank")}
+                                onClick={() => setViewerRun(run)}
                               >
                                 <IconExternalLink size={12} />
                               </ActionIcon>
@@ -559,6 +561,43 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
             </Table>
           </ScrollArea>
         )}
+
+      {/* Fullscreen Run Viewer Overlay */}
+      {viewerRun && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 300,
+          background: "var(--mantine-color-body)",
+          display: "flex",
+          flexDirection: "column",
+        }}>
+          <Group
+            px="md"
+            py="xs"
+            style={{ borderBottom: "1px solid var(--mantine-color-default-border)", flexShrink: 0 }}
+          >
+            <Badge variant="outline" color="gray" size="sm">{viewerRun.run_number || "Run"}</Badge>
+            <Text size="sm" fw={600} style={{ flex: 1 }}>
+              {caseData.name} — {viewerRun.condition_name}
+              {viewerRun.condition_velocity ? ` • ${viewerRun.condition_velocity} m/s` : ""}
+              {viewerRun.condition_yaw ? `, yaw ${viewerRun.condition_yaw}°` : ""}
+            </Text>
+            <Tooltip label="Close viewer">
+              <ActionIcon variant="subtle" color="gray" onClick={() => setViewerRun(null)}>
+                <IconX size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <RunViewer
+              caseId={caseData.id}
+              assemblyId={caseData.assembly_id}
+              run={viewerRun}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

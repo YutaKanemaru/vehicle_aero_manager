@@ -143,7 +143,8 @@ export function RunViewer({ caseId, assemblyId, run }: RunViewerProps) {
       </div>
 
       {/* Middle: Part List */}
-      <div style={{ width: 255, borderRight: "1px solid var(--mantine-color-default-border)", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: 255, borderRight: "1px solid var(--mantine-color-default-border)", display: "flex", flexDirection: "column", padding: "8px 8px 0 8px" }}>
+        <Text size="xs" fw={600} mb={4}>Parts</Text>
         <PartListPanel parts={allParts} partInfo={partInfo} />
       </div>
 
