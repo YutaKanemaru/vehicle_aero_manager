@@ -616,6 +616,87 @@ def _get_stl_path(geometry: "Geometry") -> Path:
     return Path(settings.upload_dir) / fp
 
 
+def _transform_and_analyze_task(
+    db: Session,
+    geometry_id: str,
+    source_path: Path,
+    dest_path: Path,
+    body_transform: dict,
+    wheel_part_transforms: dict | None,
+    wheel_patterns: list[str] | None,
+    decimation_ratio: float = 0.05,
+) -> None:
+    """Background task: STL transform → STL analysis → GLB generation.
+
+    Runs entirely after the HTTP response has been returned (non-blocking).
+    Status transitions: pending → analyzing → ready-decimating → ready  (or error).
+    """
+    from app.models.geometry import Geometry
+    from app.services.compute_engine import analyze_stl_to_json
+
+    geometry = db.get(Geometry, geometry_id)
+    if not geometry:
+        logger.warning(f"_transform_and_analyze_task: geometry {geometry_id} not found, skipping")
+        return
+
+    # ── Step 1: Transform STL ──────────────────────────────────────────────
+    logger.info(f"[bg] Transforming STL → {dest_path}")
+    geometry.status = "analyzing"
+    db.commit()
+
+    try:
+        _transform_stl_buffered(
+            source_path,
+            dest_path,
+            body_transform,
+            wheel_part_transforms=wheel_part_transforms,
+            wheel_patterns=wheel_patterns,
+        )
+        # Update file_size now that the file exists
+        geometry.file_size = dest_path.stat().st_size
+        db.commit()
+    except Exception as exc:
+        logger.error(f"[bg] STL transform failed for geometry {geometry_id}: {exc}")
+        geometry.status = "error"
+        geometry.error_message = f"STL transform failed: {exc}"
+        db.commit()
+        return
+
+    # ── Step 2: STL analysis ───────────────────────────────────────────────
+    logger.info(f"[bg] Analyzing transformed STL: {dest_path}")
+    try:
+        result_json = analyze_stl_to_json(dest_path)
+        geometry.analysis_result = result_json
+        geometry.status = "ready-decimating"
+        geometry.error_message = None
+        db.commit()
+    except Exception as exc:
+        logger.error(f"[bg] STL analysis failed for geometry {geometry_id}: {exc}")
+        geometry.status = "error"
+        geometry.error_message = f"STL analysis failed: {exc}"
+        db.commit()
+        return
+
+    # ── Step 3: GLB generation ─────────────────────────────────────────────
+    if decimation_ratio >= 1.0:
+        geometry.status = "ready"
+        db.commit()
+        return
+
+    try:
+        from app.services.viewer_service import build_viewer_glb
+        build_viewer_glb(geometry, ratio=decimation_ratio)
+    except Exception as exc:
+        logger.warning(
+            f"[bg] GLB pre-build failed for geometry {geometry_id} ratio={decimation_ratio:.3f}: {exc}"
+        )
+    finally:
+        geometry.status = "ready"
+        db.commit()
+
+    logger.info(f"[bg] Transform+analyze+GLB complete for geometry {geometry_id}")
+
+
 def create_system_and_geometry(
     db: Session,
     source_geometry: "Geometry",
@@ -624,17 +705,16 @@ def create_system_and_geometry(
     current_user: "User",
     condition_id: str | None,
     background_tasks: BackgroundTasks,
+    decimation_ratio: float = 0.05,
 ) -> tuple:
     """
-    1. Transform STL file → save to upload_dir/geometries/{new_id}/{name}.stl
-    2. Create Geometry record (is_linked=False, status=pending)
-    3. Create System record
-    4. Schedule analyze_stl background task
-    Returns (system, geometry)
+    1. Create Geometry record (is_linked=False, status=pending) — no file I/O
+    2. Create System record
+    3. Schedule _transform_and_analyze_task (STL write + analysis + GLB) as background task
+    Returns (system, geometry) immediately — HTTP response does NOT wait for STL transform.
     """
     from app.models.geometry import Geometry
     from app.models.system import System
-    from app.services.geometry_service import run_analysis
 
     source_path = _get_stl_path(source_geometry)
 
@@ -642,43 +722,26 @@ def create_system_and_geometry(
     wh_transforms = transform_snapshot.get("wheel_transforms")
     wheel_patterns: list[str] | None = None
     if wh_transforms:
-        # Use target_names from analysis_result if available — passed via transform_snapshot
         wheel_patterns = transform_snapshot.get("_wheel_patterns")
 
-    # ── Create destination path ────────────────────────────────────────────
+    # ── Create destination path (directory only — file written in background) ──
     new_geom_id = str(uuid.uuid4())
     dest_dir = Path(settings.upload_dir) / "geometries" / new_geom_id
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    # Preserve original filename
     orig_suffix = source_path.suffix.lower() or ".stl"
     dest_filename = f"{name}{orig_suffix}"
     dest_path = dest_dir / dest_filename
     rel_path = str(Path("geometries") / new_geom_id / dest_filename)
 
-    # ── Transform STL ──────────────────────────────────────────────────────
-    logger.info(f"Transforming STL: {source_path} → {dest_path}")
-    body_tr = transform_snapshot["transform"]
-    try:
-        _transform_stl_buffered(
-            source_path,
-            dest_path,
-            body_tr,
-            wheel_part_transforms=wh_transforms,
-            wheel_patterns=wheel_patterns,
-        )
-    except Exception as e:
-        logger.error(f"STL transform failed: {e}")
-        raise
-
-    # ── Geometry record ────────────────────────────────────────────────────
+    # ── Geometry record (file_size=0 until background task writes the file) ──
     geom = Geometry(
         id=new_geom_id,
         name=name,
         description=f"Transformed from '{source_geometry.name}'",
         file_path=rel_path,
         original_filename=dest_filename,
-        file_size=dest_path.stat().st_size,
+        file_size=0,
         is_linked=False,
         status="pending",
         uploaded_by=current_user.id,
@@ -687,7 +750,6 @@ def create_system_and_geometry(
     db.flush()
 
     # ── System record ──────────────────────────────────────────────────────
-    # Remove internal keys before saving
     snap_to_save = {k: v for k, v in transform_snapshot.items() if not k.startswith("_")}
     system = System(
         name=f"System_{name}",
@@ -702,8 +764,19 @@ def create_system_and_geometry(
     db.refresh(system)
     db.refresh(geom)
 
-    # ── Schedule analysis ──────────────────────────────────────────────────
-    background_tasks.add_task(run_analysis, db, new_geom_id)
+    # ── Schedule combined transform + analysis + GLB task ─────────────────
+    body_tr = transform_snapshot["transform"]
+    background_tasks.add_task(
+        _transform_and_analyze_task,
+        db,
+        new_geom_id,
+        source_path,
+        dest_path,
+        body_tr,
+        wh_transforms,
+        wheel_patterns,
+        decimation_ratio,
+    )
 
-    logger.info(f"System {system.id} and Geometry {new_geom_id} created.")
+    logger.info(f"System {system.id} and Geometry {new_geom_id} queued for background transform.")
     return system, geom
