@@ -28,7 +28,7 @@ import {
   runsApi,
   type RunResponse,
 } from "../../api/configurations";
-import { assembliesApi, type GeometryResponse } from "../../api/geometries";
+import { assembliesApi, geometriesApi, type GeometryResponse } from "../../api/geometries";
 import { SceneCanvas } from "../viewer/SceneCanvas";
 import { PartListPanel } from "../viewer/PartListPanel";
 import { OverlayPanel } from "../viewer/OverlayPanel";
@@ -72,7 +72,17 @@ export function RunViewer({ caseId, assemblyId, run }: RunViewerProps) {
     enabled: !!assemblyId,
   });
 
-  const geometries: GeometryResponse[] = assembly?.geometries ?? [];
+  // Fetch override geometry when transform is applied and ready
+  const { data: overrideGeometry } = useQuery({
+    queryKey: ["geometry", run.geometry_override_id],
+    queryFn: () => geometriesApi.get(run.geometry_override_id!),
+    enabled: !!run.geometry_override_id && run.geometry_override_status === "ready",
+  });
+
+  const useOverride = !!run.geometry_override_id && run.geometry_override_status === "ready";
+  const geometries: GeometryResponse[] = useOverride
+    ? (overrideGeometry ? [overrideGeometry] : [])
+    : (assembly?.geometries ?? []);
 
   // Fetch overlay data from generated XML
   const { data: overlayData } = useQuery({
