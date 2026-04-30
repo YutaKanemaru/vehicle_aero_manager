@@ -22,6 +22,11 @@ Outputs:
 Unit test mode (no STL file required):
   uv run python scripts/test_ride_height.py --unit
   Verifies: ref_front=0.4 m, ref_rear=0.4 m → target_front=0.3 m, target_rear=0.35 m
+
+Full pattern suite (no STL file required):
+  uv run python scripts/test_ride_height.py --suite
+  Runs 12 posture-change patterns covering all combinations of heave / pitch / yaw /
+  separate-body-wheel / user-input-reference modes. Exits 1 if any case fails.
 """
 from __future__ import annotations
 
@@ -33,6 +38,179 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 BACKEND_DIR = Path(__file__).parent.parent
 
+# ---------------------------------------------------------------------------
+# Shared dummy analysis_result used by --unit and --suite modes
+# ---------------------------------------------------------------------------
+_REF_Z = 0.4  # reference wheel axis Z (m) for user_input mode
+
+_DUMMY_ANALYSIS: dict = {
+    "vehicle_bbox": {
+        "x_min": -2.5, "x_max": 2.5,
+        "y_min": -1.0, "y_max": 1.0,
+        "z_min": 0.0,  "z_max": 1.5,
+    },
+    "vehicle_dimensions": {"length": 5.0, "width": 2.0, "height": 1.5},
+    "part_info": {},
+}
+
+# ---------------------------------------------------------------------------
+# Test suite case definitions
+# ---------------------------------------------------------------------------
+# front_delta / rear_delta are offsets from _REF_Z.
+# None means target_*_wheel_axis_rh = None (keep original).
+_SUITE_CASES: list[dict] = [
+    # A — identity (no transform)
+    dict(name="identity",             enabled=False, front_d=None,  rear_d=None,  yaw=0.0, yaw_mode="wheel_center", cx=0.0, adj_sep=False, use_orig=False, ref_mode="user_input"),
+    # B — heave only (parallel raise)
+    dict(name="heave",                enabled=True,  front_d=+0.02, rear_d=+0.02, yaw=0.0, yaw_mode="wheel_center", cx=0.0, adj_sep=False, use_orig=False, ref_mode="user_input"),
+    # C — pitch only (front up, rear down — same midpoint)
+    dict(name="pitch",                enabled=True,  front_d=+0.02, rear_d=-0.02, yaw=0.0, yaw_mode="wheel_center", cx=0.0, adj_sep=False, use_orig=False, ref_mode="user_input"),
+    # D — heave + pitch combined
+    dict(name="heave_pitch",          enabled=True,  front_d=+0.03, rear_d=-0.01, yaw=0.0, yaw_mode="wheel_center", cx=0.0, adj_sep=False, use_orig=False, ref_mode="user_input"),
+    # E — yaw only
+    dict(name="yaw_only",             enabled=False, front_d=None,  rear_d=None,  yaw=5.0, yaw_mode="wheel_center", cx=0.0, adj_sep=False, use_orig=False, ref_mode="user_input"),
+    # F — yaw + heave
+    dict(name="yaw_heave",            enabled=True,  front_d=+0.02, rear_d=+0.02, yaw=5.0, yaw_mode="wheel_center", cx=0.0, adj_sep=False, use_orig=False, ref_mode="user_input"),
+    # G — yaw + pitch + user-defined yaw center
+    dict(name="yaw_pitch_custcenter", enabled=True,  front_d=+0.02, rear_d=-0.02, yaw=5.0, yaw_mode="user_input",  cx=0.5, adj_sep=False, use_orig=False, ref_mode="user_input"),
+    # H — full 3-axis (yaw + heave + pitch)
+    dict(name="full_3axis",           enabled=True,  front_d=+0.02, rear_d=-0.01, yaw=5.0, yaw_mode="wheel_center", cx=0.0, adj_sep=False, use_orig=False, ref_mode="user_input"),
+    # I — separate body/wheel, wheel held at original Z
+    # skip_rh_check=True: wheel stays at original Z by design → verification error vs. body target is non-zero intentionally
+    dict(name="sep_orig_wheel",       enabled=True,  front_d=+0.02, rear_d=-0.01, yaw=5.0, yaw_mode="wheel_center", cx=0.0, adj_sep=True,  use_orig=True,  ref_mode="user_input", skip_rh_check=True),
+    # J — separate body/wheel, wheel at independent target
+    dict(name="sep_indep_wheel",      enabled=True,  front_d=+0.02, rear_d=-0.01, yaw=5.0, yaw_mode="wheel_center", cx=0.0, adj_sep=True,  use_orig=False, ref_mode="user_input"),
+    # K — user_input reference_mode with heave+pitch
+    dict(name="userinput_ref",        enabled=True,  front_d=+0.02, rear_d=-0.01, yaw=0.0, yaw_mode="wheel_center", cx=0.0, adj_sep=False, use_orig=False, ref_mode="user_input"),
+    # L — rear-only target (asymmetric: front=None)
+    dict(name="rear_only",            enabled=True,  front_d=None,  rear_d=+0.02, yaw=0.0, yaw_mode="wheel_center", cx=0.0, adj_sep=False, use_orig=False, ref_mode="user_input"),
+]
+
+
+# ---------------------------------------------------------------------------
+# Suite runner helpers
+# ---------------------------------------------------------------------------
+
+def run_test_case(case: dict) -> dict:
+    """Run a single suite test case. Returns result dict with pass/fail and error values."""
+    from app.services.ride_height_service import compute_transform
+    from app.schemas.configuration import RideHeightConditionConfig, YawConditionConfig
+    from app.schemas.template_settings import RideHeightTemplateConfig
+
+    ref_z = _REF_Z
+    front_target = (ref_z + case["front_d"]) if case["front_d"] is not None else None
+    rear_target  = (ref_z + case["rear_d"])  if case["rear_d"]  is not None else None
+
+    rh_cfg = RideHeightConditionConfig(
+        enabled=case["enabled"],
+        target_front_wheel_axis_rh=front_target,
+        target_rear_wheel_axis_rh=rear_target,
+    )
+    rh_template_cfg = RideHeightTemplateConfig(
+        reference_mode=case["ref_mode"],
+        reference_z_front=ref_z,
+        reference_z_rear=ref_z,
+        adjust_body_wheel_separately=case["adj_sep"],
+        use_original_wheel_position=case["use_orig"],
+    )
+    yaw_cfg = YawConditionConfig(
+        center_mode=case["yaw_mode"],
+        center_x=case["cx"],
+        center_y=0.0,
+    )
+
+    try:
+        snapshot = compute_transform(
+            _DUMMY_ANALYSIS, rh_cfg, case["yaw"], yaw_cfg, rh_template_cfg=rh_template_cfg
+        )
+    except Exception as e:
+        return {"name": case["name"], "passed": False, "front_err_mm": None, "rear_err_mm": None, "error": str(e)}
+
+    vr = snapshot.get("verification", {})
+    front_err_m = vr.get("front_error_m", 0.0)
+    rear_err_m  = vr.get("rear_error_m",  0.0)
+    front_ok = abs(front_err_m) < 0.001
+    rear_ok  = abs(rear_err_m)  < 0.001
+
+    # For yaw-only / identity cases: rh disabled + both targets None → no RH error to check
+    if not case["enabled"] and front_target is None and rear_target is None:
+        front_ok = rear_ok = True
+        front_err_m = rear_err_m = 0.0
+
+    # When only one target is set, ignore the None side
+    if front_target is None:
+        front_ok = True
+    if rear_target is None:
+        rear_ok = True
+
+    # skip_rh_check: wheel stays at original Z by design (use_original_wheel_position=True)
+    if case.get("skip_rh_check"):
+        front_ok = rear_ok = True
+        front_err_m = rear_err_m = float("nan")
+
+    # Pattern I/J: verify wheel_transforms dict is produced
+    extra_ok = True
+    extra_note = ""
+    if case["adj_sep"] and case["enabled"]:
+        if not snapshot.get("wheel_transforms"):
+            extra_ok = False
+            extra_note = " (wheel_transforms missing)"
+
+    passed = front_ok and rear_ok and extra_ok
+    return {
+        "name": case["name"],
+        "passed": passed,
+        "front_err_mm": front_err_m * 1000,
+        "rear_err_mm":  rear_err_m  * 1000,
+        "note": extra_note,
+        "error": None,
+    }
+
+
+def run_suite() -> None:
+    """Run all 12 posture-change pattern test cases and print a summary table."""
+    print("\n🧪 Test Suite: ride height posture-change patterns (no STL required)")
+    print("=" * 72)
+    print(f"  {'#':<3}  {'Name':<26}  {'Front err':>10}  {'Rear err':>10}  Status")
+    print("  " + "─" * 68)
+
+    results = []
+    for i, case in enumerate(_SUITE_CASES, 1):
+        result = run_test_case(case)
+        results.append(result)
+
+        if result["error"]:
+            status = "❌ EXCEPTION"
+            front_str = rear_str = "       N/A"
+        else:
+            status = "✅" if result["passed"] else f"❌{result.get('note', '')}"
+            import math
+            def _fmt(v: float | None) -> str:
+                if v is None or (isinstance(v, float) and math.isnan(v)):
+                    return "    skipped"
+                return f"{v:>+9.3f}mm"
+            front_str = _fmt(result["front_err_mm"])
+            rear_str  = _fmt(result["rear_err_mm"])
+
+        print(f"  {i:<3}  {result['name']:<26}  {front_str}  {rear_str}  {status}")
+        if result["error"]:
+            print(f"       Exception: {result['error']}")
+
+    passed_count = sum(1 for r in results if r["passed"])
+    total = len(results)
+    print("  " + "─" * 68)
+    print(f"\n  {passed_count}/{total} passed")
+
+    if passed_count < total:
+        print("\n❌ Suite FAILED — check ride_height_service.py")
+        raise SystemExit(1)
+    else:
+        print("\n✅ Suite PASSED — all patterns verified")
+
+
+# ---------------------------------------------------------------------------
+# Unit test (single case)
+# ---------------------------------------------------------------------------
 
 def run_unit_test() -> None:
     """Pure numeric test: ref front/rear=0.4 m → target front=0.3 m, rear=0.35 m.
@@ -122,6 +300,9 @@ def run_unit_test() -> None:
 
 
 def main() -> None:
+    if "--suite" in sys.argv:
+        run_suite()
+        return
     if "--unit" in sys.argv:
         run_unit_test()
         return
