@@ -1,20 +1,20 @@
 {
-  "system_id": "190b19c5-c260-4627-965d-c67795235fa9",
-  "geometry_id": "17ed3f99-2e14-425d-9bc4-3517048e3f23",
-  "geometry_name": "aurora_OSM_baffle_YAW10",
+  "system_id": "54bc0755-1839-48b2-8b4e-adddf0e9b1f7",
+  "geometry_id": "f0de0f95-1d9d-4f2b-8d4f-8499d2f8acdd",
+  "geometry_name": "PERRINN-v1806F-R001-FRONT-WING_m_YAW10",
   "geometry_status": "ready",
   "transform_snapshot": {
     "transform": {
       "yaw_angle_deg": 10.0,
       "yaw_center_xy": [
-        1.42424998,
+        -0.8541431666666667,
         0.0
       ],
       "pitch_angle_deg": 0.0,
       "rotation_pivot": [
-        1.42424998,
+        -0.8541431666666667,
         0.0,
-        0.36007802333333333
+        0.3
       ],
       "translation": [
         0.0,
@@ -26,56 +26,56 @@
     "landmarks": {
       "front_wheel_center": {
         "before": [
-          -0.14530504,
+          -0.9360863333333332,
           0.0,
-          0.42461988
+          0.3
         ],
         "after": [
-          -0.12145997247523121,
-          -0.2725503689709824,
-          0.42461988
+          -0.9348414325063714,
+          -0.014229281563924199,
+          0.3
         ]
       },
       "rear_wheel_center": {
         "before": [
-          2.993805,
+          -0.7722000000000001,
           0.0,
-          0.29553616666666666
+          0.3
         ],
         "after": [
-          2.9699599324752315,
-          0.2725503689709824,
-          0.29553616666666666
+          -0.7734449008269619,
+          0.014229281563924199,
+          0.3
         ]
       },
       "wheelbase_center": {
         "before": [
-          1.42424998,
+          -0.8541431666666667,
           0.0,
-          0.36007802333333333
+          0.3
         ],
         "after": [
-          1.42424998,
+          -0.8541431666666667,
           0.0,
-          0.36007802333333333
+          0.3
         ]
       },
       "vehicle_bbox_z_min": {
-        "before": -0.01073,
-        "after": -0.01073
+        "before": 0.075,
+        "after": 0.075
       }
     },
     "targets": {
-      "front_wheel_axis_rh": 0.43534988,
-      "rear_wheel_axis_rh": 0.3062661666666667,
+      "front_wheel_axis_rh": 0.22499999999999998,
+      "rear_wheel_axis_rh": 0.22499999999999998,
       "yaw_angle_deg": 10.0
     },
     "verification": {
-      "front_wheel_z_actual": 0.42462,
-      "front_wheel_z_target": 0.42462,
+      "front_wheel_z_actual": 0.3,
+      "front_wheel_z_target": 0.3,
       "front_error_m": 0.0,
-      "rear_wheel_z_actual": 0.295536,
-      "rear_wheel_z_target": 0.295536,
+      "rear_wheel_z_actual": 0.3,
+      "rear_wheel_z_target": 0.3,
       "rear_error_m": 0.0
     }
   }
