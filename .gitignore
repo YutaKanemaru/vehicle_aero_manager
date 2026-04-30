@@ -31,6 +31,11 @@ backend/_verify_pw.py
 # Docker volumes
 backend/data/
 
+# Large geometry files
+*.stl
+*.glb
+!docs/samples/**/*.stl
+
 # Large sample ZIP files
 docs/samples/**/*.zip
 
