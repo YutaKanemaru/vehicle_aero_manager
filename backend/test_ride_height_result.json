@@ -1,0 +1,76 @@
+{
+  "transform": {
+    "yaw_angle_deg": 0.0,
+    "yaw_center_xy": [
+      1.514517,
+      0.0
+    ],
+    "pitch_angle_deg": -0.16697868817608857,
+    "rotation_pivot": [
+      1.514517,
+      0.0,
+      0.35996016666666664
+    ],
+    "translation": [
+      0.0,
+      0.0,
+      -0.035690166666666634
+    ]
+  },
+  "wheel_transforms": null,
+  "landmarks": {
+    "front_wheel_center": {
+      "before": [
+        -0.0005793333333333333,
+        0.0,
+        0.36437566666666665
+      ],
+      "after": [
+        -0.0005857674452847128,
+        0.0,
+        0.32427
+      ]
+    },
+    "rear_wheel_center": {
+      "before": [
+        3.0296133333333333,
+        0.0,
+        0.3555446666666666
+      ],
+      "after": [
+        3.0296197674452845,
+        0.0,
+        0.32427
+      ]
+    },
+    "wheelbase_center": {
+      "before": [
+        1.514517,
+        0.0,
+        0.35996016666666664
+      ],
+      "after": [
+        1.514517,
+        0.0,
+        0.32427
+      ]
+    },
+    "vehicle_bbox_z_min": {
+      "before": -0.01073,
+      "after": -0.05083238535909257
+    }
+  },
+  "targets": {
+    "front_wheel_axis_rh": 0.335,
+    "rear_wheel_axis_rh": 0.335,
+    "yaw_angle_deg": 0.0
+  },
+  "verification": {
+    "front_wheel_z_actual": 0.32427,
+    "front_wheel_z_target": 0.32427,
+    "front_error_m": 0.0,
+    "rear_wheel_z_actual": 0.32427,
+    "rear_wheel_z_target": 0.32427,
+    "rear_error_m": 0.0
+  }
+}

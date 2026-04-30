@@ -1,0 +1,82 @@
+{
+  "system_id": "190b19c5-c260-4627-965d-c67795235fa9",
+  "geometry_id": "17ed3f99-2e14-425d-9bc4-3517048e3f23",
+  "geometry_name": "aurora_OSM_baffle_YAW10",
+  "geometry_status": "ready",
+  "transform_snapshot": {
+    "transform": {
+      "yaw_angle_deg": 10.0,
+      "yaw_center_xy": [
+        1.42424998,
+        0.0
+      ],
+      "pitch_angle_deg": 0.0,
+      "rotation_pivot": [
+        1.42424998,
+        0.0,
+        0.36007802333333333
+      ],
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "wheel_transforms": null,
+    "landmarks": {
+      "front_wheel_center": {
+        "before": [
+          -0.14530504,
+          0.0,
+          0.42461988
+        ],
+        "after": [
+          -0.12145997247523121,
+          -0.2725503689709824,
+          0.42461988
+        ]
+      },
+      "rear_wheel_center": {
+        "before": [
+          2.993805,
+          0.0,
+          0.29553616666666666
+        ],
+        "after": [
+          2.9699599324752315,
+          0.2725503689709824,
+          0.29553616666666666
+        ]
+      },
+      "wheelbase_center": {
+        "before": [
+          1.42424998,
+          0.0,
+          0.36007802333333333
+        ],
+        "after": [
+          1.42424998,
+          0.0,
+          0.36007802333333333
+        ]
+      },
+      "vehicle_bbox_z_min": {
+        "before": -0.01073,
+        "after": -0.01073
+      }
+    },
+    "targets": {
+      "front_wheel_axis_rh": 0.43534988,
+      "rear_wheel_axis_rh": 0.3062661666666667,
+      "yaw_angle_deg": 10.0
+    },
+    "verification": {
+      "front_wheel_z_actual": 0.42462,
+      "front_wheel_z_target": 0.42462,
+      "front_error_m": 0.0,
+      "rear_wheel_z_actual": 0.295536,
+      "rear_wheel_z_target": 0.295536,
+      "rear_error_m": 0.0
+    }
+  }
+}

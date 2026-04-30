@@ -9,7 +9,10 @@ Usage:
   uv run python scripts/test_transform_run.py                  # Run一覧を表示
   uv run python scripts/test_transform_run.py <run_id>         # 指定Run を変換
   uv run python scripts/test_transform_run.py --list           # Run一覧のみ表示
-  uv run python scripts/test_transform_run.py <run_id> --dry   # スナップショットのみ（DB更新なし）
+  uv run python scripts/test_transform_run.py <run_id> --dry   # スナップショットのみ（GLB生成スキップ）
+
+Note:
+  transform_run() は内部で db.commit() を呼ぶため、DB変更は常に即時反映されます。
 
 Examples:
   uv run python scripts/test_transform_run.py
@@ -20,10 +23,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Show INFO logs from ride_height_service background task steps
+logging.basicConfig(
+    level=logging.INFO,
+    format="  [%(name)s] %(message)s",
+)
 
 BACKEND_DIR = Path(__file__).parent.parent
 
@@ -127,7 +137,6 @@ def main() -> None:
     parser.add_argument("run_id", nargs="?", help="Run ID to transform")
     parser.add_argument("--list", action="store_true", help="List runs and exit")
     parser.add_argument("--dry", action="store_true", help="Skip background tasks (no GLB generation)")
-    parser.add_argument("--no-rollback", action="store_true", help="Commit DB changes (default: rollback)")
     args = parser.parse_args()
 
     from app.database import SessionLocal
@@ -253,13 +262,11 @@ def main() -> None:
         out_path.write_text(json.dumps(result, indent=2, default=str))
         print(f"\n💾 Full result saved to: {out_path.name}")
 
-        # ── DB commit / rollback ─────────────────────────────────────────────
-        if args.no_rollback:
-            db.commit()
-            print(f"\n🟢 DB changes COMMITTED (run.geometry_override_id = {run.geometry_override_id})")
-        else:
-            db.rollback()
-            print(f"\n🟡 DB changes rolled back (use --no-rollback to persist)")
+        # ── DB note ──────────────────────────────────────────────────────────
+        # NOTE: transform_run() calls db.commit() internally, so DB changes
+        # are already persisted regardless of --no-rollback.
+        db.refresh(run)
+        print(f"\n🟢 DB changes already committed by transform_run() (run.geometry_override_id = {run.geometry_override_id})")
 
     finally:
         db.close()
