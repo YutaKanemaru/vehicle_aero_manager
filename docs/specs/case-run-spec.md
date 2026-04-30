@@ -62,10 +62,11 @@ Key functions:
 - `delete_map()`: raises HTTP 400 if any `Case.map_id` references this map
 - `delete_condition()`: raises HTTP 400 if any `Run.condition_id` references this condition
 - `update_case()`: **template/assembly/map locked** — HTTP 400 when non-pending runs exist and change requested; map change triggers `sync_runs_for_map()`
-- `delete_case()`: cascades DB delete to Runs; deletes `data/runs/{run_id}/` output directories
+- `delete_case()`: for each Run calls `_cleanup_run_transform()` (deletes System + override Geometry file + DB row) before cascade delete; then deletes `data/runs/{run_id}/` output directories
 - `create_run()`: auto-formats name when `data.name` is empty
-- `delete_run()`: before deleting Run, cleans up associated System record(s) + override Geometry (file on disk + DB row) if `geometry_override_id` is set (same cleanup as `reset_run()`); then deletes Run + output directory
-- `reset_run()`: deletes run output dir; if `geometry_override_id` is set → deletes associated `System` record(s) (by `result_geometry_id`) + override `Geometry` (file on disk + DB row) + clears `geometry_override_id`; sets `status="pending"`, clears `xml_path`/`stl_path`/`error_message`
+- `_cleanup_run_transform(db, run)`: private helper — deletes System record(s) by `result_geometry_id` + override Geometry file + DB row; no-op if `geometry_override_id` is None; does **not** commit or clear `run.geometry_override_id`
+- `delete_run()`: calls `_cleanup_run_transform()`; then deletes Run + output directory
+- `reset_run()`: deletes run output dir; calls `_cleanup_run_transform()` + clears `geometry_override_id`; sets `status="pending"`, clears `xml_path`/`stl_path`/`error_message`
 - `trigger_xml_generation()`: **guarded** — HTTP 400 when `ride_height.enabled || yaw_angle != 0` but `geometry_override_id` not set or geometry not `ready`
 - `transform_run()`: derives params from Run's Condition + Case; calls `ride_height_service.compute_transform()` + `create_system_and_geometry()`; **calls `db.commit()` internally**; **returns within milliseconds**
   - Override Geometry files are written to `data/transformed/{id}/` (not `data/uploads/`) and stored with **absolute `file_path`**; excluded from `GET /geometries/` list
@@ -200,8 +201,10 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
     - Generate XML button: disabled when `needs_transform && !transform_applied`; also disabled when `needs_transform && transform_applied && geometry_override_status !== "ready"` (geometry still processing)
 - `src/components/cases/MapChangeSyncModal.tsx` — previews keep/add/orphan; confirms `PATCH` + `sync_runs_for_map()`
 - `src/components/cases/RunViewer.tsx` — 3D viewer for ready Run; overlay from `GET /runs/{id}/overlay`
+  - When `run.geometry_override_id` is set and `geometry_override_status === "ready"`, fetches and displays the **override geometry** (transformed STL) instead of the assembly geometries; when `geometry_override_id` is set and `geometry_override_status === "ready"`, fetches override Geometry via `GET /geometries/{id}` and passes `[overrideGeometry]` to `SceneCanvas` instead of `assembly.geometries` (shows transformed pose)
 - `src/components/cases/RunViewerPage.tsx` — `/cases/:caseId/runs/:runId/viewer`; opened in new tab
 - `src/components/cases/CaseCreateModal.tsx` — New Case tab + Copy from Case tab
+  - **New Case tab**: `map_id` is **required** (validated); Condition Map Select has no `clearable`; Runs are always auto-created for all Conditions on submit (`withRuns` fixed to `true` — no toggle)
 - `src/components/cases/CreateCaseFromBuilderModal.tsx` — bulk-create Case + Runs from Condition Map
 
 ### `runsApi` helpers (`src/api/configurations.ts`)
