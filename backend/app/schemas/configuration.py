@@ -287,6 +287,7 @@ class RunResponse(BaseModel):
     condition_yaw: float = 0.0
     needs_transform: bool = False      # True when condition has ride_height.enabled or yaw_angle != 0
     transform_applied: bool = False    # True when geometry_override_id is set
+    geometry_override_status: str | None = None  # status of the override geometry (pending/analyzing/ready-decimating/ready/error)
 
 
 # ---------------------------------------------------------------------------

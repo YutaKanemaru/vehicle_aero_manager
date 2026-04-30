@@ -726,13 +726,14 @@ def create_system_and_geometry(
 
     # ── Create destination path (directory only — file written in background) ──
     new_geom_id = str(uuid.uuid4())
-    dest_dir = Path(settings.upload_dir) / "geometries" / new_geom_id
+    dest_dir = Path(settings.transformed_dir) / new_geom_id
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     orig_suffix = source_path.suffix.lower() or ".stl"
     dest_filename = f"{name}{orig_suffix}"
     dest_path = dest_dir / dest_filename
-    rel_path = str(Path("geometries") / new_geom_id / dest_filename)
+    # Store as absolute path (same convention as is_linked geometries)
+    rel_path = str(dest_path)
 
     # ── Geometry record (file_size=0 until background task writes the file) ──
     geom = Geometry(

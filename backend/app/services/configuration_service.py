@@ -658,12 +658,38 @@ def create_run(db: Session, case_id: str, data: RunCreate, current_user: User) -
 
 
 def delete_run(db: Session, case_id: str, run_id: str, current_user: User) -> None:
-    """Delete a single Run and its output directory."""
+    """Delete a single Run, its output directory, and any associated System + override Geometry."""
+    from app.models.geometry import Geometry as GeometryModel
+    from app.models.system import System
+    from app.services.geometry_service import _rmtree_force
+
     run = _get_run_or_404(db, case_id, run_id)
     _check_owner_or_admin(run, current_user)
+
+    # Clean up transform artefacts before deleting the run
+    if run.geometry_override_id:
+        override_geom_id = run.geometry_override_id
+        systems = db.scalars(
+            select(System).where(System.result_geometry_id == override_geom_id)
+        ).all()
+        for system in systems:
+            db.delete(system)
+            logger.info("Deleted system %s (result_geometry_id=%s)", system.id, override_geom_id)
+        override_geom = db.get(GeometryModel, override_geom_id)
+        if override_geom:
+            try:
+                fp = Path(override_geom.file_path)
+                resolved = fp if fp.is_absolute() else settings.upload_dir / fp
+                upload_subdir = resolved.parent
+                if upload_subdir.exists() and upload_subdir != settings.upload_dir:
+                    _rmtree_force(upload_subdir)
+                    logger.info("Deleted override geometry files: %s", upload_subdir)
+            except Exception as e:
+                logger.warning("Failed to delete override geometry files: %s", e)
+            db.delete(override_geom)
+
     db.delete(run)
     db.commit()
-    from app.services.geometry_service import _rmtree_force  # avoid circular import at module level
     run_dir = settings.runs_dir / run_id
     try:
         if run_dir.exists() and run_dir != settings.runs_dir:
@@ -1370,4 +1396,9 @@ def enrich_run_response(db: Session, run: Run) -> RunResponse:
         rh = condition.ride_height  # parsed dict
         out.needs_transform = bool(rh.get("enabled")) or condition.yaw_angle != 0
     out.transform_applied = run.geometry_override_id is not None
+    if run.geometry_override_id:
+        from app.models.geometry import Geometry as GeometryModel
+        override_geom = db.get(GeometryModel, run.geometry_override_id)
+        if override_geom:
+            out.geometry_override_status = override_geom.status
     return out

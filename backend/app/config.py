@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     result_dir: Path = _BACKEND_DIR / "data" / "results"
     runs_dir: Path = _BACKEND_DIR / "data" / "runs"
     viewer_cache_dir: Path = _BACKEND_DIR / "data" / "viewer_cache"
+    transformed_dir: Path = _BACKEND_DIR / "data" / "transformed"  # ride-height/yaw transform output STLs
 
     # CORS
     cors_origins: list[str] = ["http://localhost:5173"]  # Vite dev server
