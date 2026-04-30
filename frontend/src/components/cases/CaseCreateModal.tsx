@@ -3,7 +3,6 @@ import {
   TextInput,
   Textarea,
   Select,
-  Switch,
   Button,
   Stack,
   Group,
@@ -47,26 +46,25 @@ export function CaseCreateModal({ opened, onClose }: Props) {
   });
 
   // ── New Case form ────────────────────────────────────────────────────────
-  const form = useForm<CaseCreate & { withRuns: boolean }>({
+  const form = useForm<CaseCreate>({
     initialValues: {
       name: "",
       description: "",
       template_id: "",
       assembly_id: "",
       map_id: null,
-      withRuns: false,
     },
     validate: {
       name: (v) => (v.trim() ? null : "Name is required"),
       template_id: (v) => (v ? null : "Template is required"),
       assembly_id: (v) => (v ? null : "Assembly is required"),
+      map_id: (v) => (v ? null : "Condition Map is required"),
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: CaseCreate & { withRuns: boolean }) => {
-      const { withRuns, ...caseData } = data;
-      return casesApi.create(caseData, withRuns);
+    mutationFn: (data: CaseCreate) => {
+      return casesApi.create(data, true);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
@@ -164,22 +162,15 @@ export function CaseCreateModal({ opened, onClose }: Props) {
                 {...form.getInputProps("assembly_id")}
               />
               <Select
-                label="Condition Map (optional)"
-                placeholder="Assign a map later if needed"
-                clearable
+                label="Condition Map"
+                placeholder="Select a condition map"
+                required
                 data={maps.map((m) => ({
                   value: m.id,
                   label: `${m.name} (${m.condition_count} conditions)`,
                 }))}
                 {...form.getInputProps("map_id")}
               />
-              {form.values.map_id && (
-                <Switch
-                  label="Auto-create Runs for all Conditions"
-                  description="Creates one pending Run per Condition in the selected map"
-                  {...form.getInputProps("withRuns", { type: "checkbox" })}
-                />
-              )}
               <Group justify="flex-end" mt="sm">
                 <Button variant="subtle" onClick={handleClose}>Cancel</Button>
                 <Button type="submit" loading={createMutation.isPending}>Create</Button>
