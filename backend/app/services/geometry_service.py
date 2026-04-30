@@ -92,9 +92,17 @@ def _geometry_upload_dir(geometry_id: str) -> Path:
 # ─── Geometry CRUD ────────────────────────────────────────────────────────────
 
 def list_geometries(db: Session) -> list[Geometry]:
+    from sqlalchemy import select as _select
+    from app.models.system import System
+    # Exclude transform-result geometries (referenced as System.result_geometry_id)
+    transform_ids_subq = _select(System.result_geometry_id).where(
+        System.result_geometry_id.isnot(None)
+    )
     return list(
         db.scalars(
-            select(Geometry).order_by(Geometry.created_at.desc())
+            select(Geometry)
+            .where(Geometry.id.not_in(transform_ids_subq))
+            .order_by(Geometry.created_at.desc())
         ).all()
     )
 
