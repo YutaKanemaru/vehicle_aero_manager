@@ -201,7 +201,7 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
     - Generate XML button: disabled when `needs_transform && !transform_applied`; also disabled when `needs_transform && transform_applied && geometry_override_status !== "ready"` (geometry still processing)
 - `src/components/cases/MapChangeSyncModal.tsx` — previews keep/add/orphan; confirms `PATCH` + `sync_runs_for_map()`
 - `src/components/cases/RunViewer.tsx` — 3D viewer for ready Run; overlay from `GET /runs/{id}/overlay`
-  - When `run.geometry_override_id` is set and `geometry_override_status === "ready"`, fetches and displays the **override geometry** (transformed STL) instead of the assembly geometries; when `geometry_override_id` is set and `geometry_override_status === "ready"`, fetches override Geometry via `GET /geometries/{id}` and passes `[overrideGeometry]` to `SceneCanvas` instead of `assembly.geometries` (shows transformed pose)
+  - When `run.geometry_override_id` is set and `geometry_override_status === "ready"`, fetches override Geometry via `GET /geometries/{id}` and passes `[overrideGeometry]` to `SceneCanvas` instead of `assembly.geometries` (shows transformed pose)
 - `src/components/cases/RunViewerPage.tsx` — `/cases/:caseId/runs/:runId/viewer`; opened in new tab
 - `src/components/cases/CaseCreateModal.tsx` — New Case tab + Copy from Case tab
   - **New Case tab**: `map_id` is **required** (validated); Condition Map Select has no `clearable`; Runs are always auto-created for all Conditions on submit (`withRuns` fixed to `true` — no toggle)
