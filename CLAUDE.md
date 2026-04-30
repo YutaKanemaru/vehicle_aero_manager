@@ -82,6 +82,25 @@ docs/specs/          # Feature specifications (reference below)
 
 ---
 
+## Git Commit Skill
+
+To commit and push recent implementation changes with conventional commit messages, run:
+
+```
+最近の実装内容を Conventional Commits 形式で論理的なまとまりに分割してコミットし、push してください。
+手順:
+1. git status + git diff --stat で変更内容を把握
+2. feat/fix/refactor/docs/chore/test に分類
+3. まとまりごとに git add <files> → git commit -m "<type>(<scope>): <message>" を実行
+4. git push
+5. git log --oneline -5 で確認
+ルール: 1コミット=1論理変更 / git add . 禁止 / メッセージは英語 / コードは変更しない
+```
+
+Or use the VS Code prompt file: `.github/prompts/git-commit.prompt.md`
+
+---
+
 ## Update Docs Skill
 
 To update docs/specs and instructions after implementation changes, run:
