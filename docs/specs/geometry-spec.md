@@ -38,6 +38,7 @@
 - `upload_geometry()`: saves to `upload_dir/geometries/{id}/{filename}` via chunked `shutil.copyfileobj` (8MB), triggers background analysis
 - `link_geometry()`: creates `Geometry` row with `is_linked=True` and absolute `file_path`; triggers background analysis
 - `run_analysis(db, geometry_id, decimation_ratio=0.05)`: `pending` → `analyzing` → `ready-decimating` → `ready`/`error`; if `ratio >= 1.0` skips GLB
+- `list_geometries()`: excludes transform-result geometries (IDs present in `System.result_geometry_id`) — they are not user-owned files
 - `delete_geometry()`: `is_linked=False` のみファイル削除。`_rmtree_force()` ヘルパー (Windows read-only 属性対策)。`invalidate_cache(geometry.id)` も呼ぶ
 - `delete_assembly()`: raises HTTP 400 if any `Case.assembly_id` references this assembly
 
@@ -112,6 +113,7 @@
 ### Zustand Store (`src/stores/jobs.ts`)
 
 ```typescript
+export type JobType = "stl_analysis" | "stl_transform";
 export type JobStatus = "uploading" | "pending" | "analyzing" | "ready-decimating" | "ready" | "error";
 ```
 
@@ -124,9 +126,16 @@ export type JobStatus = "uploading" | "pending" | "analyzing" | "ready-decimatin
 4. XHR success → `removeJob(tempId)` + `addJob(realId, ...)` + `updateJob(realId, "pending")`
 5. `useJobsPoller` polls until `ready`/`error`
 
+### `useJobsPoller` (`src/hooks/useJobsPoller.ts`)
+Polls every 3 seconds while any `pending`/`analyzing`/`ready-decimating` jobs exist:
+- **`stl_analysis` jobs**: `GET /geometries/` (list) でまとめて更新。リストに存在しなければ `removeJob`
+- **`stl_transform` jobs**: `GET /geometries/{id}` で個別取得 (transform geometry は list から除外されているため)。エラー時は `removeJob`（削除済みと見なす）
+
 ### Jobs Drawer (`src/components/layout/JobsDrawer.tsx`)
 - Status configs: uploading (cyan) · pending (yellow, 15%) · analyzing (blue, 60%) · ready-decimating (violet, 85%) · ready (green, 100%) · error (red, 100%)
 - Per-job ✕ button for manual dismissal
+- `typeLabel`: `stl_analysis` → "STL Analysis" · `stl_transform` → "STL Transform"
+- Job name (upper) / type label (lower, dimmed) per row
 
 ---
 

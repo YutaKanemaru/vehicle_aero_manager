@@ -49,7 +49,8 @@ class ConditionCreate(BaseModel):
 ```
 
 - `RunCreate`: `{ name: str = "", condition_id, comment: str = "" }` — auto-name = `{case_number}_{case_name}_R{N:02d}_{condition_name}[_{comment}]`
-- `RunResponse`: includes `xml_path`, `stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`, `geometry_override_id`, `needs_transform`, `transform_applied`
+- `RunResponse`: includes `xml_path`, `stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`, `geometry_override_id`, `geometry_override_status`, `needs_transform`, `transform_applied`
+  - `geometry_override_status`: status of the override geometry (`pending`/`analyzing`/`ready-decimating`/`ready`/`error` or `null`); populated by `enrich_run_response()`
 - `RunUpdate`: `{ geometry_override_id: str | None }`
 - `CaseResponse`: includes `run_count`, `case_number`, `template_name`, `assembly_name`, `map_name`, `parent_case_id`, `parent_case_number`, `parent_case_name`
 - `CaseDuplicateRequest`: `{ name, description }` — copies template/assembly/map; sets `parent_case_id`
@@ -63,9 +64,11 @@ Key functions:
 - `update_case()`: **template/assembly/map locked** — HTTP 400 when non-pending runs exist and change requested; map change triggers `sync_runs_for_map()`
 - `delete_case()`: cascades DB delete to Runs; deletes `data/runs/{run_id}/` output directories
 - `create_run()`: auto-formats name when `data.name` is empty
+- `delete_run()`: before deleting Run, cleans up associated System record(s) + override Geometry (file on disk + DB row) if `geometry_override_id` is set (same cleanup as `reset_run()`); then deletes Run + output directory
 - `reset_run()`: deletes run output dir; if `geometry_override_id` is set → deletes associated `System` record(s) (by `result_geometry_id`) + override `Geometry` (file on disk + DB row) + clears `geometry_override_id`; sets `status="pending"`, clears `xml_path`/`stl_path`/`error_message`
 - `trigger_xml_generation()`: **guarded** — HTTP 400 when `ride_height.enabled || yaw_angle != 0` but `geometry_override_id` not set or geometry not `ready`
 - `transform_run()`: derives params from Run's Condition + Case; calls `ride_height_service.compute_transform()` + `create_system_and_geometry()`; **calls `db.commit()` internally**; **returns within milliseconds**
+  - Override Geometry files are written to `data/transformed/{id}/` (not `data/uploads/`) and stored with **absolute `file_path`**; excluded from `GET /geometries/` list
   - ⚠️ `transform_snapshot["verification"]["front_wheel_z_actual"]` is **absolute Z coordinate**, not ride height. RH = `actual_z − vehicle_bbox_z_min`
 - `_generate_xml_task(run_id, geometry_only=False)`: background task; `geometry_only=True` + `parent_case_id` set → finds parent's ready Run, swaps STL only
 - `duplicate_case()`: copies Case row; sets `parent_case_id = source_case_id`; does NOT copy Runs
@@ -192,7 +195,9 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
 - `src/components/cases/CaseDetailPage.tsx` — 2 tabs:
   - **Case Info & Compare**: editable fields; template/assembly/map locked when non-pending runs exist; Compare with Parent Case accordion
   - **Runs**: per-run Apply Transform / Generate XML / Download / Reset / Delete; Transform All / Generate All bulk buttons; Open 3D Viewer
-    - Reset button shown when `status === "ready" | "error"`, or when `status === "pending" && transform_applied` (clears transform too); confirm message varies by `transform_applied`
+    - Reset button shown when `status === "ready" | "error"`, or when `status === "pending" && transform_applied` (clears transform too); confirm message varies by `transform_applied`; **disabled when `geometry_override_status` is `pending`/`analyzing`/`ready-decimating`** (transform in progress)
+    - Delete button: **disabled when `geometry_override_status` is `pending`/`analyzing`/`ready-decimating`** (transform in progress)
+    - Generate XML button: disabled when `needs_transform && !transform_applied`; also disabled when `needs_transform && transform_applied && geometry_override_status !== "ready"` (geometry still processing)
 - `src/components/cases/MapChangeSyncModal.tsx` — previews keep/add/orphan; confirms `PATCH` + `sync_runs_for_map()`
 - `src/components/cases/RunViewer.tsx` — 3D viewer for ready Run; overlay from `GET /runs/{id}/overlay`
 - `src/components/cases/RunViewerPage.tsx` — `/cases/:caseId/runs/:runId/viewer`; opened in new tab
@@ -204,6 +209,12 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
 - `runsApi.getAxesGlbUrl(caseId, runId)` — fetch axes GLB → `createObjectURL()`
 - `runsApi.download(caseId, runId)` — fetch XML blob (auth header)
 - `runsApi.downloadStl(caseId, runId)` — fetch STL blob (auth header)
+
+### Transform Jobs (`src/stores/jobs.ts`)
+- `POST /transform` success → `addJob(geometry_id, run.name, "stl_transform")` + `updateJob(geometry_id, "pending")`
+- Job name = **Run name** (not geometry name), so Jobs Drawer shows which Run is being transformed
+- `transformAllMutation`: each fulfilled transform is registered as a separate `stl_transform` job
+- Jobs Drawer shows `stl_transform` type label as "STL Transform" (vs `stl_analysis` → "STL Analysis" for uploads)
 
 ## Test Scripts
 
