@@ -576,9 +576,10 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                                 size="xs"
                                 label="Geom"
                                 checked={!!geometryOnly[run.id]}
-                                onChange={(e) =>
-                                  setGeometryOnly((prev) => ({ ...prev, [run.id]: e.currentTarget.checked }))
-                                }
+                                onChange={(e) => {
+                                  const checked = e.currentTarget.checked;
+                                  setGeometryOnly((prev) => ({ ...prev, [run.id]: checked }));
+                                }}
                               />
                             </Tooltip>
                           )}
@@ -645,7 +646,7 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                             </Tooltip>
                           )}
                           {/* Reset */}
-                          {(run.status === "ready" || run.status === "error") && (
+                          {(run.status === "ready" || run.status === "error" || (run.status === "pending" && run.transform_applied)) && (
                             <Tooltip label="Reset to pending">
                               <ActionIcon
                                 size="xs"
@@ -653,8 +654,10 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                                 color="orange"
                                 loading={resetMutation.isPending && resetMutation.variables === run.id}
                                 onClick={() => {
-                                  if (confirm(`Reset run "${run.name}"? XML/STL files will be deleted.`))
-                                    resetMutation.mutate(run.id);
+                                  const msg = run.transform_applied
+                                    ? `Reset run "${run.name}"? XML/STL files and the applied transform will be permanently deleted.`
+                                    : `Reset run "${run.name}"? XML/STL files will be deleted.`;
+                                  if (confirm(msg)) resetMutation.mutate(run.id);
                                 }}
                               >
                                 <IconRefresh size={12} />
