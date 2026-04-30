@@ -6,6 +6,9 @@ import { useJobsStore, type JobStatus } from "../stores/jobs";
 /**
  * AppLayout でマウントし続けることで、アクティブなジョブを 3 秒ごとにポーリングする。
  * pending / analyzing のジョブがなければインターバルは停止する。
+ *
+ * stl_analysis ジョブ: GET /geometries/ (list) でまとめて更新
+ * stl_transform ジョブ: GET /geometries/{id} で個別取得 (listから除外されているため)
  */
 export function useJobsPoller() {
   const jobs = useJobsStore((s) => s.jobs);
@@ -24,30 +27,47 @@ export function useJobsPoller() {
     );
     if (activeJobs.length === 0) return;
 
-    try {
-      const geometries = await geometriesApi.list();
-      const gMap = new Map(geometries.map((g) => [g.id, g]));
+    const analysisJobs = activeJobs.filter((j) => j.type === "stl_analysis");
+    const transformJobs = activeJobs.filter((j) => j.type === "stl_transform");
 
-      // pending/analyzing → ステータス更新、または削除済みなら除去
-      for (const job of activeJobs) {
-        const g = gMap.get(job.id);
-        if (g) {
-          updateJob(g.id, g.status as JobStatus, g.error_message);
-        } else {
-          // ジオメトリが削除済み → jobs からも削除
-          removeJob(job.id);
+    // ── stl_analysis: list API でまとめて更新 ──────────────────────────────
+    if (analysisJobs.length > 0) {
+      try {
+        const geometries = await geometriesApi.list();
+        const gMap = new Map(geometries.map((g) => [g.id, g]));
+
+        for (const job of analysisJobs) {
+          const g = gMap.get(job.id);
+          if (g) {
+            updateJob(g.id, g.status as JobStatus, g.error_message);
+          } else {
+            removeJob(job.id);
+          }
         }
-      }
 
-      // ready/error ジョブも削除済みジオメトリなら除去（永続化されたゴミを掃除）
-      const staleJobs = jobs.filter(
-        (j) => (j.status === "ready" || j.status === "error") && !gMap.has(j.id)
-      );
-      for (const job of staleJobs) {
-        removeJob(job.id);
+        // ready/error stale cleanup for analysis jobs
+        const staleAnalysis = jobs.filter(
+          (j) => j.type === "stl_analysis" && (j.status === "ready" || j.status === "error") && !gMap.has(j.id)
+        );
+        for (const job of staleAnalysis) removeJob(job.id);
+      } catch {
+        // サイレント
       }
-    } catch {
-      // ポーリングエラーは無視（サイレント）
+    }
+
+    // ── stl_transform: 個別 GET で更新 (list から除外されているため) ───────
+    if (transformJobs.length > 0) {
+      await Promise.allSettled(
+        transformJobs.map(async (job) => {
+          try {
+            const g = await geometriesApi.get(job.id);
+            updateJob(g.id, g.status as JobStatus, g.error_message);
+          } catch {
+            // Geometry not found (deleted via reset/delete) → remove job from Drawer
+            removeJob(job.id);
+          }
+        })
+      );
     }
   }, 3000);
 
@@ -61,19 +81,27 @@ export function useJobsPoller() {
   }, [hasActive]);
 
   // hasActive が true→false になった瞬間に 1 回 stale job をクリーンアップする
-  // (例: ジオメトリが削除されて ready/error ジョブが残っている場合)
   useEffect(() => {
     if (prevHasActive.current && !hasActive) {
-      const staleIds = jobs
-        .filter((j) => j.status === "ready" || j.status === "error")
+      // stl_analysis stale cleanup
+      const staleAnalysisIds = jobs
+        .filter((j) => j.type === "stl_analysis" && (j.status === "ready" || j.status === "error"))
         .map((j) => j.id);
-      if (staleIds.length > 0) {
+      if (staleAnalysisIds.length > 0) {
         geometriesApi.list().then((geometries) => {
           const liveIds = new Set(geometries.map((g) => g.id));
-          staleIds.forEach((id) => {
+          staleAnalysisIds.forEach((id) => {
             if (!liveIds.has(id)) removeJob(id);
           });
         }).catch(() => { /* silent */ });
+      }
+
+      // stl_transform stale cleanup — verify each individually
+      const staleTransformJobs = jobs.filter(
+        (j) => j.type === "stl_transform" && (j.status === "ready" || j.status === "error")
+      );
+      for (const job of staleTransformJobs) {
+        geometriesApi.get(job.id).catch(() => removeJob(job.id));
       }
     }
     prevHasActive.current = hasActive;

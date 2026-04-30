@@ -77,6 +77,7 @@ const statusConfig = {
 
 const typeLabel: Record<string, string> = {
   stl_analysis: "STL Analysis",
+  stl_transform: "STL Transform",
 };
 
 // ─── JobRow ──────────────────────────────────────────────────────────────────

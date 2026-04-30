@@ -3073,6 +3073,8 @@ export interface components {
              * @default false
              */
             transform_applied: boolean;
+            /** Geometry Override Status */
+            geometry_override_status?: string | null;
         };
         /**
          * RunUpdate

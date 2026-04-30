@@ -394,10 +394,11 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
 
   const transformMutation = useMutation({
     mutationFn: (runId: string) => runsApi.transform(caseData.id, runId),
-    onSuccess: (result) => {
+    onSuccess: (result, runId) => {
       queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
-      if (result?.geometry_id && result?.geometry_name) {
-        addJob(result.geometry_id, result.geometry_name, "stl_analysis");
+      if (result?.geometry_id) {
+        const runName = runs.find((r) => r.id === runId)?.name ?? result.geometry_name;
+        addJob(result.geometry_id, runName, "stl_transform");
         updateJob(result.geometry_id, "pending");
       }
       notifications.show({ message: "Transform started — geometry building in background", color: "teal" });
@@ -423,8 +424,9 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
         if (r.status === "fulfilled") {
           successCount++;
           const result = r.value;
-          if (result?.geometry_id && result?.geometry_name) {
-            addJob(result.geometry_id, result.geometry_name, "stl_analysis");
+          const run = transformedRuns[i];
+          if (result?.geometry_id) {
+            addJob(result.geometry_id, run.name, "stl_transform");
             updateJob(result.geometry_id, "pending");
           }
         } else {
@@ -603,27 +605,31 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                               <Badge size="xs" color="teal" variant="dot">T</Badge>
                             </Tooltip>
                           )}
-                          {/* Generate — disabled when transform required but not applied */}
-                          {(run.status === "pending" || run.status === "error") && (
-                            <Tooltip
-                              label={
-                                run.needs_transform && !run.transform_applied
-                                  ? "Apply Transform first"
-                                  : "Generate XML"
-                              }
-                            >
-                              <ActionIcon
-                                size="xs"
-                                variant="light"
-                                color="blue"
-                                disabled={run.needs_transform && !run.transform_applied}
-                                loading={generateMutation.isPending && generateMutation.variables?.runId === run.id}
-                                onClick={() => generateMutation.mutate({ runId: run.id, gOnly: !!geometryOnly[run.id] })}
-                              >
-                                <IconPlayerPlay size={12} />
-                              </ActionIcon>
-                            </Tooltip>
-                          )}
+                          {/* Generate — disabled when transform required but not applied/ready */}
+                          {(run.status === "pending" || run.status === "error") && (() => {
+                            const transformPending = run.needs_transform && !run.transform_applied;
+                            const transformProcessing = run.needs_transform && run.transform_applied && run.geometry_override_status !== "ready";
+                            const generateDisabled = transformPending || transformProcessing;
+                            const generateLabel = transformPending
+                              ? "Apply Transform first"
+                              : transformProcessing
+                              ? `Transform geometry processing (${run.geometry_override_status})…`
+                              : "Generate XML";
+                            return (
+                              <Tooltip label={generateLabel}>
+                                <ActionIcon
+                                  size="xs"
+                                  variant="light"
+                                  color="blue"
+                                  disabled={generateDisabled}
+                                  loading={generateMutation.isPending && generateMutation.variables?.runId === run.id}
+                                  onClick={() => generateMutation.mutate({ runId: run.id, gOnly: !!geometryOnly[run.id] })}
+                                >
+                                  <IconPlayerPlay size={12} />
+                                </ActionIcon>
+                              </Tooltip>
+                            );
+                          })()}
                           {/* Download XML */}
                           {run.status === "ready" && run.xml_path && (
                             <Tooltip label="Download XML">
@@ -646,38 +652,48 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                             </Tooltip>
                           )}
                           {/* Reset */}
-                          {(run.status === "ready" || run.status === "error" || (run.status === "pending" && run.transform_applied)) && (
-                            <Tooltip label="Reset to pending">
-                              <ActionIcon
-                                size="xs"
-                                variant="light"
-                                color="orange"
-                                loading={resetMutation.isPending && resetMutation.variables === run.id}
-                                onClick={() => {
-                                  const msg = run.transform_applied
-                                    ? `Reset run "${run.name}"? XML/STL files and the applied transform will be permanently deleted.`
-                                    : `Reset run "${run.name}"? XML/STL files will be deleted.`;
-                                  if (confirm(msg)) resetMutation.mutate(run.id);
-                                }}
-                              >
-                                <IconRefresh size={12} />
-                              </ActionIcon>
-                            </Tooltip>
-                          )}
+                          {(run.status === "ready" || run.status === "error" || (run.status === "pending" && run.transform_applied)) && (() => {
+                            const transformProcessing = run.transform_applied && run.geometry_override_status !== "ready" && run.geometry_override_status !== "error" && run.geometry_override_status !== null;
+                            return (
+                              <Tooltip label={transformProcessing ? "Cannot reset while transform geometry is processing" : "Reset to pending"}>
+                                <ActionIcon
+                                  size="xs"
+                                  variant="light"
+                                  color="orange"
+                                  disabled={transformProcessing}
+                                  loading={resetMutation.isPending && resetMutation.variables === run.id}
+                                  onClick={() => {
+                                    const msg = run.transform_applied
+                                      ? `Reset run "${run.name}"? XML/STL files and the applied transform will be permanently deleted.`
+                                      : `Reset run "${run.name}"? XML/STL files will be deleted.`;
+                                    if (confirm(msg)) resetMutation.mutate(run.id);
+                                  }}
+                                >
+                                  <IconRefresh size={12} />
+                                </ActionIcon>
+                              </Tooltip>
+                            );
+                          })()}
                           {/* Delete */}
-                          <Tooltip label="Delete run">
-                            <ActionIcon
-                              size="xs"
-                              variant="light"
-                              color="red"
-                              loading={deleteMutation.isPending && deleteMutation.variables === run.id}
-                              onClick={() => {
-                                if (confirm(`Delete run "${run.name}"?`)) deleteMutation.mutate(run.id);
-                              }}
-                            >
-                              <IconTrash size={12} />
-                            </ActionIcon>
-                          </Tooltip>
+                          {(() => {
+                            const transformProcessing = run.transform_applied && run.geometry_override_status !== "ready" && run.geometry_override_status !== "error" && run.geometry_override_status !== null;
+                            return (
+                              <Tooltip label={transformProcessing ? "Cannot delete while transform geometry is processing" : "Delete run"}>
+                                <ActionIcon
+                                  size="xs"
+                                  variant="light"
+                                  color="red"
+                                  disabled={transformProcessing}
+                                  loading={deleteMutation.isPending && deleteMutation.variables === run.id}
+                                  onClick={() => {
+                                    if (confirm(`Delete run "${run.name}"?`)) deleteMutation.mutate(run.id);
+                                  }}
+                                >
+                                  <IconTrash size={12} />
+                                </ActionIcon>
+                              </Tooltip>
+                            );
+                          })()}
                           {/* Launch Viewer */}
                           {run.status === "ready" && (
                             <Tooltip label="Open 3D Viewer">
