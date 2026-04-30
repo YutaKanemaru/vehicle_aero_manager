@@ -363,14 +363,17 @@ def delete_case(db: Session, case_id: str, current_user: User) -> None:
     case = _get_case_or_404(db, case_id)
     _check_owner_or_admin(case, current_user)
 
-    # Collect run IDs before cascade delete
-    run_ids = [run.id for run in case.runs]
+    # Collect runs before cascade delete; clean up transform artefacts per run
+    from app.services.geometry_service import _rmtree_force  # avoid circular import at module level
+    runs = list(case.runs)
+    for run in runs:
+        _cleanup_run_transform(db, run)
 
+    run_ids = [run.id for run in runs]
     db.delete(case)
     db.commit()
 
     # Delete run output directories from filesystem
-    from app.services.geometry_service import _rmtree_force  # avoid circular import at module level
     for run_id in run_ids:
         run_dir = settings.runs_dir / run_id
         try:
@@ -657,36 +660,45 @@ def create_run(db: Session, case_id: str, data: RunCreate, current_user: User) -
     return run
 
 
-def delete_run(db: Session, case_id: str, run_id: str, current_user: User) -> None:
-    """Delete a single Run, its output directory, and any associated System + override Geometry."""
+def _cleanup_run_transform(db: Session, run: Run) -> None:
+    """Delete System record(s) + override Geometry file + DB row for a transform-applied Run.
+
+    Does NOT clear run.geometry_override_id or call db.commit() — callers own those.
+    No-op if run.geometry_override_id is None.
+    """
+    if not run.geometry_override_id:
+        return
     from app.models.geometry import Geometry as GeometryModel
     from app.models.system import System
     from app.services.geometry_service import _rmtree_force
 
+    override_geom_id = run.geometry_override_id
+    systems = db.scalars(
+        select(System).where(System.result_geometry_id == override_geom_id)
+    ).all()
+    for system in systems:
+        db.delete(system)
+        logger.info("Deleted system %s (result_geometry_id=%s)", system.id, override_geom_id)
+    override_geom = db.get(GeometryModel, override_geom_id)
+    if override_geom:
+        try:
+            fp = Path(override_geom.file_path)
+            resolved = fp if fp.is_absolute() else settings.upload_dir / fp
+            upload_subdir = resolved.parent
+            if upload_subdir.exists() and upload_subdir != settings.upload_dir:
+                _rmtree_force(upload_subdir)
+                logger.info("Deleted override geometry files: %s", upload_subdir)
+        except Exception as e:
+            logger.warning("Failed to delete override geometry files: %s", e)
+        db.delete(override_geom)
+
+
+def delete_run(db: Session, case_id: str, run_id: str, current_user: User) -> None:
+    """Delete a single Run, its output directory, and any associated System + override Geometry."""
     run = _get_run_or_404(db, case_id, run_id)
     _check_owner_or_admin(run, current_user)
 
-    # Clean up transform artefacts before deleting the run
-    if run.geometry_override_id:
-        override_geom_id = run.geometry_override_id
-        systems = db.scalars(
-            select(System).where(System.result_geometry_id == override_geom_id)
-        ).all()
-        for system in systems:
-            db.delete(system)
-            logger.info("Deleted system %s (result_geometry_id=%s)", system.id, override_geom_id)
-        override_geom = db.get(GeometryModel, override_geom_id)
-        if override_geom:
-            try:
-                fp = Path(override_geom.file_path)
-                resolved = fp if fp.is_absolute() else settings.upload_dir / fp
-                upload_subdir = resolved.parent
-                if upload_subdir.exists() and upload_subdir != settings.upload_dir:
-                    _rmtree_force(upload_subdir)
-                    logger.info("Deleted override geometry files: %s", upload_subdir)
-            except Exception as e:
-                logger.warning("Failed to delete override geometry files: %s", e)
-            db.delete(override_geom)
+    _cleanup_run_transform(db, run)
 
     db.delete(run)
     db.commit()
@@ -706,8 +718,6 @@ def reset_run(db: Session, case_id: str, run_id: str, current_user: User) -> Run
     applied (geometry_override_id is set) also deletes the associated System record(s)
     and the override Geometry (file + DB row), then clears geometry_override_id.
     """
-    from app.models.geometry import Geometry as GeometryModel
-    from app.models.system import System
     from app.services.geometry_service import _rmtree_force
 
     run = _get_run_or_404(db, case_id, run_id)
@@ -722,26 +732,8 @@ def reset_run(db: Session, case_id: str, run_id: str, current_user: User) -> Run
         logger.warning("Failed to delete run directory %s: %s", run_dir, e)
 
     # Clear transform: delete associated System(s) + override Geometry
+    _cleanup_run_transform(db, run)
     if run.geometry_override_id:
-        override_geom_id = run.geometry_override_id
-        systems = db.scalars(
-            select(System).where(System.result_geometry_id == override_geom_id)
-        ).all()
-        for system in systems:
-            db.delete(system)
-            logger.info("Deleted system %s (result_geometry_id=%s)", system.id, override_geom_id)
-        override_geom = db.get(GeometryModel, override_geom_id)
-        if override_geom:
-            try:
-                fp = Path(override_geom.file_path)
-                resolved = fp if fp.is_absolute() else settings.upload_dir / fp
-                upload_subdir = resolved.parent
-                if upload_subdir.exists() and upload_subdir != settings.upload_dir:
-                    _rmtree_force(upload_subdir)
-                    logger.info("Deleted override geometry files: %s", upload_subdir)
-            except Exception as e:
-                logger.warning("Failed to delete override geometry files: %s", e)
-            db.delete(override_geom)
         run.geometry_override_id = None
 
     run.xml_path = None
