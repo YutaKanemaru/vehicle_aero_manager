@@ -167,8 +167,10 @@ build_probe_csv_files(template_settings) -> dict[str, bytes]
 - `backend/scripts/test_ride_height.py` — compute_transform() + transform_stl() smoke test
   ```
   uv run python scripts/test_ride_height.py [<stl_path>] [front_rh] [rear_rh] [yaw_deg]
-  uv run python scripts/test_ride_height.py --unit   # no STL needed
+  uv run python scripts/test_ride_height.py --unit    # no STL needed: single case
+  uv run python scripts/test_ride_height.py --suite   # no STL needed: 12-pattern suite
   ```
   - `--unit` mode: dummy analysis_result + `reference_mode="user_input"` (ref_front=ref_rear=0.4 → target 0.3/0.35); verifies round-trip error < 1 mm
+  - `--suite` mode: runs 12 posture-change patterns (identity / heave / pitch / heave+pitch / yaw / yaw+heave / yaw+pitch / full-3-axis / sep-orig-wheel / sep-indep-wheel / user-input-ref / rear-only); exits 1 if any case fails. `_SUITE_CASES` table in script; `sep_orig_wheel` (Pattern I) skips RH error check (wheel stays at original Z by design)
   - STL mode: `reference_parts=["Wheel_"]` hardcoded; outputs `test_ride_height_result.json` + `{stl_stem}_transformed.stl` to `backend/`
   - Verification display: shows both `actual_rh` (= actual_z − ground_z) and `actual_z` (absolute) to make the coordinate system explicit

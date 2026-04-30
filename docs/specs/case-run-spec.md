@@ -63,6 +63,7 @@ Key functions:
 - `update_case()`: **template/assembly/map locked** — HTTP 400 when non-pending runs exist and change requested; map change triggers `sync_runs_for_map()`
 - `delete_case()`: cascades DB delete to Runs; deletes `data/runs/{run_id}/` output directories
 - `create_run()`: auto-formats name when `data.name` is empty
+- `reset_run()`: deletes run output dir; if `geometry_override_id` is set → deletes associated `System` record(s) (by `result_geometry_id`) + override `Geometry` (file on disk + DB row) + clears `geometry_override_id`; sets `status="pending"`, clears `xml_path`/`stl_path`/`error_message`
 - `trigger_xml_generation()`: **guarded** — HTTP 400 when `ride_height.enabled || yaw_angle != 0` but `geometry_override_id` not set or geometry not `ready`
 - `transform_run()`: derives params from Run's Condition + Case; calls `ride_height_service.compute_transform()` + `create_system_and_geometry()`; **calls `db.commit()` internally**; **returns within milliseconds**
   - ⚠️ `transform_snapshot["verification"]["front_wheel_z_actual"]` is **absolute Z coordinate**, not ride height. RH = `actual_z − vehicle_bbox_z_min`
@@ -102,7 +103,7 @@ Key functions:
 | `POST` | `/cases/{id}/runs/{rid}/transform` | Apply ride-height + yaw transform |
 | `PATCH` | `/cases/{id}/runs/{rid}` | Update run (set `geometry_override_id`) |
 | `DELETE` | `/cases/{id}/runs/{rid}` | Delete Run + output directory |
-| `POST` | `/cases/{id}/runs/{rid}/reset` | Reset Run to pending |
+| `POST` | `/cases/{id}/runs/{rid}/reset` | Reset Run to pending; **also deletes System + override Geometry if transform was applied** |
 | `GET` | `/cases/{id}/runs/{rid}/download` | Download generated XML |
 | `GET` | `/cases/{id}/runs/{rid}/download-stl` | Download input STL |
 | `GET` | `/cases/{id}/runs/{rid}/axes-glb` | On-demand axis-visualisation GLB |
@@ -191,6 +192,7 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
 - `src/components/cases/CaseDetailPage.tsx` — 2 tabs:
   - **Case Info & Compare**: editable fields; template/assembly/map locked when non-pending runs exist; Compare with Parent Case accordion
   - **Runs**: per-run Apply Transform / Generate XML / Download / Reset / Delete; Transform All / Generate All bulk buttons; Open 3D Viewer
+    - Reset button shown when `status === "ready" | "error"`, or when `status === "pending" && transform_applied` (clears transform too); confirm message varies by `transform_applied`
 - `src/components/cases/MapChangeSyncModal.tsx` — previews keep/add/orphan; confirms `PATCH` + `sync_runs_for_map()`
 - `src/components/cases/RunViewer.tsx` — 3D viewer for ready Run; overlay from `GET /runs/{id}/overlay`
 - `src/components/cases/RunViewerPage.tsx` — `/cases/:caseId/runs/:runId/viewer`; opened in new tab
