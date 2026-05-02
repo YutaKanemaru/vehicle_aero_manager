@@ -123,7 +123,7 @@ interface ViewerStore {
 
 export const useViewerStore = create<ViewerStore>((set, get) => ({
   selectedAssemblyId: null,
-  setSelectedAssemblyId: (id) => set({ selectedAssemblyId: id, glbLoaded: false }),
+  setSelectedAssemblyId: (id) => set({ selectedAssemblyId: id, glbLoaded: false, partStates: {} }),
 
   glbLoaded: false,
   setGlbLoaded: (v) => set({ glbLoaded: v }),
@@ -156,7 +156,11 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
     const current = get().partStates;
     const next: Record<string, PartState> = {};
     for (const name of names) {
-      next[name] = current[name] ?? { visible: true, color: partColor(name), opacity: 1.0 };
+      next[name] = {
+        visible: true,
+        color: current[name]?.color ?? partColor(name),
+        opacity: current[name]?.opacity ?? 1.0,
+      };
     }
     set({ partStates: next });
   },
