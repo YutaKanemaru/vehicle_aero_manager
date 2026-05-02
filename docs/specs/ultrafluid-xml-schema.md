@@ -42,7 +42,9 @@ The root element is `<uFX_solver_deck>`. Key sub-structures:
       <coupling>                  # "adaptive_two-way" | "two-way" | "one-way" | "off"
       <transitional_bl_detection> # bool (GHN only)
   <geometry>
-    <source_file>                 # str — STL/ZIP filename
+    <source_file>                 # str — single vehicle STL filename (`input.stl`); omitted when source_files is used
+    <source_files>                # list of <name> — used when belt STL present (vehicle + belt) or multiple geometries;
+                                  # vehicle entry is always `input.stl` (matches GET /download-stl)
     <baffle_parts>                # list of <name>
     <domain_bounding_box>         # x_min/x_max/y_min/y_max/z_min/z_max (Computed)
     <triangle_plinth>             # bool

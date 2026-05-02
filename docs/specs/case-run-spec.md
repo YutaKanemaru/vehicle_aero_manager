@@ -73,7 +73,7 @@ Key functions:
   - Override Geometry files are written to `data/transformed/{id}/` (not `data/uploads/`) and stored with **absolute `file_path`**; excluded from `GET /geometries/` list
   - ⚠️ `transform_snapshot["verification"]["front_wheel_z_actual"]` is **absolute Z coordinate**, not ride height. RH = `actual_z − vehicle_bbox_z_min`
   - If `belt_stl_path` is set and `yaw_angle != 0`, applies Z-axis yaw rotation to the belt STL file in-place via `belt_service.rotate_belt_stl_yaw()`
-- `_generate_xml_task(run_id, geometry_only=False)`: background task; `geometry_only=True` + `parent_case_id` set → finds parent's ready Run, swaps STL only; passes `run.belt_stl_path` to `assemble_ufx_solver_deck()`; if belt STL exists, copies it into the run output directory alongside the XML
+- `_generate_xml_task(run_id, geometry_only=False)`: background task; `geometry_only=True` + `parent_case_id` set → finds parent's ready Run, swaps STL only; passes `run.belt_stl_path` to `assemble_ufx_solver_deck()`; if belt STL exists, copies it into the run output directory alongside the XML. `source_file` in the generated XML is always `"input.stl"` (single geometry / override) or a list including `"input.stl"` + belt STL name when belt is present — matching the filenames served by the download endpoints.
 - `_check_needs_belt_generation(db, run)`: private helper — reads active template version settings dict; returns `True` when `ground_mode == "rotating_belt_5"` and `run.belt_stl_path is None`
 
 ## Belt Service (`app/services/belt_service.py`)
@@ -125,7 +125,8 @@ Handles 5-belt STL generation for the `rotating_belt_5` ground mode.
 | `DELETE` | `/cases/{id}/runs/{rid}` | Delete Run + output directory |
 | `POST` | `/cases/{id}/runs/{rid}/reset` | Reset Run to pending; **also deletes System + override Geometry if transform was applied** |
 | `GET` | `/cases/{id}/runs/{rid}/download` | Download generated XML |
-| `GET` | `/cases/{id}/runs/{rid}/download-stl` | Download input STL |
+| `GET` | `/cases/{id}/runs/{rid}/download-stl` | Download input STL (`input.stl`) |
+| `GET` | `/cases/{id}/runs/{rid}/download-belt-stl` | Download 5-belt STL; 404 if `belt_stl_path` not set |
 | `GET` | `/cases/{id}/runs/{rid}/axes-glb` | On-demand axis-visualisation GLB |
 | `GET` | `/cases/{id}/runs/{rid}/belt-glb` | On-demand belt STL → GLB (no decimation); 404 if `belt_stl_path` not set |
 | `GET` | `/cases/{id}/runs/{rid}/overlay` | OverlayData from generated XML |
@@ -214,6 +215,7 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
   - **Case Info & Compare**: editable fields; template/assembly/map locked when non-pending runs exist; Compare with Parent Case accordion
   - **Runs**: per-run Generate Belts / Apply Transform / Generate XML / Download / Reset / Delete; Generate All Belts / Transform All / Generate All bulk buttons; Open 3D Viewer
     - **Generate Belts button** (grape/purple): shown when `needs_belt_generation === true`; calls `POST /generate-belts`; shows **B badge** (grape dot) when `belt_stl_path` is set
+    - **Download STL button** (cyan): shown when `run.status === "ready" && run.stl_path`; when `belt_stl_path` is also set, renders as a `Menu` dropdown with two items: **Download STL** (vehicle) and **Download Belt STL** (`{runName}_5belts.stl`); calls `runsApi.downloadBeltStl()` for the belt item
     - Reset button shown when `status === "ready" | "error"`, or when `status === "pending" && transform_applied` (clears transform too); confirm message varies by `transform_applied`; **disabled when `geometry_override_status` is `pending`/`analyzing`/`ready-decimating`** (transform in progress)
     - Delete button: **disabled when `geometry_override_status` is `pending`/`analyzing`/`ready-decimating`** (transform in progress)
     - Generate XML button: disabled when `needs_transform && !transform_applied`; also disabled when `needs_transform && transform_applied && geometry_override_status !== "ready"` (geometry still processing)
@@ -230,7 +232,8 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
 - `runsApi.update(caseId, runId, data)` — PATCH to set `geometry_override_id`
 - `runsApi.getAxesGlbUrl(caseId, runId)` — fetch axes GLB → `createObjectURL()`
 - `runsApi.download(caseId, runId)` — fetch XML blob (auth header)
-- `runsApi.downloadStl(caseId, runId)` — fetch STL blob (auth header)
+- `runsApi.downloadStl(caseId, runId)` — fetch STL blob (auth header); saved as `{runName}.stl`
+- `runsApi.downloadBeltStl(caseId, runId)` — fetch belt STL blob (auth header); saved as `{runName}_5belts.stl`
 
 ### Transform Jobs (`src/stores/jobs.ts`)
 - `POST /transform` success → `addJob(geometry_id, run.name, "stl_transform")` + `updateJob(geometry_id, "pending")`
