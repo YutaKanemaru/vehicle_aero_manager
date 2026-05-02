@@ -42,6 +42,7 @@ from app.services.compute_engine import (
     _matches_any,
     _matches_pattern,
     assemble_ufx_solver_deck,
+    extract_pca_axes,
 )
 from app.services.configuration_service import _merge_analysis_results
 from app.ultrafluid.parser import parse_ufx
@@ -521,6 +522,15 @@ def compute_overlay_data(
     if not cache_path.exists():
         try:
             sp = template_settings.simulation_parameter
+            # Run PCA on assembly STL files for accurate wheel center/axis and porous axis
+            stl_paths = [
+                __import__('pathlib').Path(g.file_path)
+                for g in assembly.geometries
+                if g.file_path and g.status == "ready"
+            ]
+            porous_patterns = [pc.part_name for pc in template_settings.porous_coefficients]
+            rim_patterns = list(template_settings.target_names.rim)
+            pca_axes = extract_pca_axes(stl_paths, porous_patterns, rim_patterns) if stl_paths else None
             deck = assemble_ufx_solver_deck(
                 template_settings=template_settings,
                 analysis_result=merged,
@@ -528,7 +538,7 @@ def compute_overlay_data(
                 inflow_velocity=sp.inflow_velocity,
                 yaw_angle=sp.yaw_angle,
                 source_files=[],
-                pca_axes=None,
+                pca_axes=pca_axes,
             )
         except Exception:
             logger.exception("Failed to assemble solver deck for overlay preview")
@@ -546,8 +556,4 @@ def compute_overlay_data(
     deck = parse_ufx(cache_path.read_bytes())
 
     # 5. Extract overlay data (pass target_names for accurate wheel axis detection)
-    overlay = extract_overlay_data(deck, template_settings, all_part_names, analysis_result=merged, target_names=template_settings.target_names)
-    # Template Builder has no real XML (pca_axes=None) — axis data would be
-    # inaccurate, so hide the Axis tab by returning an empty list.
-    overlay.axes = []
-    return overlay
+    return extract_overlay_data(deck, template_settings, all_part_names, analysis_result=merged, target_names=template_settings.target_names)

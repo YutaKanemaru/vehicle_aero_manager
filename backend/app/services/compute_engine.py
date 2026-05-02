@@ -507,20 +507,23 @@ def compute_wheel_kinematics(
     radius = max(radius_z, radius_y)
 
     if rim_vertices is not None and len(rim_vertices) >= 3:
-        centered = rim_vertices - rim_vertices.mean(axis=0)
+        rim_mean = rim_vertices.mean(axis=0)
+        center = {"x_pos": float(rim_mean[0]), "y_pos": float(rim_mean[1]), "z_pos": float(rim_mean[2])}
+        centered = rim_vertices - rim_mean
         _, _, vt = np.linalg.svd(centered, full_matrices=False)
         axis = vt[2]
         if axis[1] < 0:
             axis = -axis
         axis_dir = {"x_dir": float(axis[0]), "y_dir": float(axis[1]), "z_dir": float(axis[2])}
     else:
+        center = {"x_pos": centroid[0], "y_pos": centroid[1], "z_pos": centroid[2]}
         axis_dir = {"x_dir": 0.0, "y_dir": 1.0, "z_dir": 0.0}
 
     circumference = 2 * math.pi * radius
     rpm = (inflow_velocity / circumference) * 60.0 if circumference > 0 else 0.0
 
     return {
-        "center": {"x_pos": centroid[0], "y_pos": centroid[1], "z_pos": centroid[2]},
+        "center": center,
         "axis": axis_dir,
         "rpm": rpm,
         "radius": radius,
