@@ -47,7 +47,7 @@ from app.ultrafluid.parser import parse_ufx
 from app.ultrafluid.serializer import serialize_ufx
 
 if TYPE_CHECKING:
-    from app.schemas.template_settings import TemplateSettings
+    from app.schemas.template_settings import TargetNames, TemplateSettings
     from app.ultrafluid.schema import UfxSolverDeck
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,7 @@ def extract_overlay_data(
     template_settings: "TemplateSettings",
     all_part_names: list[str],
     analysis_result: dict | None = None,
+    target_names: "TargetNames | None" = None,
 ) -> OverlayData:
     """Turn a fully-assembled solver deck into viewer overlay primitives.
 
@@ -91,6 +92,10 @@ def extract_overlay_data(
     all_part_names : list[str]
         Flat list of part names from the merged analysis result.  Used for
         pattern matching in the Parts tab.
+    target_names : TargetNames | None
+        When provided, ``classify_wheels()`` is used to derive ride-height
+        reference X/Z (most accurate). Falls back to
+        ``extract_wheel_reference_z`` when None or when classify finds nothing.
     """
 
     # ── Domain bounding box ──────────────────────────────────────────────
@@ -277,13 +282,17 @@ def extract_overlay_data(
     rh = template_settings.setup_option.ride_height
     ref_mode = rh.reference_mode
     if ref_mode == "user_input" and rh.reference_z_front is not None and rh.reference_z_rear is not None:
-        # user_input: X positions unknown without analysis_result; try to derive
+        # user_input: Z from template config; derive X via classify_wheels (preferred) or heuristic
         front_x: float | None = None
         rear_x: float | None = None
         if analysis_result is not None:
             try:
-                from app.services.ride_height_service import extract_wheel_reference_z
-                _, _, front_x, rear_x = extract_wheel_reference_z(analysis_result, rh)
+                from app.services.ride_height_service import _wheel_axis_from_classify, extract_wheel_reference_z
+                _res = _wheel_axis_from_classify(analysis_result, target_names) if target_names else None
+                if _res is not None:
+                    _, _, front_x, rear_x = _res
+                else:
+                    _, _, front_x, rear_x = extract_wheel_reference_z(analysis_result, rh)
             except Exception:
                 logger.debug("Could not derive wheel X positions for overlay", exc_info=True)
         ride_height_ref = OverlayRideHeightRef(
@@ -297,8 +306,12 @@ def extract_overlay_data(
     elif ref_mode == "wheel_axis":
         if analysis_result is not None:
             try:
-                from app.services.ride_height_service import extract_wheel_reference_z
-                fz, rz, fx, rx = extract_wheel_reference_z(analysis_result, rh)
+                from app.services.ride_height_service import _wheel_axis_from_classify, extract_wheel_reference_z
+                _res = _wheel_axis_from_classify(analysis_result, target_names) if target_names else None
+                if _res is not None:
+                    fz, rz, fx, rx = _res
+                else:
+                    fz, rz, fx, rx = extract_wheel_reference_z(analysis_result, rh)
                 ride_height_ref = OverlayRideHeightRef(
                     reference_mode=ref_mode,
                     reference_z_front=fz,
@@ -436,5 +449,5 @@ def compute_overlay_data(
     # 4. Parse the cached XML (same path as real XML generation)
     deck = parse_ufx(cache_path.read_bytes())
 
-    # 5. Extract overlay data
-    return extract_overlay_data(deck, template_settings, all_part_names, analysis_result=merged)
+    # 5. Extract overlay data (pass target_names for accurate wheel axis detection)
+    return extract_overlay_data(deck, template_settings, all_part_names, analysis_result=merged, target_names=template_settings.target_names)

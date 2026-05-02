@@ -885,6 +885,7 @@ def transform_run(
         yaw_angle_deg=yaw_angle_deg,
         yaw_cfg=yaw_cfg,
         rh_template_cfg=rh_template,
+        target_names=template_settings.target_names,
     )
 
     # Create System + result Geometry

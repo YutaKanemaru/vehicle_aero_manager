@@ -43,7 +43,7 @@ if TYPE_CHECKING:
         RideHeightConditionConfig,
         YawConditionConfig,
     )
-    from app.schemas.template_settings import RideHeightTemplateConfig
+    from app.schemas.template_settings import RideHeightTemplateConfig, TargetNames
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +191,36 @@ def extract_wheel_reference_z(
     return front_z_orig, rear_z_orig, front_x, rear_x
 
 
+def _wheel_axis_from_classify(
+    analysis_result: dict,
+    target_names: "TargetNames",
+) -> "tuple[float, float, float, float] | None":
+    """Derive (front_z, rear_z, front_x, rear_x) using classify_wheels().
+
+    Uses target_names.wheel / wheel_tire_fr_lh etc. patterns — most accurate
+    wheel detection.  Returns None when classify_wheels() finds no candidates
+    (caller should fall back to extract_wheel_reference_z).
+
+    centroid is bbox center = (z_min + z_max) / 2  — i.e. wheel axis height.
+    """
+    from app.services.compute_engine import classify_wheels  # avoid circular
+    wheel_map = classify_wheels(analysis_result, target_names)
+    if not wheel_map:
+        return None
+
+    front_infos = [v for k, v in wheel_map.items() if k.startswith("fr")]
+    rear_infos  = [v for k, v in wheel_map.items() if k.startswith("rr")]
+
+    if not front_infos or not rear_infos:
+        return None
+
+    front_z = float(np.mean([info["centroid"][2] for info in front_infos]))
+    rear_z  = float(np.mean([info["centroid"][2] for info in rear_infos]))
+    front_x = float(np.mean([info["centroid"][0] for info in front_infos]))
+    rear_x  = float(np.mean([info["centroid"][0] for info in rear_infos]))
+    return front_z, rear_z, front_x, rear_x
+
+
 # ===========================================================================
 # compute_transform
 # ===========================================================================
@@ -201,13 +231,17 @@ def compute_transform(
     yaw_angle_deg: float,
     yaw_cfg: "YawConditionConfig",
     rh_template_cfg: "RideHeightTemplateConfig | None" = None,
+    target_names: "TargetNames | None" = None,
 ) -> dict:
     """
     Derive transform_snapshot dict from analysis_result and ride height config.
 
     rh_cfg          – condition-level config: enabled + target heights
-    rh_template_cfg – template-level config: adjust_body_wheel_separately, use_original_wheel_position
-                      (falls back to RideHeightTemplateConfig defaults when None)
+    rh_template_cfg – template-level config: adjust_body_wheel_separately,
+                      use_original_wheel_position (falls back to defaults when None)
+    target_names    – when provided, classify_wheels() is used to determine wheel
+                      axis Z/X (most accurate). Falls back to extract_wheel_reference_z
+                      if classify_wheels returns no results.
 
     Returns a dict with keys:
       transform, wheel_transforms (optional), landmarks, targets, verification
@@ -221,9 +255,16 @@ def compute_transform(
     ground_z: float = vbbox["z_min"]
 
     # ── Detect front/rear wheel axis Z & X ────────────────────────────────
-    front_z_orig, rear_z_orig, front_x, rear_x = extract_wheel_reference_z(
-        analysis_result, rh_template_cfg
-    )
+    # Prefer classify_wheels() (uses target_names patterns — most accurate).
+    # Fall back to extract_wheel_reference_z() when target_names not provided
+    # or classify_wheels finds no candidates.
+    _classify_result = _wheel_axis_from_classify(analysis_result, target_names) if target_names else None
+    if _classify_result is not None:
+        front_z_orig, rear_z_orig, front_x, rear_x = _classify_result
+    else:
+        front_z_orig, rear_z_orig, front_x, rear_x = extract_wheel_reference_z(
+            analysis_result, rh_template_cfg
+        )
 
     wheelbase = abs(rear_x - front_x)
     wb_center_orig = [
