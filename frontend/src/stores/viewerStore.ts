@@ -143,7 +143,13 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
     set((s) => ({
       partStates: {
         ...s.partStates,
-        [name]: { ...s.partStates[name], ...state },
+        [name]: {
+          visible: true,
+          color: partColor(name),
+          opacity: 1.0,
+          ...s.partStates[name],
+          ...state,
+        },
       },
     })),
   initParts: (names) => {
