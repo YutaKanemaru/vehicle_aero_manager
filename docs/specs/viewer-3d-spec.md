@@ -41,12 +41,13 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 
 ### `preview_service.py`
 
-- `extract_overlay_data(deck, template_settings, all_part_names, analysis_result=None, target_names=None) -> OverlayData` — converts assembled solver deck to absolute-coordinate viewer primitives. `target_names` enables `classify_wheels()`-based RH reference point detection (most accurate); falls back to `extract_wheel_reference_z()` when `None`.
+- `extract_overlay_data(deck, template_settings, all_part_names, analysis_result=None, target_names=None) -> OverlayData` — converts assembled solver deck to absolute-coordinate viewer primitives. `target_names` enables `classify_wheels()`-based RH reference point detection (most accurate); falls back to `extract_wheel_reference_z()` when `None`. Also extracts `axes` from the deck: wheel rotation axes from `FluidBCRotating.axis/center` (per wall instance with `type=="rotating"`; corner detected via name substring `fr_lh`/`fr_rh`/`rr_lh`/`rr_rh`; length from part bbox y-span/2) and porous flow axes from `PorousInstance.porous_axis` (center from `analysis_result` part centroid; length = max bbox span × 0.5).
 - `compute_overlay_data(db, template_id, assembly_id) -> OverlayData` — XML cache-through pipeline:
   1. Assemble solver deck via `assemble_ufx_solver_deck()`
   2. Serialise to `preview_cache_dir/{version_id}_{assembly_id}.xml` via `serialize_ufx()` (skip if cached)
   3. Parse back via `parse_ufx()` — ensures overlay is derived from identical XML structure as real generation
   4. Call `extract_overlay_data(..., analysis_result=merged, target_names=template_settings.target_names)`
+  5. Clears `axes=[]` before returning — Template Builder has no real XML (`pca_axes=None`), so axis data would be inaccurate; Axis tab is hidden on frontend when `axes` is empty
 - `invalidate_preview_cache(version_id)` — deletes all `{version_id}_*.xml` files from `preview_cache_dir`; called by `template_service.update_version_settings()` on every in-place settings save
 - Cache path helper: `_preview_cache_path(version_id, assembly_id)` → `preview_cache_dir/{version_id}_{assembly_id}.xml`
 
@@ -56,7 +57,8 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 - `OverlayPlaneItem`: `name`, `vis_key`, `type` (`"tg_ground"` / `"tg_body"` / `"section_cut"`), `position`, `normal`, `width`, `height`, `color`
 - `OverlayDomainPartItem`: `name`, `vis_key`, `location`, `export_mesh`, bbox, `z_position`, `color`
 - `OverlayProbeItem`: `name`, `vis_key`, `points`, `radius`
-- `OverlayData`: `boxes`, `planes`, `domain_parts`, `probes`, `parts_groups`, `ground_z`
+- `OverlayAxisItem`: `name`, `category` (`"wheel"` / `"porous"`), `center: [x,y,z]`, `direction: [x,y,z]` (unit vector), `length: float`, `color: str`
+- `OverlayData`: `domain_box`, `refinement_boxes`, `porous_boxes`, `partial_volume_boxes`, `domain_parts`, `tg_planes`, `section_cut_planes`, `probes`, `parts_groups`, `ground_z`, `ride_height_ref`, `axes: list[OverlayAxisItem]`
 
 ### API Endpoints
 
@@ -123,13 +125,15 @@ rhRefVisible: boolean               // default false — ride height reference p
 **`OverlayObjects.tsx`** (backend-driven — zero calculation logic)
 - Receives `overlayData: OverlayData | null` (pre-computed absolute coords from backend)
 - Per `overlayVisibility` key: domain box (white wireframe) · refinement boxes (per-level color) · porous boxes · partial volume boxes (orange) · TG planes (cyan, YZ only) · section cuts (magenta) · probe spheres (yellow) · domain parts (FloorRect: green=belt, orange=uFX_ground)
+- Axis arrows (`axes` list): `AxisArrow` renders each item as `CylinderGeometry` (shaft) + `ConeGeometry` (head); length=`item.length×2`, shaft radius=`len×0.03`, head radius=`shaftR×3`, head length=`len×0.25`; per-item visibility key `axis_{name}`; dimmed opacity 0.25 when `rhRefActive`
 
 **`OverlayPanel.tsx`** (backend-driven)
-- 4-tab `Tabs` (pills): Parts / Box / Plane / Probe
+- 5-tab `Tabs` (pills): Parts / Box / Plane / Point / Axis (Axis tab hidden when `axes.length === 0`)
 - Parts tab: `parts_groups[]` badges → click to filter `PartListPanel`
 - Box tab: `OverlaySwitch` per box item + Domain Parts section; `TabMasterSwitch`
 - Plane tab: TG Ground / TG Body / section cuts; `TabMasterSwitch`
-- Probe tab: per probe with point count; `TabMasterSwitch`
+- Point tab: per probe with point count; `TabMasterSwitch`
+- Axis tab: **Wheels** section (FR_LH=red, FR_RH=blue, RR_LH=orange, RR_RH=green) + **Porous** section (purple); per-item `ColorSwatch` + `OverlaySwitch`; sub-label shows `center (x, y, z) m  |  axis [dx, dy, dz]`; `TabMasterSwitch`
 - **RH Ref toggle is NOT in this panel** — it lives in `ViewerToolbar` (see below)
 
 **`PartListPanel.tsx`**
@@ -157,6 +161,7 @@ rhRefVisible: boolean               // default false — ride height reference p
 
 **`src/api/preview.ts`**
 - `previewApi.getOverlayData(templateId, assemblyId) -> Promise<OverlayData>`
+- Exports: `OverlayData`, `OverlayBoxItem`, `OverlayPlaneItem`, `OverlayDomainPartItem`, `OverlayProbeItem`, `OverlayPartsGroup`, `OverlayRideHeightRef`, `OverlayAxisItem`
 
 **`src/api/systems.ts`**
 - `systemsApi.list()`, `.get(id)`, `.delete(id)`, `.getLandmarksGlbUrl(id)`
