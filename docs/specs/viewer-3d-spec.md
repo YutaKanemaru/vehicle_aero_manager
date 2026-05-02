@@ -36,7 +36,7 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 - `compute_transform(analysis_result, rh_cfg, yaw_angle_deg, yaw_cfg) -> dict` — pure math, no file I/O
   - **Transform order**: Yaw (Z-axis) → Pitch (Y-axis, Rodrigues) → Z-translate
   - Returns `transform_snapshot` with keys: `transform`, `wheel_transforms`, `landmarks`, `targets`, `verification`
-- `create_system_and_geometry(db, source_geometry, transform_snapshot, name, current_user, condition_id, background_tasks, decimation_ratio=0.05) -> (System, Geometry)` — **returns immediately**, schedules background task
+- `create_system_and_geometry(db, source_geometry, transform_snapshot, name, current_user, condition_id, background_tasks) -> (System, Geometry)` — **returns immediately**, schedules background task; result geometry inherits `decimation_ratio` from `source_geometry.decimation_ratio`
 - `_transform_and_analyze_task()` — background: STL write → `analyze_stl_to_json()` → `build_viewer_glb()` → `status="ready"`
 
 ### `preview_service.py`
@@ -56,7 +56,7 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/geometries/{id}/glb?ratio=0.05` | Decimated GLB (cache or generate) |
+| `GET` | `/geometries/{id}/glb?ratio=` | Decimated GLB (cache or generate); `ratio` optional — defaults to `geometry.decimation_ratio` if omitted |
 | `GET` | `/preview/overlay` | OverlayData for Template × Assembly |
 | `GET` | `/cases/{id}/runs/{rid}/axes-glb` | On-demand axes GLB |
 | `GET` | `/cases/{id}/runs/{rid}/overlay` | OverlayData from generated XML |
@@ -94,6 +94,7 @@ fitToTarget: { center, radius } | null
 ### Key Frontend Components
 
 **`SceneCanvas.tsx`**
+- Props: `geometries: GeometryResponse[]`, `overlayData?: OverlayData | null`, `vehicleBbox?`. **No `ratio` prop** — GLB is fetched with `getGlbBlobUrl(g.id, g.decimation_ratio)` per geometry
 - `<GLBModel>`: 3 separate `useEffect` hooks for flatShading, partStates, and glbLoaded detection
 - `<CameraFitter>`: fires after `glbLoaded=true`; iso position `center + maxDim×1.2`
 - `<CameraPresetController>`: `useFrame` + `getState()` — fires every frame for immediate response

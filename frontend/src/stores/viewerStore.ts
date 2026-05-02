@@ -48,10 +48,6 @@ interface ViewerStore {
   axesGlbUrl: string | null;
   setAxesGlbUrl: (url: string | null) => void;
 
-  // Decimation ratio (fraction to keep, 0.01–1.0)
-  ratio: number;
-  setRatio: (ratio: number) => void;
-
   // Part visibility/color/opacity — keyed by part name
   partStates: Record<string, PartState>;
   setPartState: (name: string, state: Partial<PartState>) => void;
@@ -137,9 +133,6 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
   setSelectedRunId: (id) => set({ selectedRunId: id }),
   axesGlbUrl: null,
   setAxesGlbUrl: (url) => set({ axesGlbUrl: url }),
-
-  ratio: 0.05,
-  setRatio: (ratio) => set({ ratio }),
 
   partStates: {},
   setPartState: (name, state) =>

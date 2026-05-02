@@ -79,7 +79,8 @@ def upload_geometry(
 ):
     """STL ファイルをアップロードする。解析はバックグラウンドで自動実行。"""
     geometry = geometry_service.upload_geometry(
-        db, name, description, file, current_user, folder_id=folder_id
+        db, name, description, file, current_user, folder_id=folder_id,
+        decimation_ratio=decimation_ratio,
     )
     background_tasks.add_task(geometry_service.run_analysis, db, geometry.id, decimation_ratio)
     return geometry
@@ -155,7 +156,7 @@ def download_geometry_file(
 @router.get("/{geometry_id}/glb")
 def get_geometry_glb(
     geometry_id: str,
-    ratio: float = Query(0.05, ge=0.01, le=1.0, description="Keep ratio (0.01–1.0). e.g. 0.5 = keep 50%"),
+    ratio: float | None = Query(None, ge=0.01, le=1.0, description="Keep ratio (0.01–1.0). Defaults to geometry.decimation_ratio if omitted."),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -164,8 +165,11 @@ def get_geometry_glb(
     if geometry.status != "ready":
         raise HTTPException(status_code=400, detail="Geometry analysis not complete")
 
+    # ratio 未指定の場合は geometry に保存された値を使用
+    effective_ratio = ratio if ratio is not None else geometry.decimation_ratio
+
     # キャッシュ確認
-    cached = viewer_service.get_cached_glb(geometry_id, ratio)
+    cached = viewer_service.get_cached_glb(geometry_id, effective_ratio)
     if cached is not None:
         return Response(content=cached, media_type="model/gltf-binary")
 
@@ -173,7 +177,7 @@ def get_geometry_glb(
     try:
         from app.models.geometry import Geometry
         db_geometry = db.get(Geometry, geometry_id)
-        glb_bytes = viewer_service.build_viewer_glb(db_geometry, ratio=ratio)
+        glb_bytes = viewer_service.build_viewer_glb(db_geometry, ratio=effective_ratio)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:

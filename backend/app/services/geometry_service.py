@@ -118,6 +118,7 @@ def upload_geometry(
     file: UploadFile,
     current_user: User,
     folder_id: str | None = None,
+    decimation_ratio: float = 0.05,
 ) -> Geometry:
     geometry = Geometry(
         name=name,
@@ -127,6 +128,7 @@ def upload_geometry(
         original_filename=file.filename or "unknown.stl",
         file_size=0,            # 後で更新
         status="pending",
+        decimation_ratio=decimation_ratio,
         uploaded_by=current_user.id,
     )
     db.add(geometry)
@@ -172,6 +174,7 @@ def link_geometry(
         file_size=src.stat().st_size,
         is_linked=True,
         status="pending",
+        decimation_ratio=data.decimation_ratio,
         uploaded_by=current_user.id,
     )
     db.add(geometry)

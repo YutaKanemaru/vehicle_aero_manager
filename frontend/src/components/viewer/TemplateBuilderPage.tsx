@@ -311,7 +311,6 @@ export function TemplateBuilderPage() {
     selectedAssemblyId,
     selectedTemplateId,
   } = useViewerStore();
-  const { ratio } = useViewerStore();
 
   const { data: assemblies = [] } = useQuery<AssemblyResponse[]>({
     queryKey: ["assemblies"],
@@ -414,10 +413,9 @@ export function TemplateBuilderPage() {
         <CameraOverlay />
         <SceneCanvas
           geometries={geometries}
-          ratio={ratio}
           overlayData={overlayData}
           vehicleBbox={vehicleBbox}
-          partInfo={partInfo}
+        />
         />
       </Paper>
     </div>

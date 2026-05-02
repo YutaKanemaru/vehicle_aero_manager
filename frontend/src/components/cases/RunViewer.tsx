@@ -50,7 +50,6 @@ const CAMERA_PRESETS = [
 ];
 
 export function RunViewer({ caseId, assemblyId, run }: RunViewerProps) {
-  const ratio = useViewerStore((s) => s.ratio);
   const cameraProjection = useViewerStore((s) => s.cameraProjection);
   const setCameraProjection = useViewerStore((s) => s.setCameraProjection);
   const flatShading = useViewerStore((s) => s.flatShading);
@@ -162,10 +161,8 @@ export function RunViewer({ caseId, assemblyId, run }: RunViewerProps) {
       <div style={{ flex: 1, position: "relative" }}>
         <SceneCanvas
           geometries={geometries}
-          ratio={ratio}
           overlayData={overlayData}
           vehicleBbox={vehicleBbox}
-          partInfo={partInfo}
         />
 
         {/* Viewer Toolbar (top-right) */}

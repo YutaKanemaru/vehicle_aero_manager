@@ -14,7 +14,7 @@
 
 **Models** (`app/models/geometry.py`)
 - `GeometryFolder`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`; `geometries` one-to-many
-- `Geometry`: `id`, `name`, `description`, `folder_id` (nullable FK), `file_path`, `original_filename`, `file_size`, `is_linked: bool`, `status` (`pending`/`analyzing`/`ready`/`error`), `analysis_result` (JSON string), `error_message`, `uploaded_by`, `created_at`, `updated_at`
+- `Geometry`: `id`, `name`, `description`, `folder_id` (nullable FK), `file_path`, `original_filename`, `file_size`, `is_linked: bool`, `status` (`pending`/`analyzing`/`ready`/`error`), `analysis_result` (JSON string), `error_message`, `decimation_ratio: float = 0.05` (persisted — set at upload time, inherited by transform-result geometries), `uploaded_by`, `created_at`, `updated_at`
 - `AssemblyFolder`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`
 - `GeometryAssembly`: `id`, `name`, `description`, `folder_id`, `created_by`, `created_at`, `updated_at`; `geometries` many-to-many
 - `assembly_geometry_link`: association table (`assembly_id`, `geometry_id`)
@@ -23,7 +23,7 @@
 **Schemas** (`app/schemas/geometry.py`)
 - `PartInfo`: `centroid [x,y,z]`, `bbox dict`, `vertex_count`, `face_count`
 - `AnalysisResult`: `parts`, `vehicle_bbox`, `vehicle_dimensions`, `part_info dict`
-- `GeometryResponse`: full response including parsed `analysis_result`, `folder_id: str | None`, `is_linked: bool`
+- `GeometryResponse`: full response including parsed `analysis_result`, `folder_id: str | None`, `is_linked: bool`, `decimation_ratio: float`
 - `GeometryUpdate`: `name`, `description`, `folder_id` — uses `model_fields_set` to distinguish explicit null from field not sent
 - `GeometryLinkRequest`: `name`, `description`, `file_path` (server absolute path), `folder_id`, `decimation_ratio: float = 0.05`
 
@@ -35,8 +35,8 @@
 - Multi-solid ASCII STL fully supported
 
 **Service** (`app/services/geometry_service.py`)
-- `upload_geometry()`: saves to `upload_dir/geometries/{id}/{filename}` via chunked `shutil.copyfileobj` (8MB), triggers background analysis
-- `link_geometry()`: creates `Geometry` row with `is_linked=True` and absolute `file_path`; triggers background analysis
+- `upload_geometry()`: saves to `upload_dir/geometries/{id}/{filename}` via chunked `shutil.copyfileobj` (8MB), stores `decimation_ratio`, triggers background analysis
+- `link_geometry()`: creates `Geometry` row with `is_linked=True`, `decimation_ratio=data.decimation_ratio`, and absolute `file_path`; triggers background analysis
 - `run_analysis(db, geometry_id, decimation_ratio=0.05)`: `pending` → `analyzing` → `ready-decimating` → `ready`/`error`; if `ratio >= 1.0` skips GLB
 - `list_geometries()`: excludes transform-result geometries (IDs present in `System.result_geometry_id`) — they are not user-owned files
 - `delete_geometry()`: `is_linked=False` のみファイル削除。`_rmtree_force()` ヘルパー (Windows read-only 属性対策)。`invalidate_cache(geometry.id)` も呼ぶ
@@ -88,7 +88,7 @@
 **API layer** (`src/api/geometries.ts`)
 - `geometriesApi.upload(name, description, folderId, file, onProgress?, decimationRatio=0.05)` — uses `XMLHttpRequest` for `upload.onprogress`
 - `geometriesApi.link(data: GeometryLinkRequest)` — JSON POST
-- `geometriesApi.getGlbBlobUrl(id, ratio?)` — fetches GLB with auth → `createObjectURL()`
+- `geometriesApi.getGlbBlobUrl(id, ratio?)` — fetches GLB with auth → `createObjectURL()`; if `ratio` omitted the backend defaults to `geometry.decimation_ratio`
 - `assemblyFoldersApi`, `assembliesApi` — full CRUD
 
 **Components**

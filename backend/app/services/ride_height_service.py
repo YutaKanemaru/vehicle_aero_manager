@@ -745,6 +745,7 @@ def create_system_and_geometry(
         file_size=0,
         is_linked=False,
         status="pending",
+        decimation_ratio=source_geometry.decimation_ratio,  # inherit from source
         uploaded_by=current_user.id,
     )
     db.add(geom)
@@ -776,7 +777,7 @@ def create_system_and_geometry(
         body_tr,
         wh_transforms,
         wheel_patterns,
-        decimation_ratio,
+        geom.decimation_ratio,  # inherited from source_geometry
     )
 
     logger.info(f"System {system.id} and Geometry {new_geom_id} queued for background transform.")

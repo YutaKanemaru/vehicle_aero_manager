@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, Integer, Boolean, Text, ForeignKey, Table, Column, func
+from sqlalchemy import String, DateTime, Integer, Boolean, Text, Float, ForeignKey, Table, Column, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -69,6 +69,9 @@ class Geometry(Base):
     # "pending" | "analyzing" | "ready" | "error"
     analysis_result: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # GLB decimation ratio used when generating the 3D preview
+    decimation_ratio: Mapped[float] = mapped_column(Float, default=0.05, server_default="0.05")
 
     # 所有者
     uploaded_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))

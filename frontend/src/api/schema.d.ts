@@ -1859,6 +1859,11 @@ export interface components {
             is_linked: boolean;
             /** Status */
             status: string;
+            /**
+             * Decimation Ratio
+             * @default 0.05
+             */
+            decimation_ratio: number;
             analysis_result?: components["schemas"]["AnalysisResult"] | null;
             /** Error Message */
             error_message: string | null;
@@ -4904,8 +4909,8 @@ export interface operations {
     get_geometry_glb_api_v1_geometries__geometry_id__glb_get: {
         parameters: {
             query?: {
-                /** @description Keep ratio (0.01–1.0). e.g. 0.5 = keep 50% */
-                ratio?: number;
+                /** @description Keep ratio (0.01–1.0). Defaults to geometry.decimation_ratio if omitted. */
+                ratio?: number | null;
             };
             header?: never;
             path: {

@@ -479,10 +479,8 @@ function OriginAxes({ vehicleBbox }: { vehicleBbox?: VehicleBbox | null }) {
 
 interface SceneCanvasProps {
   geometries: GeometryResponse[];
-  ratio: number;
   overlayData?: OverlayData | null;
   vehicleBbox?: { x_min: number; x_max: number; y_min: number; y_max: number; z_min: number; z_max: number } | null;
-  partInfo?: Record<string, unknown> | null;
 }
 
 interface BlobEntry {
@@ -491,7 +489,7 @@ interface BlobEntry {
   parts: string[];
 }
 
-export function SceneCanvas({ geometries, ratio, overlayData, vehicleBbox, partInfo }: SceneCanvasProps) {
+export function SceneCanvas({ geometries, overlayData, vehicleBbox }: SceneCanvasProps) {
   const [blobEntries, setBlobEntries] = useState<BlobEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -519,7 +517,7 @@ export function SceneCanvas({ geometries, ratio, overlayData, vehicleBbox, partI
 
     Promise.all(
       readyGeometries.map(async (g) => {
-        const url = await geometriesApi.getGlbBlobUrl(g.id, ratio);
+        const url = await geometriesApi.getGlbBlobUrl(g.id, g.decimation_ratio ?? 0.05);
         const parts: string[] =
           (g.analysis_result as { parts?: string[] } | null)?.parts ?? [];
         return { geometryId: g.id, url, parts };
@@ -541,7 +539,7 @@ export function SceneCanvas({ geometries, ratio, overlayData, vehicleBbox, partI
     return () => {
       cancelled = true;
     };
-  }, [readyGeometries.map((g) => g.id).join(","), ratio]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [readyGeometries.map((g) => g.id).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (

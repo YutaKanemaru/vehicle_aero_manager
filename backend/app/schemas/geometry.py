@@ -33,6 +33,7 @@ class GeometryResponse(BaseModel):
     file_size: int
     is_linked: bool = False
     status: str
+    decimation_ratio: float = 0.05
     analysis_result: AnalysisResult | None = None
     error_message: str | None
     uploaded_by: str
