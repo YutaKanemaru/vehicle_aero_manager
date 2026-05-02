@@ -65,6 +65,7 @@ VAM is a web browser-based application that helps automotive engineers manage ve
 | Step | Description | Status |
 |---|---|---|
 | 2A-1 to 2A-14 | 3D Viewer / Template Builder — GLB pipeline, SceneCanvas, OverlayObjects, PartListPanel, TemplateBuilderPage, ride height transform, backend-driven overlay data | ✅ Complete |
+| 2A-15 | 5-Belt STL generation — `belt_service.py`, `belt_stl_path` on Run, `generate-belts` endpoint, yaw rotation, DPI bypass in XML assembly, frontend Generate Belts button | ✅ Complete |
 | 2B | Post-processing EnSight viewer (PyVista backend) | 🔲 Planned |
 
 ---

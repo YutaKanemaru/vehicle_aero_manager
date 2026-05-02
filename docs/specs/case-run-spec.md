@@ -20,7 +20,7 @@
 - `ConditionMap`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`; `conditions` one-to-many (cascade delete)
 - `Condition`: `id`, `map_id` (FK), `name`, `inflow_velocity`, `yaw_angle`, `ride_height_json` (Text, nullable), `yaw_config_json` (Text, nullable), `created_by`, `created_at`, `updated_at`
 - `Case`: `id`, `case_number`, `name`, `description`, `template_id`, `assembly_id`, `map_id` (nullable), `folder_id` (nullable), `parent_case_id` (nullable self-FK, ondelete SET NULL), `created_by`, `created_at`, `updated_at`
-- `Run`: `id`, `run_number`, `name`, `case_id` (FK, CASCADE), `condition_id`, `xml_path`, `stl_path`, `geometry_override_id` (nullable FK→geometries, ondelete SET NULL), `status` (`pending`/`generating`/`ready`/`error`), `error_message`, `created_by`, `created_at`, `updated_at`
+- `Run`: `id`, `run_number`, `name`, `case_id` (FK, CASCADE), `condition_id`, `xml_path`, `stl_path`, `belt_stl_path` (nullable Text — path to generated 5-belt STL file), `geometry_override_id` (nullable FK→geometries, ondelete SET NULL), `status` (`pending`/`generating`/`ready`/`error`), `error_message`, `created_by`, `created_at`, `updated_at`
 
 **`app/models/system.py`**
 - `System`: `id`, `name`, `source_geometry_id`, `result_geometry_id` (nullable), `condition_id` (nullable), `transform_snapshot` (Text/JSON), `created_by`, `created_at`
@@ -49,8 +49,9 @@ class ConditionCreate(BaseModel):
 ```
 
 - `RunCreate`: `{ name: str = "", condition_id, comment: str = "" }` — auto-name = `{case_number}_{case_name}_R{N:02d}_{condition_name}[_{comment}]`
-- `RunResponse`: includes `xml_path`, `stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`, `geometry_override_id`, `geometry_override_status`, `needs_transform`, `transform_applied`
+- `RunResponse`: includes `xml_path`, `stl_path`, `belt_stl_path`, `status`, `run_number`, `condition_name`, `condition_velocity`, `condition_yaw`, `geometry_override_id`, `geometry_override_status`, `needs_transform`, `transform_applied`, `needs_belt_generation`
   - `geometry_override_status`: status of the override geometry (`pending`/`analyzing`/`ready-decimating`/`ready`/`error` or `null`); populated by `enrich_run_response()`
+  - `needs_belt_generation`: `True` when `ground_mode == "rotating_belt_5"` and `belt_stl_path` is `None`; determined by reading active template version settings in `enrich_run_response()`
 - `RunUpdate`: `{ geometry_override_id: str | None }`
 - `CaseResponse`: includes `run_count`, `case_number`, `template_name`, `assembly_name`, `map_name`, `parent_case_id`, `parent_case_number`, `parent_case_name`
 - `CaseDuplicateRequest`: `{ name, description }` — copies template/assembly/map; sets `parent_case_id`
@@ -66,12 +67,26 @@ Key functions:
 - `create_run()`: auto-formats name when `data.name` is empty
 - `_cleanup_run_transform(db, run)`: private helper — deletes System record(s) by `result_geometry_id` + override Geometry file + DB row; no-op if `geometry_override_id` is None; does **not** commit or clear `run.geometry_override_id`
 - `delete_run()`: calls `_cleanup_run_transform()`; then deletes Run + output directory
-- `reset_run()`: deletes run output dir; calls `_cleanup_run_transform()` + clears `geometry_override_id`; sets `status="pending"`, clears `xml_path`/`stl_path`/`error_message`
+- `reset_run()`: deletes run output dir; calls `_cleanup_run_transform()` + clears `geometry_override_id`; sets `status="pending"`, clears `xml_path`/`stl_path`/`belt_stl_path`/`error_message`
 - `trigger_xml_generation()`: **guarded** — HTTP 400 when `ride_height.enabled || yaw_angle != 0` but `geometry_override_id` not set or geometry not `ready`
 - `transform_run()`: derives params from Run's Condition + Case; calls `ride_height_service.compute_transform()` + `create_system_and_geometry()`; **calls `db.commit()` internally**; **returns within milliseconds**
   - Override Geometry files are written to `data/transformed/{id}/` (not `data/uploads/`) and stored with **absolute `file_path`**; excluded from `GET /geometries/` list
   - ⚠️ `transform_snapshot["verification"]["front_wheel_z_actual"]` is **absolute Z coordinate**, not ride height. RH = `actual_z − vehicle_bbox_z_min`
-- `_generate_xml_task(run_id, geometry_only=False)`: background task; `geometry_only=True` + `parent_case_id` set → finds parent's ready Run, swaps STL only
+  - If `belt_stl_path` is set and `yaw_angle != 0`, applies Z-axis yaw rotation to the belt STL file in-place via `belt_service.rotate_belt_stl_yaw()`
+- `_generate_xml_task(run_id, geometry_only=False)`: background task; `geometry_only=True` + `parent_case_id` set → finds parent's ready Run, swaps STL only; passes `run.belt_stl_path` to `assemble_ufx_solver_deck()`; if belt STL exists, copies it into the run output directory alongside the XML
+- `_check_needs_belt_generation(db, run)`: private helper — reads active template version settings dict; returns `True` when `ground_mode == "rotating_belt_5"` and `run.belt_stl_path is None`
+
+## Belt Service (`app/services/belt_service.py`)
+
+Handles 5-belt STL generation for the `rotating_belt_5` ground mode.
+
+- `generate_belt5_stl(analysis_result, belt5_cfg, ground_z, target_names=None) -> str`: generates multi-solid ASCII STL string with 5 solids — `Belt_Wheel_FR_LH`, `Belt_Wheel_FR_RH`, `Belt_Wheel_RR_LH`, `Belt_Wheel_RR_RH`, `Belt_Center`
+  - Each belt is a thin box at `ground_z ± 0.001mm` (total thickness 0.002mm), 12 triangles per solid
+  - Wheel belt Y positions derived from `classify_wheels()` + `compute_wheel_kinematics()` centroids
+  - Center belt X position from `center_belt_position` setting (`at_wheelbase_center` or `user_specified`)
+  - Narrow car fallback applied when `narrow_car_fallback.enabled` and belt gap < `min_belt_gap`
+- `rotate_belt_stl_yaw(stl_content, yaw_angle_deg, yaw_center_xy=(0,0)) -> str`: applies Z-axis rotation to all vertices and face normals; used by `transform_run()` for yaw ≠ 0
+- `generate_belt5_for_run(db, run) -> dict`: orchestrator — loads Run→Case→Assembly→Template, resolves `ground_z`, generates STL, saves to `data/runs/{run_id}/{base_name}_5belts.stl`, sets `run.belt_stl_path`, commits DB
 - `duplicate_case()`: copies Case row; sets `parent_case_id = source_case_id`; does NOT copy Runs
 - `create_case_with_runs()`: creates Case + one Run per Condition
 - `compare_cases()`: deep-diffs template settings JSON, map condition values, assembly parts sets
@@ -104,7 +119,8 @@ Key functions:
 | `GET` | `/cases/{id}/runs/` | List runs |
 | `POST` | `/cases/{id}/runs/` | Create run |
 | `POST` | `/cases/{id}/runs/{rid}/generate?geometry_only=false` | Trigger XML generation |
-| `POST` | `/cases/{id}/runs/{rid}/transform` | Apply ride-height + yaw transform |
+| `POST` | `/cases/{id}/runs/{rid}/generate-belts` | Generate 5-belt STL (must be called before Transform/XML generation) |
+| `POST` | `/cases/{id}/runs/{rid}/transform` | Apply ride-height + yaw transform (applies yaw rotation to belt STL if present) |
 | `PATCH` | `/cases/{id}/runs/{rid}` | Update run (set `geometry_override_id`) |
 | `DELETE` | `/cases/{id}/runs/{rid}` | Delete Run + output directory |
 | `POST` | `/cases/{id}/runs/{rid}/reset` | Reset Run to pending; **also deletes System + override Geometry if transform was applied** |
@@ -131,7 +147,7 @@ Key functions:
 ```python
 def assemble_ufx_solver_deck(
     template_settings, analysis_result, sim_type, inflow_velocity, yaw_angle,
-    source_file=None, source_files=None, pca_axes=None,
+    source_file=None, source_files=None, pca_axes=None, belt_stl_path=None,
 ) -> UfxSolverDeck
 
 def extract_pca_axes(stl_paths, porous_patterns, rim_patterns) -> dict
@@ -195,7 +211,8 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
 - `src/components/cases/CaseList.tsx` — folder-grouped; row click → `/cases/{id}`; Compare mode (up to 2 rows)
 - `src/components/cases/CaseDetailPage.tsx` — 2 tabs:
   - **Case Info & Compare**: editable fields; template/assembly/map locked when non-pending runs exist; Compare with Parent Case accordion
-  - **Runs**: per-run Apply Transform / Generate XML / Download / Reset / Delete; Transform All / Generate All bulk buttons; Open 3D Viewer
+  - **Runs**: per-run Generate Belts / Apply Transform / Generate XML / Download / Reset / Delete; Generate All Belts / Transform All / Generate All bulk buttons; Open 3D Viewer
+    - **Generate Belts button** (grape/purple): shown when `needs_belt_generation === true`; calls `POST /generate-belts`; shows **B badge** (grape dot) when `belt_stl_path` is set
     - Reset button shown when `status === "ready" | "error"`, or when `status === "pending" && transform_applied` (clears transform too); confirm message varies by `transform_applied`; **disabled when `geometry_override_status` is `pending`/`analyzing`/`ready-decimating`** (transform in progress)
     - Delete button: **disabled when `geometry_override_status` is `pending`/`analyzing`/`ready-decimating`** (transform in progress)
     - Generate XML button: disabled when `needs_transform && !transform_applied`; also disabled when `needs_transform && transform_applied && geometry_override_status !== "ready"` (geometry still processing)
@@ -208,6 +225,7 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
 - `src/components/cases/CreateCaseFromBuilderModal.tsx` — bulk-create Case + Runs from Condition Map
 
 ### `runsApi` helpers (`src/api/configurations.ts`)
+- `runsApi.generateBelts(caseId, runId)` — calls `POST /generate-belts`; returns `{ belt_stl_path, parts }`
 - `runsApi.update(caseId, runId, data)` — PATCH to set `geometry_override_id`
 - `runsApi.getAxesGlbUrl(caseId, runId)` — fetch axes GLB → `createObjectURL()`
 - `runsApi.download(caseId, runId)` — fetch XML blob (auth header)
@@ -239,3 +257,5 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
 - `ff0265eeeb01` — `stl_path` column on `runs`
 - `0601bb149381` — `geometry_override_id` FK on `runs` (batch_alter_table)
 - `100503ac21a7` — `parent_case_id` self-FK on `cases` (batch_alter_table)
+- `0c0f562f6ba5` — `decimation_ratio` column on `geometries`
+- `c3b4d5e6f7a8` — `belt_stl_path` column on `runs`
