@@ -64,6 +64,7 @@ Key functions:
 - `delete_condition()`: raises HTTP 400 if any `Run.condition_id` references this condition
 - `update_case()`: **template/assembly/map locked** — HTTP 400 when non-pending runs exist and change requested; map change triggers `sync_runs_for_map()`
 - `delete_case()`: for each Run calls `_cleanup_run_transform()` (deletes System + override Geometry file + DB row) before cascade delete; then deletes `data/runs/{run_id}/` output directories
+- `get_run(db, case_id, run_id) -> Run`: single run lookup; raises 404 if not found
 - `create_run()`: auto-formats name when `data.name` is empty
 - `_cleanup_run_transform(db, run)`: private helper — deletes System record(s) by `result_geometry_id` + override Geometry file + DB row; no-op if `geometry_override_id` is None; does **not** commit or clear `run.geometry_override_id`
 - `delete_run()`: calls `_cleanup_run_transform()`; then deletes Run + output directory
@@ -117,6 +118,7 @@ Handles 5-belt STL generation for the `rotating_belt_5` ground mode.
 | `GET` | `/cases/{id}/compare?with={id2}` | Compare two cases |
 | `GET` | `/cases/{id}/sync-preview?new_map_id={id}` | Preview map change (no data modification) |
 | `GET` | `/cases/{id}/runs/` | List runs |
+| `GET` | `/cases/{id}/runs/{rid}` | Get single run |
 | `POST` | `/cases/{id}/runs/` | Create run |
 | `POST` | `/cases/{id}/runs/{rid}/generate?geometry_only=false` | Trigger XML generation |
 | `POST` | `/cases/{id}/runs/{rid}/generate-belts` | Generate 5-belt STL (must be called before Transform/XML generation) |
@@ -228,6 +230,7 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
 - `src/components/cases/CreateCaseFromBuilderModal.tsx` — bulk-create Case + Runs from Condition Map
 
 ### `runsApi` helpers (`src/api/configurations.ts`)
+- `runsApi.get(caseId, runId)` — `GET /cases/{caseId}/runs/{runId}`; returns `RunResponse`
 - `runsApi.generateBelts(caseId, runId)` — calls `POST /generate-belts`; returns `{ belt_stl_path, parts }`
 - `runsApi.update(caseId, runId, data)` — PATCH to set `geometry_override_id`
 - `runsApi.getAxesGlbUrl(caseId, runId)` — fetch axes GLB → `createObjectURL()`
@@ -240,6 +243,14 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
 - Job name = **Run name** (not geometry name), so Jobs Drawer shows which Run is being transformed
 - `transformAllMutation`: each fulfilled transform is registered as a separate `stl_transform` job
 - Jobs Drawer shows `stl_transform` type label as "STL Transform" (vs `stl_analysis` → "STL Analysis" for uploads)
+
+### XML Generation Jobs (`src/stores/jobs.ts`)
+- `POST /generate` success → `addJob(run.id, run.name, "xml_generation", { caseId })` + `updateJob(run.id, "generating")`
+- `generateAllMutation` uses `Promise.allSettled` — registers a separate `xml_generation` job for each fulfilled run
+- `useJobsPoller` polls `GET /cases/{caseId}/runs/{runId}` every 3 seconds until `status === "ready" | "error"`
+- Job stores `caseId` on the `Job` object so AppLayout-level poller can poll without page context
+- Jobs Drawer shows `xml_generation` type label as "XML Generation"
+- Jobs persist to `localStorage` (24-hour TTL) — survive browser refresh
 
 ## Test Scripts
 

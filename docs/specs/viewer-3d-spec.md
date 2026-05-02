@@ -43,11 +43,11 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 
 - `extract_overlay_data(deck, template_settings, all_part_names, analysis_result=None, target_names=None) -> OverlayData` — converts assembled solver deck to absolute-coordinate viewer primitives. `target_names` enables `classify_wheels()`-based RH reference point detection (most accurate); falls back to `extract_wheel_reference_z()` when `None`. Also extracts `axes` from the deck: wheel rotation axes from `FluidBCRotating.axis/center` (per wall instance with `type=="rotating"`; corner detected via name substring `fr_lh`/`fr_rh`/`rr_lh`/`rr_rh`; length from part bbox y-span/2) and porous flow axes from `PorousInstance.porous_axis` (center from `analysis_result` part centroid; length = max bbox span × 0.5).
 - `compute_overlay_data(db, template_id, assembly_id) -> OverlayData` — XML cache-through pipeline:
-  1. Assemble solver deck via `assemble_ufx_solver_deck()`
-  2. Serialise to `preview_cache_dir/{version_id}_{assembly_id}.xml` via `serialize_ufx()` (skip if cached)
-  3. Parse back via `parse_ufx()` — ensures overlay is derived from identical XML structure as real generation
-  4. Call `extract_overlay_data(..., analysis_result=merged, target_names=template_settings.target_names)`
-  5. Clears `axes=[]` before returning — Template Builder has no real XML (`pca_axes=None`), so axis data would be inaccurate; Axis tab is hidden on frontend when `axes` is empty
+  1. Build `stl_paths` from assembly ready geometries; call `extract_pca_axes(stl_paths, porous_patterns, rim_patterns)` for accurate wheel center (rim vertex centroid) and porous axis
+  2. Assemble solver deck via `assemble_ufx_solver_deck(..., pca_axes=pca_axes)`
+  3. Serialise to `preview_cache_dir/{version_id}_{assembly_id}.xml` via `serialize_ufx()` (skip if cached)
+  4. Parse back via `parse_ufx()` — ensures overlay is derived from identical XML structure as real generation
+  5. Call `extract_overlay_data(..., analysis_result=merged, target_names=template_settings.target_names)` — Axis tab is populated; Template Builder shows wheel rotation axes and porous flow axes
 - `invalidate_preview_cache(version_id)` — deletes all `{version_id}_*.xml` files from `preview_cache_dir`; called by `template_service.update_version_settings()` on every in-place settings save
 - Cache path helper: `_preview_cache_path(version_id, assembly_id)` → `preview_cache_dir/{version_id}_{assembly_id}.xml`
 
@@ -125,7 +125,7 @@ rhRefVisible: boolean               // default false — ride height reference p
 **`OverlayObjects.tsx`** (backend-driven — zero calculation logic)
 - Receives `overlayData: OverlayData | null` (pre-computed absolute coords from backend)
 - Per `overlayVisibility` key: domain box (white wireframe) · refinement boxes (per-level color) · porous boxes · partial volume boxes (orange) · TG planes (cyan, YZ only) · section cuts (magenta) · probe spheres (yellow) · domain parts (FloorRect: green=belt, orange=uFX_ground)
-- Axis arrows (`axes` list): `AxisArrow` renders each item as `CylinderGeometry` (shaft) + `ConeGeometry` (head); length=`item.length×2`, shaft radius=`len×0.03`, head radius=`shaftR×3`, head length=`len×0.25`; per-item visibility key `axis_{name}`; dimmed opacity 0.25 when `rhRefActive`
+- Axis arrows (`axes` list): `AxisArrow` renders each item as `CylinderGeometry` (shaft) + `ConeGeometry` (head); shaft extends bidirectionally — from `center - dir×len` to `center + dir×shaftLen` (total shaft length = `shaftLen + len`); cone head on +direction side only; length=`item.length×2`, shaft radius=`len×0.03`, head radius=`shaftR×3`, head length=`len×0.25`; per-item visibility key `axis_{name}`; dimmed opacity 0.25 when `rhRefActive`
 
 **`OverlayPanel.tsx`** (backend-driven)
 - 5-tab `Tabs` (pills): Parts / Box / Plane / Point / Axis (Axis tab hidden when `axes.length === 0`)
