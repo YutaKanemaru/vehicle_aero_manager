@@ -91,7 +91,7 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 Key state:
 ```typescript
 partStates: Record<string, { visible, color, opacity }>
-selectedAssemblyId: string | null   // changing resets glbLoaded=false
+selectedAssemblyId: string | null   // changing resets glbLoaded=false AND clears partStates={}
 selectedTemplateId: string | null
 glbLoaded: boolean                  // set true by GLBModel after first Mesh detected
 cameraProjection: "perspective" | "orthographic"
@@ -106,6 +106,11 @@ rhRefVisible: boolean               // default false — ride height reference p
 ```
 
 `partColor(name)` — deterministic per-part color (djb2 hash → 12-color SWATCHES palette).
+
+Store action semantics:
+- `setPartState(name, partial)` — merges with base defaults `{ visible:true, color:partColor(name), opacity:1.0 }` spread first, then existing entry, then incoming partial; ensures `color`/`opacity` are never `undefined` even when only `visible` is passed
+- `initParts(names)` — always resets `visible: true` for every part (prevents stale `visible:false` from a previous `showOnly()` or assembly switch); preserves user-chosen `color` and `opacity` if already set
+- `setSelectedAssemblyId(id)` — resets `glbLoaded=false` and clears `partStates={}` to prevent stale visibility state from a previous assembly bleeding into the new one
 
 ### Key Frontend Components
 

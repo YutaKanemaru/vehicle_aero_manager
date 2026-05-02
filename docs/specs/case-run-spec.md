@@ -74,7 +74,7 @@ Key functions:
   - Override Geometry files are written to `data/transformed/{id}/` (not `data/uploads/`) and stored with **absolute `file_path`**; excluded from `GET /geometries/` list
   - ⚠️ `transform_snapshot["verification"]["front_wheel_z_actual"]` is **absolute Z coordinate**, not ride height. RH = `actual_z − vehicle_bbox_z_min`
   - If `belt_stl_path` is set and `yaw_angle != 0`, applies Z-axis yaw rotation to the belt STL file in-place via `belt_service.rotate_belt_stl_yaw()`
-- `_generate_xml_task(run_id, geometry_only=False)`: background task; `geometry_only=True` + `parent_case_id` set → finds parent's ready Run, swaps STL only; passes `run.belt_stl_path` to `assemble_ufx_solver_deck()`; if belt STL exists, copies it into the run output directory alongside the XML. `source_file` in the generated XML is `"{safe_run_name}.stl"` (single geometry / override) or a list including `"{safe_run_name}.stl"` + `"{safe_run_name}_5belts.stl"` when belt is present — both names derived via `safe_filename(run.name)` from `app/utils/filename.py`, matching the filenames served by the download endpoints.
+- `_generate_xml_task(run_id, geometry_only=False)`: background task; `geometry_only=True` + `parent_case_id` set → finds parent's ready Run, swaps STL only; passes `run.belt_stl_path` to `assemble_ufx_solver_deck()`; if belt STL exists, copies it into the run output directory alongside the XML. `source_file` in the generated XML is `"{safe_run_name}.stl"` (single geometry / override) or a list including `"{safe_run_name}.stl"` + `"{safe_run_name}_5belts.stl"` when belt is present — both names derived via `safe_filename(run.name)` from `app/utils/filename.py`, matching the filenames served by the download endpoints. **PCA optimisation for Transform runs**: when `geometry_override_id` is set, PCA axes are extracted from the original assembly STL paths (not the transformed STL) then mathematically transformed via `transform_pca_axes_vertices(pca_axes, transform_snapshot)` — avoids re-scanning the large transformed STL file.
 - `_check_needs_belt_generation(db, run)`: private helper — reads active template version settings dict; returns `True` when `ground_mode == "rotating_belt_5"` and `run.belt_stl_path is None`
 
 ## Belt Service (`app/services/belt_service.py`)
@@ -155,6 +155,7 @@ def assemble_ufx_solver_deck(
 ) -> UfxSolverDeck
 
 def extract_pca_axes(stl_paths, porous_patterns, rim_patterns) -> dict
+def transform_pca_axes_vertices(pca_axes, transform_snapshot) -> dict  # applies yaw→pitch→Z-translate to vertex arrays; lives in ride_height_service.py to reuse _rotate_z/_rodrigues_y helpers
 def build_probe_csv_files(template_settings) -> dict[str, bytes]
 def compute_dt(coarsest_mesh_size, mach_factor, temperature_k) -> float
 def compute_domain_bbox(vehicle_bbox, multipliers) -> dict
