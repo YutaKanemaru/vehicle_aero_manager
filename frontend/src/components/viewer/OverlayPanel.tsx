@@ -243,7 +243,6 @@ function PlaneTab({ overlayData }: { overlayData: OverlayData }) {
 // ─── Point tab — RH Reference + Probe files ───────────────────────────────────
 
 function PointTab({ overlayData }: { overlayData: OverlayData }) {
-  const { rhRefVisible, setRhRefVisible } = useViewerStore();
   const rh = overlayData.ride_height_ref;
   const hasProbes = overlayData.probes.length > 0;
   const allProbeVisKeys = overlayData.probes.map((pf) => `probe_${pf.name}`);
@@ -260,14 +259,6 @@ function PointTab({ overlayData }: { overlayData: OverlayData }) {
       <div>
         <Group justify="space-between" align="center" mb={6}>
           <Text size="xs" fw={600} c="dimmed">Ride Height Reference</Text>
-          {rh && (
-            <Switch
-              size="xs"
-              checked={rhRefVisible}
-              onChange={(e) => setRhRefVisible(e.currentTarget.checked)}
-              label={<Text size="xs" c="dimmed">Show</Text>}
-            />
-          )}
         </Group>
 
         {!rh && (

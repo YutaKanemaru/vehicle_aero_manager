@@ -261,8 +261,9 @@ function CameraOverlay() {
 
 // ─── Floating viewer toolbar (Persp/Ortho + FlatShading + Edges) ─────────────
 
-function ViewerToolbar() {
-  const { cameraProjection, setCameraProjection, flatShading, setFlatShading, showEdges, setShowEdges } = useViewerStore();
+function ViewerToolbar({ overlayData }: { overlayData: OverlayData | null }) {
+  const { cameraProjection, setCameraProjection, flatShading, setFlatShading, showEdges, setShowEdges, rhRefVisible, setRhRefVisible } = useViewerStore();
+  const hasRhRef = !!overlayData?.ride_height_ref;
   return (
     <div
       style={{
@@ -300,6 +301,14 @@ function ViewerToolbar() {
         checked={showEdges}
         onChange={(e) => setShowEdges(e.currentTarget.checked)}
       />
+      {hasRhRef && (
+        <Switch
+          size="xs"
+          label="RH Ref"
+          checked={rhRefVisible}
+          onChange={(e) => setRhRefVisible(e.currentTarget.checked)}
+        />
+      )}
     </div>
   );
 }
@@ -409,7 +418,7 @@ export function TemplateBuilderPage() {
         withBorder
         style={{ flex: 1, overflow: "hidden", position: "relative" }}
       >
-        <ViewerToolbar />
+        <ViewerToolbar overlayData={overlayData} />
         <CameraOverlay />
         <SceneCanvas
           geometries={geometries}
