@@ -48,6 +48,7 @@ import {
   IconExternalLink,
   IconLock,
   IconTransform,
+  IconRoad,
 } from "@tabler/icons-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -447,6 +448,41 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
 
+  const generateBeltsMutation = useMutation({
+    mutationFn: (runId: string) => runsApi.generateBelts(caseData.id, runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
+      notifications.show({ message: "Belt STL generated", color: "teal" });
+    },
+    onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
+  });
+
+  const generateAllBeltsMutation = useMutation({
+    mutationFn: async () => {
+      const needBelts = runs.filter((r) => r.needs_belt_generation);
+      const results = await Promise.allSettled(
+        needBelts.map((run) => runsApi.generateBelts(caseData.id, run.id))
+      );
+      return { results, runs: needBelts };
+    },
+    onSuccess: ({ results, runs: beltRuns }) => {
+      queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
+      const successCount = results.filter((r) => r.status === "fulfilled").length;
+      results.forEach((r, i) => {
+        if (r.status === "rejected") {
+          notifications.show({
+            message: `Belt generation failed for "${beltRuns[i].name}": ${r.reason?.message ?? r.reason}`,
+            color: "red",
+          });
+        }
+      });
+      if (successCount > 0) {
+        notifications.show({ message: `${successCount} belt STL(s) generated`, color: "teal" });
+      }
+    },
+    onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
+  });
+
   async function downloadXml(runId: string, runName: string) {
     try {
       const blob = await runsApi.download(caseData.id, runId);
@@ -476,6 +512,7 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
   }
 
   const hasParent = !!caseData.parent_case_id;
+  const beltsNeededCount = runs.filter((r) => r.needs_belt_generation).length;
   const transformNeededCount = runs.filter(
     (r) => r.needs_transform && !r.transform_applied && (r.status === "pending" || r.status === "error")
   ).length;
@@ -497,6 +534,18 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
       <Group px="sm" py={6} justify="space-between">
           <Text size="sm" fw={600}>Runs ({runs.length})</Text>
           <Group gap={4}>
+            {beltsNeededCount > 0 && (
+              <Button
+                size="xs"
+                variant="light"
+                color="grape"
+                leftSection={<IconRoad size={12} />}
+                loading={generateAllBeltsMutation.isPending}
+                onClick={() => generateAllBeltsMutation.mutate()}
+              >
+                Generate All Belts ({beltsNeededCount})
+              </Button>
+            )}
             {transformNeededCount > 0 && (
               <Button
                 size="xs"
@@ -583,6 +632,26 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                                   setGeometryOnly((prev) => ({ ...prev, [run.id]: checked }));
                                 }}
                               />
+                            </Tooltip>
+                          )}
+                          {/* Generate Belts */}
+                          {run.needs_belt_generation && (
+                            <Tooltip label="Generate Belt STL">
+                              <ActionIcon
+                                size="xs"
+                                variant="light"
+                                color="grape"
+                                loading={generateBeltsMutation.isPending && generateBeltsMutation.variables === run.id}
+                                onClick={() => generateBeltsMutation.mutate(run.id)}
+                              >
+                                <IconRoad size={12} />
+                              </ActionIcon>
+                            </Tooltip>
+                          )}
+                          {/* Belt generated badge */}
+                          {!!run.belt_stl_path && (
+                            <Tooltip label="Belt STL generated">
+                              <Badge size="xs" color="grape" variant="dot">B</Badge>
                             </Tooltip>
                           )}
                           {/* Apply Transform */}

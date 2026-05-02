@@ -357,6 +357,28 @@ def generate_xml(
     return configuration_service.enrich_run_response(db, run)
 
 
+@router.post("/cases/{case_id}/runs/{run_id}/generate-belts", status_code=201)
+def generate_belts(
+    case_id: str,
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate 5-belt STL for a Run.
+
+    Creates thin-box belt geometries from Belt5Config + wheel kinematics.
+    Must be called before Transform/XML generation.
+    """
+    from app.services.belt_service import generate_belt5_for_run
+    from app.models.configuration import Run
+
+    run = db.get(Run, run_id)
+    if not run or run.case_id != case_id:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Run not found")
+    return generate_belt5_for_run(db, run)
+
+
 @router.post("/cases/{case_id}/runs/{run_id}/transform", status_code=201)
 def transform_run(
     case_id: str,

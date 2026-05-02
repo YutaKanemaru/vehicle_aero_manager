@@ -170,6 +170,7 @@ class Run(Base):
     )
     xml_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     stl_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    belt_stl_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     geometry_override_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("geometries.id", ondelete="SET NULL"), nullable=True
     )  # if set, XML generation uses this geometry instead of the assembly's default

@@ -738,6 +738,7 @@ def reset_run(db: Session, case_id: str, run_id: str, current_user: User) -> Run
 
     run.xml_path = None
     run.stl_path = None
+    run.belt_stl_path = None
     run.status = "pending"
     run.error_message = None
     db.commit()
@@ -899,6 +900,18 @@ def transform_run(
 
     # Patch geometry_override_id on the Run
     run.geometry_override_id = result_geom.id
+
+    # Apply yaw rotation to belt STL if it exists and yaw != 0
+    if run.belt_stl_path and abs(yaw_angle_deg) > 1e-9:
+        from app.services.belt_service import rotate_belt_stl_yaw
+        from pathlib import Path as _Path
+        belt_path = _Path(run.belt_stl_path)
+        if belt_path.exists():
+            stl_content = belt_path.read_text(encoding="utf-8")
+            rotated = rotate_belt_stl_yaw(stl_content, yaw_angle_deg)
+            belt_path.write_text(rotated, encoding="utf-8")
+            logger.info("Applied yaw rotation (%.1f°) to belt STL: %s", yaw_angle_deg, belt_path)
+
     db.commit()
     db.refresh(run)
 
@@ -1043,6 +1056,7 @@ def _generate_xml_task(run_id: str, geometry_only: bool = False) -> None:
             source_file=source_file,
             source_files=source_files if source_files else None,
             pca_axes=pca_axes,
+            belt_stl_path=run.belt_stl_path,
         )
         xml_bytes = serialize_ufx(deck)
 
@@ -1081,6 +1095,13 @@ def _generate_xml_task(run_id: str, geometry_only: bool = False) -> None:
             stl_dst = out_dir / "input.stl"
             shutil.copy2(str(stl_paths[0]), str(stl_dst))
             run.stl_path = str(stl_dst)
+        # Copy belt STL into the run output directory
+        if run.belt_stl_path:
+            belt_src = Path(run.belt_stl_path)
+            if belt_src.exists():
+                belt_dst = out_dir / belt_src.name
+                if belt_src != belt_dst:
+                    shutil.copy2(str(belt_src), str(belt_dst))
         run.status = "ready"
         run.error_message = None
 
@@ -1393,4 +1414,32 @@ def enrich_run_response(db: Session, run: Run) -> RunResponse:
         override_geom = db.get(GeometryModel, run.geometry_override_id)
         if override_geom:
             out.geometry_override_status = override_geom.status
+    # Belt generation status
+    out.needs_belt_generation = _check_needs_belt_generation(db, run)
     return out
+
+
+def _check_needs_belt_generation(db: Session, run: Run) -> bool:
+    """Check if a run needs belt STL generation (rotating_belt_5 mode without belt_stl_path)."""
+    if run.belt_stl_path:
+        return False
+    case = db.get(Case, run.case_id)
+    if not case:
+        return False
+    active_version = db.scalar(
+        select(TemplateVersion).where(
+            TemplateVersion.template_id == case.template_id,
+            TemplateVersion.is_active == True,  # noqa: E712
+        )
+    )
+    if not active_version:
+        return False
+    import json as _json
+    settings_data = _json.loads(active_version.settings) if isinstance(active_version.settings, str) else active_version.settings
+    ground_mode = (
+        settings_data.get("setup_option", {})
+        .get("boundary_condition", {})
+        .get("ground", {})
+        .get("ground_mode", "")
+    )
+    return ground_mode == "rotating_belt_5"

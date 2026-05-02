@@ -1011,6 +1011,20 @@ def _build_tg_instances(
 # Main assembler
 # ---------------------------------------------------------------------------
 
+def _build_source_files_list(
+    source_files: list[str] | None,
+    belt_stl_path: str | None,
+) -> list[str]:
+    """Build the source_files list for the Geometry element, appending belt STL if present."""
+    result = list(source_files) if source_files else []
+    if belt_stl_path:
+        from pathlib import Path as _P
+        belt_filename = _P(belt_stl_path).name
+        if belt_filename not in result:
+            result.append(belt_filename)
+    return result
+
+
 def assemble_ufx_solver_deck(
     template_settings: "TemplateSettings",
     analysis_result: dict,
@@ -1020,6 +1034,7 @@ def assemble_ufx_solver_deck(
     source_files: list[str] | None = None,
     source_file: str | None = None,
     pca_axes: dict | None = None,
+    belt_stl_path: str | None = None,
 ) -> "UfxSolverDeck":
     """
     Template (Fixed) + Geometry analysis_result (Computed) + Config (UserInput)
@@ -1224,6 +1239,9 @@ def assemble_ufx_solver_deck(
             DomainPartInstance, BoundingRange,
         )
         wall_instances.extend(belt_wis)
+        # When belt STL is provided, skip DPIs (belt geometry from STL file)
+        if belt_stl_path:
+            belt_dpis = []
 
     elif is_aero and gc.ground_mode == "rotating_belt_1" and moving_ground:
         wall_instances.append(WallInstance(
@@ -1726,7 +1744,7 @@ def assemble_ufx_solver_deck(
         ),
         geometry=Geometry(
             source_file=source_file,
-            source_files=source_files or [],
+            source_files=_build_source_files_list(source_files, belt_stl_path),
             baffle_parts=baffle_parts,
             domain_bounding_box=domain_bb,
             triangle_plinth=False,

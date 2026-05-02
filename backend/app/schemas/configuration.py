@@ -274,6 +274,7 @@ class RunResponse(BaseModel):
     condition_id: str
     xml_path: str | None
     stl_path: str | None = None
+    belt_stl_path: str | None = None
     geometry_override_id: str | None = None
     status: Literal["pending", "generating", "ready", "error"]
     error_message: str | None
@@ -288,6 +289,7 @@ class RunResponse(BaseModel):
     needs_transform: bool = False      # True when condition has ride_height.enabled or yaw_angle != 0
     transform_applied: bool = False    # True when geometry_override_id is set
     geometry_override_status: str | None = None  # status of the override geometry (pending/analyzing/ready-decimating/ready/error)
+    needs_belt_generation: bool = False  # True when ground_mode=rotating_belt_5 and belt_stl_path is None
 
 
 # ---------------------------------------------------------------------------

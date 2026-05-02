@@ -850,6 +850,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cases/{case_id}/runs/{run_id}/generate-belts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Belts
+         * @description Generate 5-belt STL for a Run.
+         *
+         *     Creates thin-box belt geometries from Belt5Config + wheel kinematics.
+         *     Must be called before Transform/XML generation.
+         */
+        post: operations["generate_belts_api_v1_cases__case_id__runs__run_id__generate_belts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cases/{case_id}/runs/{run_id}/transform": {
         parameters: {
             query?: never;
@@ -3052,6 +3075,8 @@ export interface components {
             xml_path: string | null;
             /** Stl Path */
             stl_path?: string | null;
+            /** Belt Stl Path */
+            belt_stl_path?: string | null;
             /** Geometry Override Id */
             geometry_override_id?: string | null;
             /**
@@ -3102,6 +3127,11 @@ export interface components {
             transform_applied: boolean;
             /** Geometry Override Status */
             geometry_override_status?: string | null;
+            /**
+             * Needs Belt Generation
+             * @default false
+             */
+            needs_belt_generation: boolean;
         };
         /**
          * RunUpdate
@@ -6246,6 +6276,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_belts_api_v1_cases__case_id__runs__run_id__generate_belts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

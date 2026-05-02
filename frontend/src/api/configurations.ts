@@ -169,6 +169,11 @@ export const runsApi = {
   reset: (caseId: string, runId: string): Promise<RunResponse> =>
     client.post(`/cases/${caseId}/runs/${runId}/reset`, {}),
 
+  /** Generate 5-belt STL for a Run. Must be called before Transform/XML generation. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  generateBelts: (caseId: string, runId: string): Promise<any> =>
+    client.post(`/cases/${caseId}/runs/${runId}/generate-belts`, {}),
+
   /** Apply ride-height + yaw transform for a Run. No body needed — backend derives all params. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   transform: (caseId: string, runId: string): Promise<any> =>
