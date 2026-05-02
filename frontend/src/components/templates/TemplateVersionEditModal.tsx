@@ -68,6 +68,7 @@ export function TemplateVersionEditModal({ opened, onClose, template, version }:
       queryClient.invalidateQueries({
         queryKey: ["templates", template.id, "versions"],
       });
+      queryClient.invalidateQueries({ queryKey: ["preview", "overlay"] });
       notifications.show({ message: "Version updated", color: "green" });
       if (shouldClose) onClose();
     },

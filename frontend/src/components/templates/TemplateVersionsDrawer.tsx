@@ -50,6 +50,7 @@ export function TemplateVersionsDrawer({ template, onClose }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["templates"] });
       queryClient.invalidateQueries({ queryKey: ["templates", template.id, "versions"] });
+      queryClient.invalidateQueries({ queryKey: ["preview", "overlay"] });
       notifications.show({ message: "Version activated", color: "green" });
     },
     onError: (e: Error) => {
