@@ -2413,6 +2413,7 @@ export interface components {
              * @default 0
              */
             ground_z: number;
+            ride_height_ref?: components["schemas"]["OverlayRideHeightRef"] | null;
         };
         /**
          * OverlayDomainPartItem
@@ -2481,6 +2482,27 @@ export interface components {
             points: number[][];
             /** Radius */
             radius: number;
+        };
+        /**
+         * OverlayRideHeightRef
+         * @description Ride height reference axis positions for the 3-D viewer.
+         */
+        OverlayRideHeightRef: {
+            /** Reference Mode */
+            reference_mode: string;
+            /** Reference Z Front */
+            reference_z_front?: number | null;
+            /** Reference Z Rear */
+            reference_z_rear?: number | null;
+            /** Reference X Front */
+            reference_x_front?: number | null;
+            /** Reference X Rear */
+            reference_x_rear?: number | null;
+            /**
+             * Reference Parts
+             * @default []
+             */
+            reference_parts: string[];
         };
         /** PartInfo */
         PartInfo: {

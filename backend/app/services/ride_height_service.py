@@ -125,6 +125,73 @@ def _calculate_pitch_angle(wheelbase: float, z_diff: float) -> float:
 
 
 # ===========================================================================
+# Wheel reference Z extraction (shared helper)
+# ===========================================================================
+
+def extract_wheel_reference_z(
+    analysis_result: dict,
+    rh_template_cfg: "RideHeightTemplateConfig",
+) -> tuple[float, float, float, float]:
+    """Derive front/rear wheel axis Z and X positions from analysis_result.
+
+    Returns (front_z, rear_z, front_x, rear_x).
+
+    Supports both ``reference_mode='user_input'`` (fixed Z from template config)
+    and ``reference_mode='wheel_axis'`` (auto-detected from part centroids).
+    """
+    part_info: dict = analysis_result.get("part_info", {})
+    vbbox: dict = analysis_result["vehicle_bbox"]
+    ground_z: float = vbbox["z_min"]
+    mid_x = (vbbox["x_min"] + vbbox["x_max"]) / 2.0
+    ref_mode = getattr(rh_template_cfg, "reference_mode", "wheel_axis")
+
+    if ref_mode == "user_input":
+        ref_z_front = getattr(rh_template_cfg, "reference_z_front", None)
+        ref_z_rear  = getattr(rh_template_cfg, "reference_z_rear", None)
+        if ref_z_front is None or ref_z_rear is None:
+            raise ValueError(
+                "reference_z_front and reference_z_rear must be set when reference_mode='user_input'"
+            )
+        front_z_orig = float(ref_z_front)
+        rear_z_orig  = float(ref_z_rear)
+        # X positions derived from heuristic (needed for wheelbase + yaw center)
+        wheel_candidates_x = [
+            (name, info) for name, info in part_info.items()
+            if ground_z < info["centroid"][2] < ground_z + 1.5
+        ]
+        front_x_list = [info["centroid"][0] for _, info in wheel_candidates_x if info["centroid"][0] < mid_x]
+        rear_x_list  = [info["centroid"][0] for _, info in wheel_candidates_x if info["centroid"][0] >= mid_x]
+        front_x = float(np.mean(front_x_list)) if front_x_list else vbbox["x_min"] + 0.3
+        rear_x  = float(np.mean(rear_x_list))  if rear_x_list  else vbbox["x_max"] - 0.3
+    else:
+        # wheel_axis mode: auto-detect from part centroids
+        ref_parts = getattr(rh_template_cfg, "reference_parts", [])
+        if ref_parts:
+            from app.services.compute_engine import _matches_any  # noqa: PLC0415
+            wheel_candidates = [
+                (name, info) for name, info in part_info.items()
+                if _matches_any(name, ref_parts)
+            ]
+        else:
+            wheel_candidates = [
+                (name, info) for name, info in part_info.items()
+                if ground_z < info["centroid"][2] < ground_z + 1.2
+            ]
+
+        front_z_list = [info["centroid"][2] for _, info in wheel_candidates if info["centroid"][0] < mid_x]
+        rear_z_list  = [info["centroid"][2] for _, info in wheel_candidates if info["centroid"][0] >= mid_x]
+        front_x_list = [info["centroid"][0] for _, info in wheel_candidates if info["centroid"][0] < mid_x]
+        rear_x_list  = [info["centroid"][0] for _, info in wheel_candidates if info["centroid"][0] >= mid_x]
+
+        front_z_orig = float(np.mean(front_z_list)) if front_z_list else ground_z + 0.35
+        rear_z_orig  = float(np.mean(rear_z_list))  if rear_z_list  else ground_z + 0.35
+        front_x      = float(np.mean(front_x_list)) if front_x_list else vbbox["x_min"] + 0.3
+        rear_x       = float(np.mean(rear_x_list))  if rear_x_list  else vbbox["x_max"] - 0.3
+
+    return front_z_orig, rear_z_orig, front_x, rear_x
+
+
+# ===========================================================================
 # compute_transform
 # ===========================================================================
 
@@ -150,70 +217,13 @@ def compute_transform(
         rh_template_cfg = _RHTemplate()
     from app.services.compute_engine import classify_wheels  # avoid circular
 
-    # We need a minimal TargetNames-like object for classify_wheels.
-    # Use a simple namespace here — analysis_result should already have wheel centroids
-    # identified by bbox; we derive front/rear from centroids directly.
-    part_info: dict = analysis_result.get("part_info", {})
     vbbox: dict = analysis_result["vehicle_bbox"]
     ground_z: float = vbbox["z_min"]
 
-    # ── Detect front/rear wheel Z from part_info centroids ─────────────────
-    # Heuristic: parts whose Z-centroid ≈ ground_z + some height and whose
-    # X-centroid falls in front/rear half. We use all parts since we don't
-    # have pattern filtering here — instead look at the 4 "wheel" candidates
-    # that have smallest ground clearance (closest centroid.z to ground_z).
-    #
-    # Simpler: use vbbox.x midpoint to split front/rear, then average Z of
-    # the two groups among parts with centroid.Z in [ground_z, ground_z+1.2].
-    mid_x = (vbbox["x_min"] + vbbox["x_max"]) / 2.0
-    ref_mode = getattr(rh_template_cfg, "reference_mode", "wheel_axis")
-
-    if ref_mode == "user_input":
-        # ── User-supplied reference Z (STL-independent) ────────────────────
-        ref_z_front = getattr(rh_template_cfg, "reference_z_front", None)
-        ref_z_rear  = getattr(rh_template_cfg, "reference_z_rear", None)
-        if ref_z_front is None or ref_z_rear is None:
-            raise ValueError(
-                "reference_z_front and reference_z_rear must be set when reference_mode='user_input'"
-            )
-        front_z_orig = float(ref_z_front)
-        rear_z_orig  = float(ref_z_rear)
-        # Derive X positions from heuristic only (needed for wheelbase + yaw center)
-        wheel_candidates_x = [
-            (name, info) for name, info in part_info.items()
-            if ground_z < info["centroid"][2] < ground_z + 1.5
-        ]
-        front_x_list = [info["centroid"][0] for _, info in wheel_candidates_x if info["centroid"][0] < mid_x]
-        rear_x_list  = [info["centroid"][0] for _, info in wheel_candidates_x if info["centroid"][0] >= mid_x]
-        front_x = float(np.mean(front_x_list)) if front_x_list else vbbox["x_min"] + 0.3
-        rear_x  = float(np.mean(rear_x_list))  if rear_x_list  else vbbox["x_max"] - 0.3
-    else:
-        # ── Wheel axis mode: auto-detect from part_info ────────────────────
-        ref_parts = getattr(rh_template_cfg, "reference_parts", [])
-        if ref_parts:
-            # Filter by reference_parts patterns (supports glob via compute_engine helper)
-            from app.services.compute_engine import _matches_any  # noqa: PLC0415
-            wheel_candidates = [
-                (name, info) for name, info in part_info.items()
-                if _matches_any(name, ref_parts)
-            ]
-        else:
-            # Heuristic: parts whose Z-centroid falls within [ground_z, ground_z + 1.2]
-            wheel_candidates = [
-                (name, info) for name, info in part_info.items()
-                if ground_z < info["centroid"][2] < ground_z + 1.2
-            ]
-
-        front_z_list = [info["centroid"][2] for _, info in wheel_candidates if info["centroid"][0] < mid_x]
-        rear_z_list  = [info["centroid"][2] for _, info in wheel_candidates if info["centroid"][0] >= mid_x]
-        front_x_list = [info["centroid"][0] for _, info in wheel_candidates if info["centroid"][0] < mid_x]
-        rear_x_list  = [info["centroid"][0] for _, info in wheel_candidates if info["centroid"][0] >= mid_x]
-
-        # If heuristic/pattern matching fails, fall back to vehicle bbox values
-        front_z_orig = float(np.mean(front_z_list)) if front_z_list else ground_z + 0.35
-        rear_z_orig  = float(np.mean(rear_z_list))  if rear_z_list  else ground_z + 0.35
-        front_x      = float(np.mean(front_x_list)) if front_x_list else vbbox["x_min"] + 0.3
-        rear_x       = float(np.mean(rear_x_list))  if rear_x_list  else vbbox["x_max"] - 0.3
+    # ── Detect front/rear wheel axis Z & X ────────────────────────────────
+    front_z_orig, rear_z_orig, front_x, rear_x = extract_wheel_reference_z(
+        analysis_result, rh_template_cfg
+    )
 
     wheelbase = abs(rear_x - front_x)
     wb_center_orig = [

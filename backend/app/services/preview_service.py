@@ -26,6 +26,7 @@ from app.schemas.overlay import (
     OverlayPartsGroup,
     OverlayPlaneItem,
     OverlayProbeItem,
+    OverlayRideHeightRef,
 )
 from app.services.compute_engine import (
     _matches_any,
@@ -64,6 +65,7 @@ def extract_overlay_data(
     deck: "UfxSolverDeck",
     template_settings: "TemplateSettings",
     all_part_names: list[str],
+    analysis_result: dict | None = None,
 ) -> OverlayData:
     """Turn a fully-assembled solver deck into viewer overlay primitives.
 
@@ -259,6 +261,53 @@ def extract_overlay_data(
     # ── Ground Z ─────────────────────────────────────────────────────────
     ground_z = dbb.z_min
 
+    # ── Ride height reference axis positions ─────────────────────────────
+    ride_height_ref: OverlayRideHeightRef | None = None
+    rh = template_settings.setup_option.ride_height
+    ref_mode = rh.reference_mode
+    if ref_mode == "user_input" and rh.reference_z_front is not None and rh.reference_z_rear is not None:
+        # user_input: X positions unknown without analysis_result; try to derive
+        front_x: float | None = None
+        rear_x: float | None = None
+        if analysis_result is not None:
+            try:
+                from app.services.ride_height_service import extract_wheel_reference_z
+                _, _, front_x, rear_x = extract_wheel_reference_z(analysis_result, rh)
+            except Exception:
+                logger.debug("Could not derive wheel X positions for overlay", exc_info=True)
+        ride_height_ref = OverlayRideHeightRef(
+            reference_mode=ref_mode,
+            reference_z_front=float(rh.reference_z_front),
+            reference_z_rear=float(rh.reference_z_rear),
+            reference_x_front=front_x,
+            reference_x_rear=rear_x,
+            reference_parts=list(rh.reference_parts),
+        )
+    elif ref_mode == "wheel_axis":
+        if analysis_result is not None:
+            try:
+                from app.services.ride_height_service import extract_wheel_reference_z
+                fz, rz, fx, rx = extract_wheel_reference_z(analysis_result, rh)
+                ride_height_ref = OverlayRideHeightRef(
+                    reference_mode=ref_mode,
+                    reference_z_front=fz,
+                    reference_z_rear=rz,
+                    reference_x_front=fx,
+                    reference_x_rear=rx,
+                    reference_parts=list(rh.reference_parts),
+                )
+            except Exception:
+                logger.debug("Could not extract wheel reference Z for overlay", exc_info=True)
+                ride_height_ref = OverlayRideHeightRef(
+                    reference_mode=ref_mode,
+                    reference_parts=list(rh.reference_parts),
+                )
+        else:
+            ride_height_ref = OverlayRideHeightRef(
+                reference_mode=ref_mode,
+                reference_parts=list(rh.reference_parts),
+            )
+
     return OverlayData(
         domain_box=domain_box,
         refinement_boxes=refinement_boxes,
@@ -270,6 +319,7 @@ def extract_overlay_data(
         probes=probes,
         parts_groups=parts_groups,
         ground_z=ground_z,
+        ride_height_ref=ride_height_ref,
     )
 
 
@@ -336,4 +386,4 @@ def compute_overlay_data(
         )
 
     # 4. Extract overlay data from the assembled deck
-    return extract_overlay_data(deck, template_settings, all_part_names)
+    return extract_overlay_data(deck, template_settings, all_part_names, analysis_result=merged)

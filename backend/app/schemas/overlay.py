@@ -53,6 +53,16 @@ class OverlayProbeItem(BaseModel):
     radius: float
 
 
+class OverlayRideHeightRef(BaseModel):
+    """Ride height reference axis positions for the 3-D viewer."""
+    reference_mode: str               # "wheel_axis" | "user_input"
+    reference_z_front: float | None = None   # wheel axis Z (m)
+    reference_z_rear:  float | None = None   # wheel axis Z (m)
+    reference_x_front: float | None = None   # wheel axis X (m)
+    reference_x_rear:  float | None = None   # wheel axis X (m)
+    reference_parts: list[str] = []   # patterns used for detection (wheel_axis mode)
+
+
 class OverlayPartsGroup(BaseModel):
     """One group of part-name patterns (Parts tab badges)."""
     label: str
@@ -72,3 +82,4 @@ class OverlayData(BaseModel):
     probes: list[OverlayProbeItem] = []
     parts_groups: list[OverlayPartsGroup] = []
     ground_z: float = 0.0
+    ride_height_ref: OverlayRideHeightRef | None = None

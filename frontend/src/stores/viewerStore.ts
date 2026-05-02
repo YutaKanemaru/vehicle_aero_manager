@@ -94,6 +94,10 @@ interface ViewerStore {
   overlaysAllVisible: boolean;
   setOverlaysAllVisible: (v: boolean) => void;
 
+  // Ride height reference point visibility — ON dims all other objects to 0.15
+  rhRefVisible: boolean;
+  setRhRefVisible: (v: boolean) => void;
+
   // Part selection (click highlight)
   selectedPartName: string | null;
   setSelectedPartName: (name: string | null) => void;
@@ -198,6 +202,9 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
 
   overlaysAllVisible: true,
   setOverlaysAllVisible: (v) => set({ overlaysAllVisible: v }),
+
+  rhRefVisible: true,
+  setRhRefVisible: (v) => set({ rhRefVisible: v }),
 
   selectedPartName: null,
   setSelectedPartName: (name) => set({ selectedPartName: name }),

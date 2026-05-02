@@ -240,26 +240,93 @@ function PlaneTab({ overlayData }: { overlayData: OverlayData }) {
   );
 }
 
-// ─── Probe tab ───────────────────────────────────────────────────────────────
+// ─── Point tab — RH Reference + Probe files ───────────────────────────────────
 
-function ProbeTab({ overlayData }: { overlayData: OverlayData }) {
-  if (overlayData.probes.length === 0) {
-    return <Text size="xs" c="dimmed">No probe files defined in template.</Text>;
-  }
+function PointTab({ overlayData }: { overlayData: OverlayData }) {
+  const { rhRefVisible, setRhRefVisible } = useViewerStore();
+  const rh = overlayData.ride_height_ref;
+  const hasProbes = overlayData.probes.length > 0;
+  const allProbeVisKeys = overlayData.probes.map((pf) => `probe_${pf.name}`);
 
-  const allVisKeys = overlayData.probes.map((pf) => `probe_${pf.name}`);
+  const zFront = rh?.reference_z_front;
+  const zRear  = rh?.reference_z_rear;
+  const xFront = rh?.reference_x_front;
+  const xRear  = rh?.reference_x_rear;
+  const hasCoords = zFront != null && zRear != null;
 
   return (
     <Stack gap="sm">
-      <TabMasterSwitch visKeys={allVisKeys} />
-      {overlayData.probes.map((pf) => (
-        <OverlaySwitch
-          key={pf.name}
-          label={pf.name}
-          sub={`${pf.points.length} point${pf.points.length !== 1 ? "s" : ""}`}
-          visKey={`probe_${pf.name}`}
-        />
-      ))}
+      {/* ── Ride Height Reference ───────────────────────────── */}
+      <div>
+        <Group justify="space-between" align="center" mb={6}>
+          <Text size="xs" fw={600} c="dimmed">Ride Height Reference</Text>
+          {rh && (
+            <Switch
+              size="xs"
+              checked={rhRefVisible}
+              onChange={(e) => setRhRefVisible(e.currentTarget.checked)}
+              label={<Text size="xs" c="dimmed">Show</Text>}
+            />
+          )}
+        </Group>
+
+        {!rh && (
+          <Text size="xs" c="dimmed">Select a template and assembly.</Text>
+        )}
+
+        {rh && (
+          <Stack gap={4}>
+            <Text size="xs" c="dimmed">
+              Mode: {rh.reference_mode === "user_input" ? "User input" : "Wheel axis (auto)"}
+            </Text>
+
+            {rh.reference_parts.length > 0 && (
+              <Group gap={4} wrap="wrap">
+                <Text size="xs" c="dimmed">Patterns:</Text>
+                {rh.reference_parts.map((p) => (
+                  <Badge key={p} size="xs" variant="light">{p}</Badge>
+                ))}
+              </Group>
+            )}
+
+            {hasCoords ? (
+              <>
+                <Group gap="xs">
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ff4444" }} />
+                  <Text size="xs">Front: ({(xFront ?? 0).toFixed(3)}, 0, {zFront!.toFixed(4)}) m</Text>
+                </Group>
+                <Group gap="xs">
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4444ff" }} />
+                  <Text size="xs">Rear: &nbsp;({(xRear ?? 0).toFixed(3)}, 0, {zRear!.toFixed(4)}) m</Text>
+                </Group>
+              </>
+            ) : (
+              <Text size="xs" c="dimmed">Coordinates not available — assembly not loaded.</Text>
+            )}
+          </Stack>
+        )}
+      </div>
+
+      {/* ── Probe files ─────────────────────────────────────── */}
+      <Divider />
+      {hasProbes ? (
+        <>
+          <Group justify="space-between" align="center">
+            <Text size="xs" fw={600} c="dimmed">Probe Files</Text>
+            <TabMasterSwitch visKeys={allProbeVisKeys} />
+          </Group>
+          {overlayData.probes.map((pf) => (
+            <OverlaySwitch
+              key={pf.name}
+              label={pf.name}
+              sub={`${pf.points.length} point${pf.points.length !== 1 ? "s" : ""}`}
+              visKey={`probe_${pf.name}`}
+            />
+          ))}
+        </>
+      ) : (
+        <Text size="xs" c="dimmed">No probe files defined in template.</Text>
+      )}
     </Stack>
   );
 }
@@ -281,7 +348,7 @@ export function OverlayPanel({ overlayData }: OverlayPanelProps) {
         <Tabs.Tab value="parts" fz={10} p={4}>Parts</Tabs.Tab>
         <Tabs.Tab value="box" fz={10} p={4}>Box</Tabs.Tab>
         <Tabs.Tab value="plane" fz={10} p={4}>Plane</Tabs.Tab>
-        <Tabs.Tab value="probe" fz={10} p={4}>Probe</Tabs.Tab>
+        <Tabs.Tab value="point" fz={10} p={4}>Point</Tabs.Tab>
       </Tabs.List>
 
       <div>
@@ -294,8 +361,8 @@ export function OverlayPanel({ overlayData }: OverlayPanelProps) {
         <Tabs.Panel value="plane">
           <PlaneTab overlayData={overlayData} />
         </Tabs.Panel>
-        <Tabs.Panel value="probe">
-          <ProbeTab overlayData={overlayData} />
+        <Tabs.Panel value="point">
+          <PointTab overlayData={overlayData} />
         </Tabs.Panel>
       </div>
     </Tabs>

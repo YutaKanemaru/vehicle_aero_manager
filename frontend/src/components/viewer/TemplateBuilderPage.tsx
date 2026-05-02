@@ -416,7 +416,6 @@ export function TemplateBuilderPage() {
           overlayData={overlayData}
           vehicleBbox={vehicleBbox}
         />
-        />
       </Paper>
     </div>
   );

@@ -29,9 +29,11 @@ function buildGLBBox(scene: THREE.Object3D): THREE.Box3 {
 function GLBModel({
   blobUrl,
   parts,
+  rhRefActive,
 }: {
   blobUrl: string;
   parts: string[];
+  rhRefActive: boolean;
 }) {
   const { scene } = useGLTF(blobUrl);
   const { partStates, initParts, flatShading, showEdges, selectedPartName, setGlbLoaded } = useViewerStore();
@@ -73,6 +75,15 @@ function GLBModel({
       }
       const mat = obj.material as THREE.MeshStandardMaterial;
 
+      if (rhRefActive) {
+        // Dim: override all meshes to near-invisible
+        obj.visible = true;
+        mat.opacity = 0.15;
+        mat.transparent = true;
+        mat.needsUpdate = true;
+        return;
+      }
+
       const state = partStates[obj.name] ?? partStates[obj.parent?.name ?? ""];
       const partName = obj.name || obj.parent?.name || "";
 
@@ -91,7 +102,7 @@ function GLBModel({
       mat.transparent = (state?.opacity ?? 1.0) < 1.0;
       mat.needsUpdate = true;
     });
-  }, [scene, partStates, selectedPartName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scene, partStates, selectedPartName, rhRefActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Edge lines visibility
   useEffect(() => {
@@ -494,7 +505,9 @@ export function SceneCanvas({ geometries, overlayData, vehicleBbox }: SceneCanva
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Must be called unconditionally before any early returns
-  const { axesGlbUrl, landmarksGlbUrl, overlays, viewerTheme, showOriginAxes, glbLoaded } = useViewerStore();
+  const { axesGlbUrl, landmarksGlbUrl, overlays, viewerTheme, showOriginAxes, glbLoaded, rhRefVisible, overlaysAllVisible } = useViewerStore();
+
+  const rhRefActive = rhRefVisible && overlaysAllVisible && !!overlayData?.ride_height_ref;
 
   const readyGeometries = geometries.filter((g) => g.status === "ready");
 
@@ -584,7 +597,7 @@ export function SceneCanvas({ geometries, overlayData, vehicleBbox }: SceneCanva
 
         <Suspense fallback={null}>
           {blobEntries.map((entry) => (
-            <GLBModel key={entry.geometryId} blobUrl={entry.url} parts={entry.parts} />
+            <GLBModel key={entry.geometryId} blobUrl={entry.url} parts={entry.parts} rhRefActive={rhRefActive} />
           ))}
           {axesGlbUrl && overlays.wheelAxes && (
             <AxesGLBModel blobUrl={axesGlbUrl} />

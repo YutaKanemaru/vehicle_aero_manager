@@ -16,11 +16,13 @@ function WireBox({
   max,
   color = "white",
   opacity = 1.0,
+  dimmed = false,
 }: {
   min: [number, number, number];
   max: [number, number, number];
   color?: string;
   opacity?: number;
+  dimmed?: boolean;
 }) {
   const cx = (min[0] + max[0]) / 2;
   const cy = (min[1] + max[1]) / 2;
@@ -36,6 +38,9 @@ function WireBox({
     return eg;
   }, [sx, sy, sz]);
 
+  const fillOpacity  = dimmed ? 0.02 : opacity * 0.12;
+  const edgeOpacity  = dimmed ? 0.15 : Math.min(opacity * 0.85, 1);
+
   return (
     <group position={[cx, cy, cz]}>
       {/* Semi-transparent fill — back-side only to avoid z-fighting */}
@@ -44,14 +49,14 @@ function WireBox({
         <meshBasicMaterial
           color={color}
           transparent
-          opacity={opacity * 0.12}
+          opacity={fillOpacity}
           depthWrite={false}
           side={THREE.BackSide}
         />
       </mesh>
       {/* Outline edges */}
       <lineSegments geometry={edges}>
-        <lineBasicMaterial color={color} transparent opacity={Math.min(opacity * 0.85, 1)} />
+        <lineBasicMaterial color={color} transparent opacity={edgeOpacity} />
       </lineSegments>
     </group>
   );
@@ -67,6 +72,7 @@ function FloorRect({
   z,
   color = "#00cc66",
   opacity = 0.3,
+  dimmed = false,
 }: {
   xMin: number;
   xMax: number;
@@ -75,6 +81,7 @@ function FloorRect({
   z: number;
   color?: string;
   opacity?: number;
+  dimmed?: boolean;
 }) {
   const cx = (xMin + xMax) / 2;
   const cy = (yMin + yMax) / 2;
@@ -96,14 +103,14 @@ function FloorRect({
         <meshBasicMaterial
           color={color}
           transparent
-          opacity={opacity}
+          opacity={dimmed ? 0.04 : opacity}
           depthWrite={false}
           side={THREE.DoubleSide}
         />
       </mesh>
       {/* Wireframe outline */}
       <lineSegments geometry={edges}>
-        <lineBasicMaterial color={color} transparent opacity={Math.min(opacity + 0.4, 1)} />
+        <lineBasicMaterial color={color} transparent opacity={dimmed ? 0.15 : Math.min(opacity + 0.4, 1)} />
       </lineSegments>
     </group>
   );
@@ -112,8 +119,10 @@ function FloorRect({
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
-  const { overlayVisibility, overlaysAllVisible } = useViewerStore();
+  const { overlayVisibility, overlaysAllVisible, rhRefVisible } = useViewerStore();
   const vis = (key: string) => overlayVisibility[key] !== false;
+
+  const rhRefActive = rhRefVisible && overlaysAllVisible && !!overlayData?.ride_height_ref;
 
   if (!overlaysAllVisible || !overlayData) return null;
 
@@ -129,6 +138,7 @@ export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
         max={[db.x_max, db.y_max, db.z_max]}
         color={db.color ?? "#ffffff"}
         opacity={0.6}
+        dimmed={rhRefActive}
       />,
     );
   }
@@ -143,6 +153,7 @@ export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
         max={[rb.x_max, rb.y_max, rb.z_max]}
         color={rb.color ?? "#aaaaff"}
         opacity={0.5}
+        dimmed={rhRefActive}
       />,
     );
   }
@@ -157,6 +168,7 @@ export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
         max={[pb.x_max, pb.y_max, pb.z_max]}
         color={pb.color ?? "#ff4444"}
         opacity={0.6}
+        dimmed={rhRefActive}
       />,
     );
   }
@@ -171,6 +183,7 @@ export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
         max={[pv.x_max, pv.y_max, pv.z_max]}
         color={pv.color ?? "#ff8800"}
         opacity={0.5}
+        dimmed={rhRefActive}
       />,
     );
   }
@@ -188,6 +201,7 @@ export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
         z={dp.z_position}
         color={dp.color ?? "#00cc66"}
         opacity={dp.export_mesh ? 0.3 : 0.2}
+        dimmed={rhRefActive}
       />,
     );
   }
@@ -213,7 +227,7 @@ export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
           <meshBasicMaterial
             color={tg.color ?? "#00ffff"}
             transparent
-            opacity={0.25}
+            opacity={rhRefActive ? 0.04 : 0.25}
             side={THREE.DoubleSide}
           />
         </mesh>
@@ -223,6 +237,7 @@ export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
           max={[px + 0.001, py + tg.width / 2, pz + tg.height / 2]}
           color={tg.color ?? "#00ffff"}
           opacity={0.9}
+          dimmed={rhRefActive}
         />
       </group>,
     );
@@ -248,7 +263,7 @@ export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
         <meshBasicMaterial
           color={sc.color ?? "#ff00ff"}
           transparent
-          opacity={0.2}
+          opacity={rhRefActive ? 0.03 : 0.2}
           side={THREE.DoubleSide}
         />
       </mesh>,
@@ -263,7 +278,34 @@ export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
       nodes.push(
         <mesh key={`probe_${probe.name}_${i}`} position={[x, y, z]}>
           <sphereGeometry args={[0.04, 8, 8]} />
-          <meshBasicMaterial color="#ffff00" />
+          <meshBasicMaterial color="#ffff00" transparent opacity={rhRefActive ? 0.15 : 1.0} />
+        </mesh>,
+      );
+    }
+  }
+
+  // ── Ride height reference spheres (front=red, rear=blue) ───────────────
+  if (rhRefActive) {
+    const rh = overlayData.ride_height_ref!;
+    if (rh.reference_z_front != null) {
+      nodes.push(
+        <mesh
+          key="rh_front"
+          position={[rh.reference_x_front ?? 0, 0, rh.reference_z_front]}
+        >
+          <sphereGeometry args={[0.06, 16, 16]} />
+          <meshStandardMaterial color="#ff4444" />
+        </mesh>,
+      );
+    }
+    if (rh.reference_z_rear != null) {
+      nodes.push(
+        <mesh
+          key="rh_rear"
+          position={[rh.reference_x_rear ?? 0, 0, rh.reference_z_rear]}
+        >
+          <sphereGeometry args={[0.06, 16, 16]} />
+          <meshStandardMaterial color="#4444ff" />
         </mesh>,
       );
     }
