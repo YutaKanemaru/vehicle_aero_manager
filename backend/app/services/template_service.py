@@ -311,6 +311,8 @@ def update_version_settings(
     current_user: User,
 ) -> TemplateVersion:
     """Overwrite the settings (and optionally comment) of an existing version in-place."""
+    from app.services.preview_service import invalidate_preview_cache  # avoid circular at module level
+
     template = _get_template_or_404(db, template_id)
     _check_owner_or_admin(template, current_user)
     version = _get_version_or_404(db, template_id, version_id)
@@ -319,6 +321,8 @@ def update_version_settings(
         version.comment = data.comment
     db.commit()
     db.refresh(version)
+    # Settings changed — cached preview XML is stale
+    invalidate_preview_cache(version_id)
     return version
 
 

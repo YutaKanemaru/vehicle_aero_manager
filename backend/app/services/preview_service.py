@@ -1,12 +1,20 @@
 """
 Preview service — generates overlay data for the Template Builder 3D viewer.
 
-Calls ``assemble_ufx_solver_deck()`` with the selected Template + Assembly and
-extracts absolute-coordinate overlay primitives from the resulting
-``UfxSolverDeck``.  No XML file is created on disk.
+Flow (Template Builder):
+  1. ``compute_overlay_data()`` assembles the solver deck in memory.
+  2. The deck is serialised to a cache XML at
+     ``preview_cache_dir/{version_id}_{assembly_id}.xml``.
+  3. The XML is parsed back via ``parse_ufx`` so the displayed overlay is
+     derived from exactly the same data structure that XML generation produces.
+  4. ``extract_overlay_data()`` converts the deck to viewer primitives.
 
-The same ``extract_overlay_data()`` function can be reused in the future
-Case viewer: parse an already-generated XML → ``UfxSolverDeck`` → overlay.
+The same ``extract_overlay_data()`` is used by ``get_run_overlay()`` in
+``configuration_service.py`` (Case viewer) via a real Run XML.
+
+Cache invalidation:
+  Call ``invalidate_preview_cache(version_id)`` whenever a version's settings
+  are overwritten in-place (i.e. ``update_version_settings``).
 """
 
 from __future__ import annotations
@@ -28,12 +36,15 @@ from app.schemas.overlay import (
     OverlayProbeItem,
     OverlayRideHeightRef,
 )
+from app.config import settings as _settings
 from app.services.compute_engine import (
     _matches_any,
     _matches_pattern,
     assemble_ufx_solver_deck,
 )
 from app.services.configuration_service import _merge_analysis_results
+from app.ultrafluid.parser import parse_ufx
+from app.ultrafluid.serializer import serialize_ufx
 
 if TYPE_CHECKING:
     from app.schemas.template_settings import TemplateSettings
@@ -323,6 +334,30 @@ def extract_overlay_data(
     )
 
 
+# ─── Cache helpers ───────────────────────────────────────────────────────────
+
+
+def _preview_cache_path(version_id: str, assembly_id: str):
+    """Return the Path for a cached preview XML (may not exist yet)."""
+    return _settings.preview_cache_dir / f"{version_id}_{assembly_id}.xml"
+
+
+def invalidate_preview_cache(version_id: str) -> None:
+    """Delete all cached XML files for the given template version.
+
+    Call this whenever a version's settings are overwritten in-place.
+    """
+    cache_dir = _settings.preview_cache_dir
+    if not cache_dir.exists():
+        return
+    for p in cache_dir.glob(f"{version_id}_*.xml"):
+        try:
+            p.unlink()
+            logger.debug("Invalidated preview cache: %s", p)
+        except OSError as exc:
+            logger.warning("Failed to delete preview cache %s: %s", p, exc)
+
+
 # ─── Public API: Template + Assembly → OverlayData ───────────────────────────
 
 
@@ -331,10 +366,17 @@ def compute_overlay_data(
     template_id: str,
     assembly_id: str,
 ) -> OverlayData:
-    """Assemble a solver deck from Template + Assembly and extract overlay data.
+    """Assemble a solver deck, cache it as XML, then parse and return OverlayData.
 
-    This endpoint does NOT write any file to disk.
+    The XML cache (``preview_cache_dir/{version_id}_{assembly_id}.xml``) ensures
+    that the Template Builder overlay is derived from exactly the same XML
+    structure that the real XML generation pipeline produces, eliminating any
+    discrepancy between the viewer and the output file.
+
+    Cache is invalidated by ``invalidate_preview_cache(version_id)`` whenever
+    a version's settings change.
     """
+    import json
     from app.schemas.template_settings import TemplateSettings
 
     # 1. Load template + active version
@@ -349,7 +391,6 @@ def compute_overlay_data(
     if not active_version:
         raise HTTPException(status_code=400, detail="Template has no active version")
 
-    import json
     settings_dict = json.loads(active_version.settings) if isinstance(active_version.settings, str) else active_version.settings
     template_settings = TemplateSettings.model_validate(settings_dict)
 
@@ -366,24 +407,34 @@ def compute_overlay_data(
     merged = _merge_analysis_results(assembly)
     all_part_names: list[str] = merged.get("parts", [])
 
-    # 3. Assemble solver deck (no PCA, no disk write)
-    try:
-        sp = template_settings.simulation_parameter
-        deck = assemble_ufx_solver_deck(
-            template_settings=template_settings,
-            analysis_result=merged,
-            sim_type=template.sim_type,
-            inflow_velocity=sp.inflow_velocity,
-            yaw_angle=sp.yaw_angle,
-            source_files=[],         # not needed for overlay
-            pca_axes=None,           # skip PCA — overlay doesn't need axes
-        )
-    except Exception:
-        logger.exception("Failed to assemble solver deck for overlay preview")
-        raise HTTPException(
-            status_code=400,
-            detail="Failed to compute overlay. Check template settings and assembly geometry.",
-        )
+    # 3. Check cache; assemble + write if stale/missing
+    cache_path = _preview_cache_path(active_version.id, assembly_id)
+    if not cache_path.exists():
+        try:
+            sp = template_settings.simulation_parameter
+            deck = assemble_ufx_solver_deck(
+                template_settings=template_settings,
+                analysis_result=merged,
+                sim_type=template.sim_type,
+                inflow_velocity=sp.inflow_velocity,
+                yaw_angle=sp.yaw_angle,
+                source_files=[],
+                pca_axes=None,
+            )
+        except Exception:
+            logger.exception("Failed to assemble solver deck for overlay preview")
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to compute overlay. Check template settings and assembly geometry.",
+            )
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_bytes(serialize_ufx(deck))
+        logger.debug("Wrote preview cache: %s", cache_path)
+    else:
+        logger.debug("Using cached preview XML: %s", cache_path)
 
-    # 4. Extract overlay data from the assembled deck
+    # 4. Parse the cached XML (same path as real XML generation)
+    deck = parse_ufx(cache_path.read_bytes())
+
+    # 5. Extract overlay data
     return extract_overlay_data(deck, template_settings, all_part_names, analysis_result=merged)
