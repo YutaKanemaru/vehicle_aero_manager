@@ -452,6 +452,25 @@ def download_stl(
     return FileResponse(str(p), media_type="application/octet-stream", filename=p.name)
 
 
+@router.get("/cases/{case_id}/runs/{run_id}/download-belt-stl")
+def download_belt_stl(
+    case_id: str,
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download the 5-belt STL file used for XML generation (rotating_belt_5 only)."""
+    from pathlib import Path as _Path
+    from fastapi import HTTPException
+    run = db.query(Run).filter_by(id=run_id, case_id=case_id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if not run.belt_stl_path or not _Path(run.belt_stl_path).exists():
+        raise HTTPException(status_code=404, detail="Belt STL file not available for this run")
+    p = _Path(run.belt_stl_path)
+    return FileResponse(str(p), media_type="application/octet-stream", filename=p.name)
+
+
 @router.get("/cases/{case_id}/runs/{run_id}/axes-glb")
 def get_axes_glb(
     case_id: str,

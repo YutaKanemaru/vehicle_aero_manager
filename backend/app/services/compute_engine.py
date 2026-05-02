@@ -1014,14 +1014,27 @@ def _build_tg_instances(
 def _build_source_files_list(
     source_files: list[str] | None,
     belt_stl_path: str | None,
+    source_file: str | None = None,
 ) -> list[str]:
-    """Build the source_files list for the Geometry element, appending belt STL if present."""
-    result = list(source_files) if source_files else []
-    if belt_stl_path:
-        from pathlib import Path as _P
-        belt_filename = _P(belt_stl_path).name
-        if belt_filename not in result:
-            result.append(belt_filename)
+    """Build the source_files list for the Geometry element.
+
+    When belt_stl_path is present, folds source_file (single-geometry case) and
+    source_files (multi-geometry case) into a combined list, then appends the
+    belt STL filename.  When no belt, returns an empty list so the single
+    source_file field is used directly.
+    """
+    if not belt_stl_path:
+        # No belt: leave source_file as the separate single-file field
+        return list(source_files) if source_files else []
+
+    from pathlib import Path as _P
+    result: list[str] = []
+    if source_file:
+        result.append(source_file)
+    result.extend(source_files or [])
+    belt_filename = _P(belt_stl_path).name
+    if belt_filename not in result:
+        result.append(belt_filename)
     return result
 
 
@@ -1697,6 +1710,7 @@ def assemble_ufx_solver_deck(
     ))
 
     # ── Assemble UfxSolverDeck ────────────────────────────────────────────
+    _built_source_files = _build_source_files_list(source_files, belt_stl_path, source_file)
     deck = UfxSolverDeck(
         version=Version(gui_version="2024", solver_version="2024"),
         simulation=Simulation(
@@ -1720,8 +1734,8 @@ def assemble_ufx_solver_deck(
             ),
         ),
         geometry=Geometry(
-            source_file=source_file,
-            source_files=_build_source_files_list(source_files, belt_stl_path),
+            source_file=source_file if not _built_source_files else None,
+            source_files=_built_source_files,
             baffle_parts=baffle_parts,
             domain_bounding_box=domain_bb,
             triangle_plinth=False,

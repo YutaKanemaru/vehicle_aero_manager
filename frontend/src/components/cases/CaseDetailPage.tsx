@@ -32,6 +32,7 @@ import {
   SimpleGrid,
   ThemeIcon,
   Code,
+  Menu,
 } from "@mantine/core";
 import {
   IconArrowLeft,
@@ -511,6 +512,20 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
     }
   }
 
+  async function downloadBeltStl(runId: string, runName: string) {
+    try {
+      const blob = await runsApi.downloadBeltStl(caseData.id, runId);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${runName}_5belts.stl`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      notifications.show({ message: (e as Error).message, color: "red" });
+    }
+  }
+
   const hasParent = !!caseData.parent_case_id;
   const beltsNeededCount = runs.filter((r) => r.needs_belt_generation).length;
   const transformNeededCount = runs.filter(
@@ -707,18 +722,44 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
                               </ActionIcon>
                             </Tooltip>
                           )}
-                          {/* Download STL */}
+                          {/* Download STL (dropdown when belt STL also available) */}
                           {run.status === "ready" && run.stl_path && (
-                            <Tooltip label="Download STL">
-                              <ActionIcon
-                                size="xs"
-                                variant="light"
-                                color="cyan"
-                                onClick={() => downloadStl(run.id, run.name)}
-                              >
-                                <IconFileTypography size={12} />
-                              </ActionIcon>
-                            </Tooltip>
+                            run.belt_stl_path ? (
+                              <Menu shadow="md" position="bottom-end">
+                                <Menu.Target>
+                                  <Tooltip label="Download STL">
+                                    <ActionIcon size="xs" variant="light" color="cyan">
+                                      <IconFileTypography size={12} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                </Menu.Target>
+                                <Menu.Dropdown>
+                                  <Menu.Item
+                                    leftSection={<IconFileTypography size={12} />}
+                                    onClick={() => downloadStl(run.id, run.name)}
+                                  >
+                                    Download STL
+                                  </Menu.Item>
+                                  <Menu.Item
+                                    leftSection={<IconRoad size={12} />}
+                                    onClick={() => downloadBeltStl(run.id, run.name)}
+                                  >
+                                    Download Belt STL
+                                  </Menu.Item>
+                                </Menu.Dropdown>
+                              </Menu>
+                            ) : (
+                              <Tooltip label="Download STL">
+                                <ActionIcon
+                                  size="xs"
+                                  variant="light"
+                                  color="cyan"
+                                  onClick={() => downloadStl(run.id, run.name)}
+                                >
+                                  <IconFileTypography size={12} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )
                           )}
                           {/* Reset */}
                           {(run.status === "ready" || run.status === "error" || (run.status === "pending" && run.transform_applied)) && (() => {

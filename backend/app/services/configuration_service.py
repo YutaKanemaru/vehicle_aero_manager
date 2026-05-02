@@ -978,11 +978,13 @@ def _generate_xml_task(run_id: str, geometry_only: bool = False) -> None:
         source_file: str | None = None
         source_files: list[str] = []
         if override_geom:
-            source_file = override_geom.original_filename
+            # "input.stl" matches the filename served by GET /download-stl
+            source_file = "input.stl"
         elif assembly and assembly.geometries:
             geom_names = [g.original_filename for g in assembly.geometries]
             if len(geom_names) == 1:
-                source_file = geom_names[0]
+                # "input.stl" matches the filename served by GET /download-stl
+                source_file = "input.stl"
             else:
                 source_files = geom_names
 
