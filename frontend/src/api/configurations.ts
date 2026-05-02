@@ -222,4 +222,17 @@ export const runsApi = {
   /** Fetch overlay data for a ready Run (parsed from its generated XML). */
   getOverlayData: (caseId: string, runId: string): Promise<OverlayData> =>
     client.get<OverlayData>(`/cases/${caseId}/runs/${runId}/overlay`),
+
+  /** Fetch the belt GLB for a Run that has belt_stl_path set. Returns a blob URL (caller must revokeObjectURL). */
+  getBeltGlbUrl: async (caseId: string, runId: string): Promise<string> => {
+    const token = localStorage.getItem("vam_token");
+    const res = await fetch(`/api/v1/cases/${caseId}/runs/${runId}/belt-glb`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    return URL.createObjectURL(await res.blob());
+  },
 };

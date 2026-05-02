@@ -1256,6 +1256,32 @@ def get_run_overlay(db: Session, case_id: str, run_id: str):
     return extract_overlay_data(deck, template_settings, all_part_names)
 
 
+def get_belt_glb(db: Session, case_id: str, run_id: str) -> bytes:
+    """Return a GLB built from the Run's 5-belt STL file.
+
+    Uses STLReader → GLBExporter at ratio 1.0 (belt geometry is trivially simple).
+    A temporary file is used so GLBExporter can write to disk, then the bytes
+    are returned and the file is cleaned up.
+    """
+    import tempfile
+    from app.services.stl_decimator import GLBExporter, STLReader
+
+    run = _get_run_or_404(db, case_id, run_id)
+    if not run.belt_stl_path:
+        raise HTTPException(status_code=404, detail="No belt STL for this run")
+    belt_path = Path(run.belt_stl_path)
+    if not belt_path.exists():
+        raise HTTPException(status_code=404, detail="Belt STL file not found on disk")
+
+    solids = STLReader.read(belt_path)
+    tmp = Path(tempfile.mktemp(suffix=".glb"))
+    try:
+        GLBExporter.export(solids, tmp)
+        return tmp.read_bytes()
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 # ---------------------------------------------------------------------------
 # Diff
 # ---------------------------------------------------------------------------

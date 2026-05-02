@@ -492,6 +492,8 @@ interface SceneCanvasProps {
   geometries: GeometryResponse[];
   overlayData?: OverlayData | null;
   vehicleBbox?: { x_min: number; x_max: number; y_min: number; y_max: number; z_min: number; z_max: number } | null;
+  /** Optional blob URL to a belt GLB (rotating_belt_5 mode, Run Viewer only). */
+  beltGlbUrl?: string | null;
 }
 
 interface BlobEntry {
@@ -500,7 +502,7 @@ interface BlobEntry {
   parts: string[];
 }
 
-export function SceneCanvas({ geometries, overlayData, vehicleBbox }: SceneCanvasProps) {
+export function SceneCanvas({ geometries, overlayData, vehicleBbox, beltGlbUrl }: SceneCanvasProps) {
   const [blobEntries, setBlobEntries] = useState<BlobEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -604,6 +606,9 @@ export function SceneCanvas({ geometries, overlayData, vehicleBbox }: SceneCanva
           )}
           {landmarksGlbUrl && overlays.landmarks && (
             <LandmarksGLBModel blobUrl={landmarksGlbUrl} />
+          )}
+          {beltGlbUrl && (
+            <AxesGLBModel blobUrl={beltGlbUrl} />
           )}
           <CameraFitter />
         </Suspense>

@@ -475,6 +475,18 @@ def get_run_overlay(
     return configuration_service.get_run_overlay(db, case_id, run_id)
 
 
+@router.get("/cases/{case_id}/runs/{run_id}/belt-glb")
+def get_belt_glb(
+    case_id: str,
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return a GLB for the 5-belt STL of a Run (rotating_belt_5 ground mode)."""
+    glb_bytes = configuration_service.get_belt_glb(db, case_id, run_id)
+    return Response(content=glb_bytes, media_type="model/gltf-binary")
+
+
 @router.get("/cases/{case_id}/compare", response_model=CaseCompareResult)
 def compare_cases(
     case_id: str,

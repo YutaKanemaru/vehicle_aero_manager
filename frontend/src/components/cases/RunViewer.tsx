@@ -18,6 +18,7 @@ import {
   ActionIcon,
   Tooltip,
 } from "@mantine/core";
+import type { OverlayData } from "../../api/preview";
 import {
   IconSun,
   IconMoon,
@@ -63,6 +64,8 @@ export function RunViewer({ caseId, assemblyId, run }: RunViewerProps) {
   const setShowOriginAxes = useViewerStore((s) => s.setShowOriginAxes);
   const overlaysAllVisible = useViewerStore((s) => s.overlaysAllVisible);
   const setOverlaysAllVisible = useViewerStore((s) => s.setOverlaysAllVisible);
+  const rhRefVisible = useViewerStore((s) => s.rhRefVisible);
+  const setRhRefVisible = useViewerStore((s) => s.setRhRefVisible);
 
   // Fetch assembly details for geometries
   const { data: assembly } = useQuery({
@@ -84,10 +87,17 @@ export function RunViewer({ caseId, assemblyId, run }: RunViewerProps) {
     : (assembly?.geometries ?? []);
 
   // Fetch overlay data from generated XML
-  const { data: overlayData } = useQuery({
+  const { data: overlayData } = useQuery<OverlayData>({
     queryKey: ["runs", run.id, "overlay"],
     queryFn: () => runsApi.getOverlayData(caseId, run.id),
     enabled: run.status === "ready" && !!run.xml_path,
+  });
+
+  // Fetch belt GLB when belt STL is available (rotating_belt_5 mode)
+  const { data: beltGlbUrl } = useQuery<string>({
+    queryKey: ["runs", run.id, "belt-glb"],
+    queryFn: () => runsApi.getBeltGlbUrl(caseId, run.id),
+    enabled: !!run.belt_stl_path,
   });
 
   // Merge part info from all geometries
@@ -163,10 +173,11 @@ export function RunViewer({ caseId, assemblyId, run }: RunViewerProps) {
           geometries={geometries}
           overlayData={overlayData}
           vehicleBbox={vehicleBbox}
+          beltGlbUrl={beltGlbUrl}
         />
 
         {/* Viewer Toolbar (top-right) */}
-        <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10, display: "flex", gap: 8, alignItems: "center", background: "rgba(0,0,0,0.5)", padding: "4px 8px", borderRadius: 6 }}>
+        <div style={{ position: "absolute", top: 8, right: 8, zIndex: 10, display: "flex", gap: 8, alignItems: "center", background: "rgba(0,0,0,0.6)", padding: "4px 10px", borderRadius: 6 }}>
           <SegmentedControl
             size="xs"
             data={[
@@ -190,6 +201,15 @@ export function RunViewer({ caseId, assemblyId, run }: RunViewerProps) {
             onChange={(e) => setShowEdges(e.currentTarget.checked)}
             styles={{ label: { color: "white" } }}
           />
+          {overlayData?.ride_height_ref && (
+            <Switch
+              size="xs"
+              label="RH Ref"
+              checked={rhRefVisible}
+              onChange={(e) => setRhRefVisible(e.currentTarget.checked)}
+              styles={{ label: { color: "white" } }}
+            />
+          )}
         </div>
 
         {/* Camera Overlay (bottom-right) */}
