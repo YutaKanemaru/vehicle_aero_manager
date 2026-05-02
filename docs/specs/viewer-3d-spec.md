@@ -87,6 +87,7 @@ overlayVisibility: Record<string, boolean>  // key absent = visible (true)
 overlaysAllVisible: boolean         // global master switch
 selectedPartName: string | null
 fitToTarget: { center, radius } | null
+rhRefVisible: boolean               // default false — ride height reference points visibility
 ```
 
 `partColor(name)` — deterministic per-part color (djb2 hash → 12-color SWATCHES palette).
@@ -115,6 +116,7 @@ fitToTarget: { center, radius } | null
 - Box tab: `OverlaySwitch` per box item + Domain Parts section; `TabMasterSwitch`
 - Plane tab: TG Ground / TG Body / section cuts; `TabMasterSwitch`
 - Probe tab: per probe with point count; `TabMasterSwitch`
+- **RH Ref toggle is NOT in this panel** — it lives in `ViewerToolbar` (see below)
 
 **`PartListPanel.tsx`**
 - Per-part row: click name → `setSelectedPartName`; `IconFocusCentered` → `setFitToTarget`; eye toggle; `ColorSwatch` (96 swatches); opacity Popover
@@ -125,8 +127,10 @@ fitToTarget: { center, radius } | null
 - 3-column layout: 275px ControlPanel | 255px PartListPanel | flex-1 SceneCanvas
 - Overlay data flow: `useQuery(["preview", "overlay", templateId, assemblyId])` → `previewApi.getOverlayData()` → `OverlayData` → passed to `OverlayPanel` + `OverlayObjects`
 - `AssemblyGeometriesDrawer` opened via `IconPackage` ActionIcon
-- `TemplateVersionEditModal` opened via `IconPencil` ActionIcon (gated on `editTemplateOpen`)
+- `TemplateVersionEditModal` opened via `IconPencil` ActionIcon (gated on `editTemplateOpen`); **invalidates `["preview", "overlay"]` query on save** so viewer refreshes
+- `TemplateVersionsDrawer`: **invalidates `["preview", "overlay"]` query on version activate**
 - `CreateCaseFromBuilderModal` opened via `IconPlus` button
+- `ViewerToolbar`: floating overlay (top-right of canvas); accepts `overlayData: OverlayData | null`; controls Persp/Ortho `SegmentedControl`, Flat shading Switch, Edges Switch; shows **RH Ref Switch** (reads/sets `rhRefVisible` from `viewerStore`) only when `overlayData.ride_height_ref` is present
 
 ### API Client
 
