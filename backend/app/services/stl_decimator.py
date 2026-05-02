@@ -235,7 +235,8 @@ class QEMDecimator:
         return best_v, max(0.0, best_c)
 
     @classmethod
-    def simplify(cls, solid: Solid, ratio: float, verbose: bool = False) -> Solid:
+    def simplify(cls, solid: Solid, ratio: float, verbose: bool = False,
+                 boundary_penalty: float = 1000.0) -> Solid:
         t0 = time.perf_counter()
         n_input = len(solid.faces)
         target  = max(4, int(n_input * ratio))
@@ -277,7 +278,15 @@ class QEMDecimator:
             for i in range(3):
                 e = (min(f[i], f[(i+1) % 3]), max(f[i], f[(i+1) % 3]))
                 edge_set.add(e)
-
+        # ── Boundary-edge detection (boundary = shared by exactly 1 face) ──
+        _edge_face_count: dict[tuple[int, int], int] = {}
+        for f in face_verts:
+            for i in range(3):
+                e = (min(f[i], f[(i+1) % 3]), max(f[i], f[(i+1) % 3]))
+                _edge_face_count[e] = _edge_face_count.get(e, 0) + 1
+        boundary_edges: set[tuple[int, int]] = {
+            e for e, cnt in _edge_face_count.items() if cnt == 1
+        }
         # ── Step 4: build priority queue ──────────────────────
         heap: list[tuple[float, int, int]] = []
         best_cost: dict[tuple[int, int], float] = {}
@@ -285,6 +294,8 @@ class QEMDecimator:
         for e in edge_set:
             Qe   = Q[e[0]] + Q[e[1]]
             _, c = cls._optimal_vertex(Qe, verts[e[0]], verts[e[1]])
+            if boundary_penalty != 1.0 and e in boundary_edges:
+                c *= boundary_penalty
             best_cost[e] = c
             heapq.heappush(heap, (c, e[0], e[1]))
 
@@ -364,6 +375,8 @@ class QEMDecimator:
                 ne = (min(ra, rnb), max(ra, rnb))
                 Qne  = Q[ra] + Q[rnb]
                 _, c = cls._optimal_vertex(Qne, verts[ra], verts[rnb])
+                if boundary_penalty != 1.0 and ne in boundary_edges:
+                    c *= boundary_penalty
                 best_cost[ne] = c
                 heapq.heappush(heap, (c, ne[0], ne[1]))
 
