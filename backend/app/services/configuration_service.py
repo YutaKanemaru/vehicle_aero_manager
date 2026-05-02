@@ -1253,7 +1253,13 @@ def get_run_overlay(db: Session, case_id: str, run_id: str):
     # Parse the actual generated XML
     deck = parse_ufx(xml_path.read_bytes())
 
-    return extract_overlay_data(deck, template_settings, all_part_names)
+    return extract_overlay_data(
+        deck,
+        template_settings,
+        all_part_names,
+        analysis_result=merged,
+        target_names=template_settings.target_names,
+    )
 
 
 def get_belt_glb(db: Session, case_id: str, run_id: str) -> bytes:
