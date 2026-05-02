@@ -73,7 +73,7 @@ Key functions:
   - Override Geometry files are written to `data/transformed/{id}/` (not `data/uploads/`) and stored with **absolute `file_path`**; excluded from `GET /geometries/` list
   - ⚠️ `transform_snapshot["verification"]["front_wheel_z_actual"]` is **absolute Z coordinate**, not ride height. RH = `actual_z − vehicle_bbox_z_min`
   - If `belt_stl_path` is set and `yaw_angle != 0`, applies Z-axis yaw rotation to the belt STL file in-place via `belt_service.rotate_belt_stl_yaw()`
-- `_generate_xml_task(run_id, geometry_only=False)`: background task; `geometry_only=True` + `parent_case_id` set → finds parent's ready Run, swaps STL only; passes `run.belt_stl_path` to `assemble_ufx_solver_deck()`; if belt STL exists, copies it into the run output directory alongside the XML. `source_file` in the generated XML is always `"input.stl"` (single geometry / override) or a list including `"input.stl"` + belt STL name when belt is present — matching the filenames served by the download endpoints.
+- `_generate_xml_task(run_id, geometry_only=False)`: background task; `geometry_only=True` + `parent_case_id` set → finds parent's ready Run, swaps STL only; passes `run.belt_stl_path` to `assemble_ufx_solver_deck()`; if belt STL exists, copies it into the run output directory alongside the XML. `source_file` in the generated XML is `"{safe_run_name}.stl"` (single geometry / override) or a list including `"{safe_run_name}.stl"` + `"{safe_run_name}_5belts.stl"` when belt is present — both names derived via `safe_filename(run.name)` from `app/utils/filename.py`, matching the filenames served by the download endpoints.
 - `_check_needs_belt_generation(db, run)`: private helper — reads active template version settings dict; returns `True` when `ground_mode == "rotating_belt_5"` and `run.belt_stl_path is None`
 
 ## Belt Service (`app/services/belt_service.py`)
@@ -86,7 +86,7 @@ Handles 5-belt STL generation for the `rotating_belt_5` ground mode.
   - Center belt X position from `center_belt_position` setting (`at_wheelbase_center` or `user_specified`)
   - Narrow car fallback applied when `narrow_car_fallback.enabled` and belt gap < `min_belt_gap`
 - `rotate_belt_stl_yaw(stl_content, yaw_angle_deg, yaw_center_xy=(0,0)) -> str`: applies Z-axis rotation to all vertices and face normals; used by `transform_run()` for yaw ≠ 0
-- `generate_belt5_for_run(db, run) -> dict`: orchestrator — loads Run→Case→Assembly→Template, resolves `ground_z`, generates STL, saves to `data/runs/{run_id}/{base_name}_5belts.stl`, sets `run.belt_stl_path`, commits DB
+- `generate_belt5_for_run(db, run) -> dict`: orchestrator — loads Run→Case→Assembly→Template, resolves `ground_z`, generates STL, saves to `data/runs/{run_id}/{safe_run_name}_5belts.stl` (filename via `safe_filename(run.name)` from `app/utils/filename.py`), sets `run.belt_stl_path`, commits DB
 - `duplicate_case()`: copies Case row; sets `parent_case_id = source_case_id`; does NOT copy Runs
 - `create_case_with_runs()`: creates Case + one Run per Condition
 - `compare_cases()`: deep-diffs template settings JSON, map condition values, assembly parts sets

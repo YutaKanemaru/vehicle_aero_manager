@@ -76,6 +76,12 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 
 `stl_decimator.py` lives at `backend/app/services/stl_decimator.py` — pure Python + NumPy, no trimesh/fast-simplification.
 
+**Boundary-Preserving QEM** (`QEMDecimator.simplify(ratio, boundary_penalty=1000.0)`):
+- After edge_set is built, boundary edges (edges shared by exactly 1 face) are detected
+- Boundary edges receive a `×boundary_penalty` cost in both initial heap build and neighbour recomputation
+- Default `boundary_penalty=1000.0` — collapses boundary edges last, preserving solid outlines and reducing visible gaps between parts in the 3D viewer
+- `boundary_penalty=1.0` restores original unconstrained QEM behaviour
+
 ## Frontend
 
 ### `src/stores/viewerStore.ts` (Zustand)

@@ -88,9 +88,12 @@ vehicle_aero_manager/
 │       ├── schemas/             # Pydantic request/response schemas only
 │       ├── services/            # Business logic — DB operations belong here, not in routers
 │       │   ├── viewer_service.py      # GLB generation, decimation, cache management
+│       │   ├── stl_decimator.py       # Pure-Python QEM decimation (STLReader + QEMDecimator + GLBExporter)
 │       │   ├── ride_height_service.py # Ride height / yaw STL transform + System creation
 │       │   ├── preview_service.py     # Overlay data: assemble_ufx_solver_deck() → extract_overlay_data() → OverlayData
 │       ├── storage/             # StorageBackend abstraction
+│       ├── utils/               # Shared utilities
+│       │   └── filename.py      # safe_filename() — strips illegal chars, spaces→underscore, max 200 chars
 │       └── ultrafluid/          # XML schema (Pydantic), parser, serializer — isolated module
 ├── frontend/
 │   └── src/
