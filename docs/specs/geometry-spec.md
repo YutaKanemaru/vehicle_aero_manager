@@ -135,7 +135,7 @@ Polls every 3 seconds while any `pending`/`analyzing`/`ready-decimating`/`genera
 - **`xml_generation` jobs**: `GET /cases/{caseId}/runs/{runId}` で個別取得。`run.status === "ready" | "error"` でジョブ終了。エラー時は `removeJob`（Run 削除済みと見なす）
 
 ### Jobs Drawer (`src/components/layout/JobsDrawer.tsx`)
-- Status configs: uploading (cyan) · pending (yellow, 15%) · analyzing (blue, 60%) · ready-decimating (violet, 85%) · ready (green, 100%) · error (red, 100%)
+- Status configs: uploading (cyan) · pending (yellow, 15%) · analyzing (blue, 60%) · ready-decimating (violet, 85%) · generating (blue, 50%, striped) · ready (green, 100%) · error (red, 100%)
 - Per-job ✕ button for manual dismissal
 - `typeLabel`: `stl_analysis` → "STL Analysis" · `stl_transform` → "STL Transform" · `xml_generation` → "XML Generation"
 - Job name (upper) / type label (lower, dimmed) per row

@@ -57,6 +57,14 @@ const statusConfig = {
     striped: true,
     icon: <IconLoader size={14} />,
   },
+  generating: {
+    label: "Generating…",
+    color: "blue",
+    progressValue: 50,
+    animated: true,
+    striped: true,
+    icon: <IconLoader size={14} />,
+  },
   ready: {
     label: "Complete",
     color: "green",
