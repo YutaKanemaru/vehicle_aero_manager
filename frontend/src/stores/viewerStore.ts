@@ -203,7 +203,7 @@ export const useViewerStore = create<ViewerStore>((set, get) => ({
   overlaysAllVisible: true,
   setOverlaysAllVisible: (v) => set({ overlaysAllVisible: v }),
 
-  rhRefVisible: true,
+  rhRefVisible: false,
   setRhRefVisible: (v) => set({ rhRefVisible: v }),
 
   selectedPartName: null,
