@@ -112,6 +112,56 @@ def _apply_point_transform(
     return v[0].tolist()
 
 
+def transform_pca_axes_vertices(pca_axes: dict, transform_snapshot: dict) -> dict:
+    """Apply the ride-height/yaw transform to all vertex arrays in a pca_axes dict.
+
+    Instead of re-scanning the transformed STL, the original pca_axes (extracted from
+    the source assembly STLs) can be passed here and transformed via the same rigid-body
+    transform that was applied to the STL geometry:
+
+      1. Yaw  rotation about Z at yaw_center_xy
+      2. Pitch rotation about Y at rotation_pivot  (Rodrigues)
+      3. Z translation
+
+    For adjust_body_wheel_separately runs the body transform is applied to all parts
+    (rim axis direction is insensitive to pitch since the wheel axis is ~Y).
+
+    Args:
+        pca_axes: {"porous": {name: np.ndarray(N,3)}, "rim": {name: np.ndarray(N,3)}}
+        transform_snapshot: the transform_snapshot dict stored on the System record
+
+    Returns:
+        Same structure with vertex arrays moved to their post-transform positions.
+    """
+    t = transform_snapshot.get("transform", {})
+    yaw_angle_deg  = float(t.get("yaw_angle_deg", 0.0))
+    yaw_center_xy  = t.get("yaw_center_xy", [0.0, 0.0])
+    pitch_angle_deg = float(t.get("pitch_angle_deg", 0.0))
+    rotation_pivot  = t.get("rotation_pivot", [0.0, 0.0, 0.0])
+    translation     = t.get("translation", [0.0, 0.0, 0.0])
+
+    yaw_center_arr   = np.array(yaw_center_xy[:2], dtype=np.float64)
+    rotation_pivot_arr = np.array(rotation_pivot, dtype=np.float64)
+    translation_arr  = np.array(translation, dtype=np.float64)
+
+    def _apply(arr: "np.ndarray") -> "np.ndarray":
+        v = arr.astype(np.float64)
+        v = _rotate_z(v, yaw_angle_deg, yaw_center_arr)
+        v = _rodrigues_y(v, pitch_angle_deg, rotation_pivot_arr)
+        v = v + translation_arr
+        return v
+
+    porous_out: dict = {}
+    for name, verts in pca_axes.get("porous", {}).items():
+        porous_out[name] = _apply(verts)
+
+    rim_out: dict = {}
+    for name, verts in pca_axes.get("rim", {}).items():
+        rim_out[name] = _apply(verts)
+
+    return {"porous": porous_out, "rim": rim_out}
+
+
 def _calculate_pitch_angle(wheelbase: float, z_diff: float) -> float:
     """Return the signed pitch angle (degrees) for a wheelbase and front-rear Z difference.
 

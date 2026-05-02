@@ -1052,7 +1052,34 @@ def _generate_xml_task(run_id: str, geometry_only: bool = False) -> None:
 
         porous_patterns = [pc.part_name for pc in template_settings.porous_coefficients]
         rim_patterns = list(template_settings.target_names.rim)
-        pca_axes = extract_pca_axes(stl_paths, porous_patterns, rim_patterns)
+
+        if override_geom and (porous_patterns or rim_patterns):
+            # For transform runs: extract PCA from original (pre-transform) assembly STLs,
+            # then apply the same rigid-body transform to the vertex arrays.
+            # This avoids re-scanning the (large) transformed STL.
+            original_stl_paths: list[Path] = []
+            if assembly and assembly.geometries:
+                for geom in assembly.geometries:
+                    if geom.is_linked:
+                        original_stl_paths.append(Path(geom.file_path))
+                    else:
+                        original_stl_paths.append(settings.upload_dir / geom.file_path)
+            pca_axes_orig = extract_pca_axes(original_stl_paths, porous_patterns, rim_patterns)
+            # Fetch transform_snapshot from the System record
+            from app.models.system import System as _System
+            import json as _json2
+            _system = db.scalar(
+                select(_System).where(_System.result_geometry_id == run.geometry_override_id)
+            )
+            if _system and _system.transform_snapshot:
+                _snap = _json2.loads(_system.transform_snapshot) if isinstance(_system.transform_snapshot, str) else _system.transform_snapshot
+                from app.services.ride_height_service import transform_pca_axes_vertices
+                pca_axes = transform_pca_axes_vertices(pca_axes_orig, _snap)
+                logger.info("[xml_task] Used transformed original PCA axes for run %s", run_id)
+            else:
+                pca_axes = pca_axes_orig
+        else:
+            pca_axes = extract_pca_axes(stl_paths, porous_patterns, rim_patterns)
 
         deck = assemble_ufx_solver_deck(
             template_settings=template_settings,
