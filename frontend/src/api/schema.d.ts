@@ -950,6 +950,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cases/{case_id}/runs/{run_id}/download-belt-stl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Belt Stl
+         * @description Download the 5-belt STL file used for XML generation (rotating_belt_5 only).
+         */
+        get: operations["download_belt_stl_api_v1_cases__case_id__runs__run_id__download_belt_stl_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cases/{case_id}/runs/{run_id}/axes-glb": {
         parameters: {
             query?: never;
@@ -982,6 +1002,26 @@ export interface paths {
          * @description Return OverlayData for a ready Run — parsed from its generated XML.
          */
         get: operations["get_run_overlay_api_v1_cases__case_id__runs__run_id__overlay_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/runs/{run_id}/belt-glb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Belt Glb
+         * @description Return a GLB for the 5-belt STL of a Run (rotating_belt_5 ground mode).
+         */
+        get: operations["get_belt_glb_api_v1_cases__case_id__runs__run_id__belt_glb_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2357,6 +2397,24 @@ export interface components {
             window_avg_temperature: boolean;
         };
         /**
+         * OverlayAxisItem
+         * @description Rotation or flow-direction axis arrow for the 3-D viewer.
+         */
+        OverlayAxisItem: {
+            /** Name */
+            name: string;
+            /** Category */
+            category: string;
+            /** Center */
+            center: number[];
+            /** Direction */
+            direction: number[];
+            /** Length */
+            length: number;
+            /** Color */
+            color: string;
+        };
+        /**
          * OverlayBoxItem
          * @description Axis-aligned wireframe box (domain, refinement, porous, partial-volume).
          */
@@ -2437,6 +2495,11 @@ export interface components {
              */
             ground_z: number;
             ride_height_ref?: components["schemas"]["OverlayRideHeightRef"] | null;
+            /**
+             * Axes
+             * @default []
+             */
+            axes: components["schemas"]["OverlayAxisItem"][];
         };
         /**
          * OverlayDomainPartItem
@@ -6449,6 +6512,38 @@ export interface operations {
             };
         };
     };
+    download_belt_stl_api_v1_cases__case_id__runs__run_id__download_belt_stl_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_axes_glb_api_v1_cases__case_id__runs__run_id__axes_glb_get: {
         parameters: {
             query?: never;
@@ -6482,6 +6577,38 @@ export interface operations {
         };
     };
     get_run_overlay_api_v1_cases__case_id__runs__run_id__overlay_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_belt_glb_api_v1_cases__case_id__runs__run_id__belt_glb_get: {
         parameters: {
             query?: never;
             header?: never;

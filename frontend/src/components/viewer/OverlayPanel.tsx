@@ -1,4 +1,4 @@
-import { Tabs, Stack, Switch, Badge, Text, Group, Tooltip, Divider } from "@mantine/core";
+import { Tabs, Stack, Switch, Badge, Text, Group, Tooltip, Divider, ColorSwatch } from "@mantine/core";
 import { useViewerStore } from "../../stores/viewerStore";
 import type { OverlayData } from "../../api/preview";
 
@@ -321,7 +321,61 @@ function PointTab({ overlayData }: { overlayData: OverlayData }) {
     </Stack>
   );
 }
+// ─── Axis tab — Wheel rotation axes + Porous flow axes ───────────────────
 
+function AxisTab({ overlayData }: { overlayData: OverlayData }) {
+  const axes = overlayData.axes ?? [];
+  const wheelAxes = axes.filter((a) => a.category === "wheel");
+  const porousAxes = axes.filter((a) => a.category === "porous");
+  const allVisKeys = axes.map((a) => `axis_${a.name}`);
+
+  if (axes.length === 0) {
+    return <Text size="xs" c="dimmed">No axes available. Generate XML first.</Text>;
+  }
+
+  return (
+    <Stack gap="sm">
+      <TabMasterSwitch visKeys={allVisKeys} />
+
+      {wheelAxes.length > 0 && (
+        <>
+          <Text size="xs" fw={600} c="dimmed">Wheel Rotation Axes</Text>
+          {wheelAxes.map((ax) => (
+            <Group key={ax.name} gap="xs" wrap="nowrap" align="flex-start">
+              <ColorSwatch color={ax.color} size={12} mt={2} withShadow={false} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <OverlaySwitch
+                  label={ax.name}
+                  sub={`center (${ax.center[0].toFixed(3)}, ${ax.center[1].toFixed(3)}, ${ax.center[2].toFixed(3)}) m`}
+                  visKey={`axis_${ax.name}`}
+                />
+              </div>
+            </Group>
+          ))}
+        </>
+      )}
+
+      {porousAxes.length > 0 && (
+        <>
+          {wheelAxes.length > 0 && <Divider />}
+          <Text size="xs" fw={600} c="dimmed">Porous Flow Axes</Text>
+          {porousAxes.map((ax) => (
+            <Group key={ax.name} gap="xs" wrap="nowrap" align="flex-start">
+              <ColorSwatch color={ax.color} size={12} mt={2} withShadow={false} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <OverlaySwitch
+                  label={ax.name}
+                  sub={`center (${ax.center[0].toFixed(3)}, ${ax.center[1].toFixed(3)}, ${ax.center[2].toFixed(3)}) m`}
+                  visKey={`axis_${ax.name}`}
+                />
+              </div>
+            </Group>
+          ))}
+        </>
+      )}
+    </Stack>
+  );
+}
 // ─── Main export ─────────────────────────────────────────────────────────────
 
 export function OverlayPanel({ overlayData }: OverlayPanelProps) {
@@ -333,6 +387,8 @@ export function OverlayPanel({ overlayData }: OverlayPanelProps) {
     );
   }
 
+  const hasAxes = (overlayData.axes ?? []).length > 0;
+
   return (
     <Tabs defaultValue="box" variant="pills" radius="sm">
       <Tabs.List grow mb="xs">
@@ -340,6 +396,7 @@ export function OverlayPanel({ overlayData }: OverlayPanelProps) {
         <Tabs.Tab value="box" fz={10} p={4}>Box</Tabs.Tab>
         <Tabs.Tab value="plane" fz={10} p={4}>Plane</Tabs.Tab>
         <Tabs.Tab value="point" fz={10} p={4}>Point</Tabs.Tab>
+        {hasAxes && <Tabs.Tab value="axis" fz={10} p={4}>Axis</Tabs.Tab>}
       </Tabs.List>
 
       <div>
@@ -355,6 +412,11 @@ export function OverlayPanel({ overlayData }: OverlayPanelProps) {
         <Tabs.Panel value="point">
           <PointTab overlayData={overlayData} />
         </Tabs.Panel>
+        {hasAxes && (
+          <Tabs.Panel value="axis">
+            <AxisTab overlayData={overlayData} />
+          </Tabs.Panel>
+        )}
       </div>
     </Tabs>
   );

@@ -14,6 +14,7 @@ export type OverlayDomainPartItem = OverlayData["domain_parts"][number];
 export type OverlayProbeItem = OverlayData["probes"][number];
 export type OverlayPartsGroup = OverlayData["parts_groups"][number];
 export type OverlayRideHeightRef = NonNullable<OverlayData["ride_height_ref"]>;
+export type OverlayAxisItem = OverlayData["axes"][number];
 
 export const previewApi = {
   getOverlayData: (

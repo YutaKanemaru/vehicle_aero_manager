@@ -1,7 +1,7 @@
 import { useMemo, type ReactElement } from "react";
 import * as THREE from "three";
 import { useViewerStore } from "../../stores/viewerStore";
-import type { OverlayData } from "../../api/preview";
+import type { OverlayData, OverlayAxisItem } from "../../api/preview";
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -115,7 +115,20 @@ function FloorRect({
     </group>
   );
 }
+// ─── Arrow helper for wheel / porous axes ─────────────────────────────────────
 
+function AxisArrow({ item, dimmed }: { item: OverlayAxisItem; dimmed: boolean }) {
+  const arrow = useMemo(() => {
+    const dir = new THREE.Vector3(...(item.direction as [number, number, number])).normalize();
+    const origin = new THREE.Vector3(...(item.center as [number, number, number]));
+    const len = item.length;
+    const color = new THREE.Color(item.color);
+    const a = new THREE.ArrowHelper(dir, origin, len, color, len * 0.25, len * 0.1);
+    return a;
+  }, [item.direction, item.center, item.length, item.color]);
+
+  return <primitive object={arrow} opacity={dimmed ? 0.2 : 1.0} />;
+}
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
@@ -282,6 +295,14 @@ export function OverlayObjects({ overlayData }: OverlayObjectsProps) {
         </mesh>,
       );
     }
+  }
+
+  // ── Axis arrows (wheel rotation axes + porous flow axes) ──────────────
+  for (const ax of overlayData.axes ?? []) {
+    if (!vis(`axis_${ax.name}`)) continue;
+    nodes.push(
+      <AxisArrow key={`axis_${ax.name}`} item={ax} dimmed={rhRefActive} />,
+    );
   }
 
   // ── Ride height reference spheres (front=red, rear=blue) ───────────────

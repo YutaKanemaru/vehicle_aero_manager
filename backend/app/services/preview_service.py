@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.geometry import GeometryAssembly
 from app.models.template import Template
 from app.schemas.overlay import (
+    OverlayAxisItem,
     OverlayBoxItem,
     OverlayData,
     OverlayDomainPartItem,
@@ -332,6 +333,100 @@ def extract_overlay_data(
                 reference_parts=list(rh.reference_parts),
             )
 
+    # ── Axis items (wheel rotation axes + porous flow axes) ─────────────
+    axes: list[OverlayAxisItem] = []
+
+    # Wheel corner colour map (name substring → hex)
+    _WHEEL_COLORS: dict[str, str] = {
+        "fr_lh": "#ff4444",
+        "fr_rh": "#4488ff",
+        "rr_lh": "#ff9944",
+        "rr_rh": "#44cc44",
+    }
+    _DEFAULT_WHEEL_COLOR = "#ffaa00"
+    _DEFAULT_WHEEL_LENGTH = 0.35
+
+    part_info_map: dict = (analysis_result or {}).get("part_info", {})
+
+    for wall in deck.boundary_conditions.wall:
+        bc = wall.fluid_bc_settings
+        if bc.type != "rotating":
+            continue
+        # Determine corner colour
+        name_lower = wall.name.lower()
+        color = _DEFAULT_WHEEL_COLOR
+        for corner, col in _WHEEL_COLORS.items():
+            if corner in name_lower:
+                color = col
+                break
+        # Arrow length from part bbox y-span (wheel radius approximation)
+        length = _DEFAULT_WHEEL_LENGTH
+        for part_name in wall.parts:
+            pi = part_info_map.get(part_name)
+            if pi and "bbox" in pi:
+                bb = pi["bbox"]
+                try:
+                    length = (bb["y_max"] - bb["y_min"]) / 2.0
+                    if length <= 0:
+                        length = _DEFAULT_WHEEL_LENGTH
+                except (KeyError, TypeError):
+                    pass
+                break
+        # Normalize direction
+        ax = bc.axis
+        mag = (ax.x_dir ** 2 + ax.y_dir ** 2 + ax.z_dir ** 2) ** 0.5
+        if mag < 1e-9:
+            continue
+        axes.append(OverlayAxisItem(
+            name=wall.name,
+            category="wheel",
+            center=[bc.center.x_pos, bc.center.y_pos, bc.center.z_pos],
+            direction=[ax.x_dir / mag, ax.y_dir / mag, ax.z_dir / mag],
+            length=length,
+            color=color,
+        ))
+
+    for por in deck.sources.porous:
+        pa = por.porous_axis
+        mag = (pa.x_dir ** 2 + pa.y_dir ** 2 + pa.z_dir ** 2) ** 0.5
+        if mag < 1e-9:
+            continue
+        # Center = centroid of first matched part in analysis_result
+        center: list[float] = [0.0, 0.0, 0.0]
+        length = 0.5
+        for part_name in por.parts:
+            pi = part_info_map.get(part_name)
+            if pi is None:
+                # try glob-style match
+                for k, v in part_info_map.items():
+                    if _matches_pattern(k, part_name):
+                        pi = v
+                        break
+            if pi and "centroid" in pi:
+                center = list(pi["centroid"])
+                if "bbox" in pi:
+                    bb = pi["bbox"]
+                    try:
+                        spans = [
+                            bb["x_max"] - bb["x_min"],
+                            bb["y_max"] - bb["y_min"],
+                            bb["z_max"] - bb["z_min"],
+                        ]
+                        length = max(spans) * 0.5
+                        if length <= 0:
+                            length = 0.5
+                    except (KeyError, TypeError):
+                        pass
+                break
+        axes.append(OverlayAxisItem(
+            name=por.name,
+            category="porous",
+            center=center,
+            direction=[pa.x_dir / mag, pa.y_dir / mag, pa.z_dir / mag],
+            length=length,
+            color="#aa44ff",
+        ))
+
     return OverlayData(
         domain_box=domain_box,
         refinement_boxes=refinement_boxes,
@@ -344,6 +439,7 @@ def extract_overlay_data(
         parts_groups=parts_groups,
         ground_z=ground_z,
         ride_height_ref=ride_height_ref,
+        axes=axes,
     )
 
 
@@ -450,4 +546,8 @@ def compute_overlay_data(
     deck = parse_ufx(cache_path.read_bytes())
 
     # 5. Extract overlay data (pass target_names for accurate wheel axis detection)
-    return extract_overlay_data(deck, template_settings, all_part_names, analysis_result=merged, target_names=template_settings.target_names)
+    overlay = extract_overlay_data(deck, template_settings, all_part_names, analysis_result=merged, target_names=template_settings.target_names)
+    # Template Builder has no real XML (pca_axes=None) — axis data would be
+    # inaccurate, so hide the Axis tab by returning an empty list.
+    overlay.axes = []
+    return overlay

@@ -70,6 +70,16 @@ class OverlayPartsGroup(BaseModel):
     matched_parts: list[str]
 
 
+class OverlayAxisItem(BaseModel):
+    """Rotation or flow-direction axis arrow for the 3-D viewer."""
+    name: str
+    category: str                 # "wheel" | "porous"
+    center: list[float]           # [x, y, z] — arrow origin (m)
+    direction: list[float]        # [x, y, z] — unit vector
+    length: float                 # arrow length (m)
+    color: str                    # hex color
+
+
 class OverlayData(BaseModel):
     """Complete overlay payload for the 3-D viewer."""
     domain_box: OverlayBoxItem | None = None
@@ -83,3 +93,4 @@ class OverlayData(BaseModel):
     parts_groups: list[OverlayPartsGroup] = []
     ground_z: float = 0.0
     ride_height_ref: OverlayRideHeightRef | None = None
+    axes: list[OverlayAxisItem] = []
