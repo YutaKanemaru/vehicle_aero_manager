@@ -977,14 +977,14 @@ def _generate_xml_task(run_id: str, geometry_only: bool = False) -> None:
 
         source_file: str | None = None
         source_files: list[str] = []
+        from app.utils.filename import safe_filename as _safe_fn
+        _stl_name = f"{_safe_fn(run.name)}.stl"
         if override_geom:
-            # "input.stl" matches the filename served by GET /download-stl
-            source_file = "input.stl"
+            source_file = _stl_name
         elif assembly and assembly.geometries:
             geom_names = [g.original_filename for g in assembly.geometries]
             if len(geom_names) == 1:
-                # "input.stl" matches the filename served by GET /download-stl
-                source_file = "input.stl"
+                source_file = _stl_name
             else:
                 source_files = geom_names
 
@@ -1033,7 +1033,7 @@ def _generate_xml_task(run_id: str, geometry_only: bool = False) -> None:
                 xml_path = out_dir / "output.xml"
                 xml_path.write_bytes(geom_only_bytes)
                 if stl_paths:
-                    stl_dst = out_dir / "input.stl"
+                    stl_dst = out_dir / _stl_name
                     shutil.copy2(str(stl_paths[0]), str(stl_dst))
                     run.stl_path = str(stl_dst)
                 run.xml_path = str(xml_path)
@@ -1095,7 +1095,7 @@ def _generate_xml_task(run_id: str, geometry_only: bool = False) -> None:
         run.xml_path = str(xml_path)
         # Copy first STL into the run directory for later download
         if stl_paths:
-            stl_dst = out_dir / "input.stl"
+            stl_dst = out_dir / _stl_name
             shutil.copy2(str(stl_paths[0]), str(stl_dst))
             run.stl_path = str(stl_dst)
         # Copy belt STL into the run output directory

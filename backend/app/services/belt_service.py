@@ -338,16 +338,11 @@ def generate_belt5_for_run(
         target_names=template_settings.target_names,
     )
 
-    # Determine output filename
-    # Use first geometry's original filename as base
-    base_name = "geometry"
-    if assembly and assembly.geometries:
-        first_geom = assembly.geometries[0]
-        base_name = Path(first_geom.original_filename or first_geom.name).stem
-
+    # Determine output filename — use run name for consistency with download endpoints
+    from app.utils.filename import safe_filename as _safe_fn
+    belt_filename = f"{_safe_fn(run.name)}_5belts.stl"
     out_dir = settings.runs_dir / run.id
     out_dir.mkdir(parents=True, exist_ok=True)
-    belt_filename = f"{base_name}_5belts.stl"
     belt_path = out_dir / belt_filename
     belt_path.write_text(stl_content, encoding="utf-8")
 
