@@ -120,6 +120,7 @@ export type JobStatus = "uploading" | "pending" | "analyzing" | "ready-decimatin
 **Actions**: `addJob(id, name, type, extra?)` · `updateJob` · `updateUploadProgress` · `removeJob` · `clearCompleted`
 
 `Job` has optional `caseId?: string` field — set for `xml_generation` jobs so the poller can call `GET /cases/{caseId}/runs/{id}`.
+`extra` also accepts `initialStatus?: JobStatus` to skip the default `"uploading"` initial state (used by `xml_generation` to start directly at `"generating"`).
 
 **Upload Flow**:
 1. `addJob(tempId, ...)` → job appears as "Uploading…"
@@ -132,7 +133,7 @@ export type JobStatus = "uploading" | "pending" | "analyzing" | "ready-decimatin
 Polls every 3 seconds while any `pending`/`analyzing`/`ready-decimating`/`generating` jobs exist:
 - **`stl_analysis` jobs**: `GET /geometries/` (list) でまとめて更新。リストに存在しなければ `removeJob`
 - **`stl_transform` jobs**: `GET /geometries/{id}` で個別取得 (transform geometry は list から除外されているため)。エラー時は `removeJob`（削除済みと見なす）
-- **`xml_generation` jobs**: `GET /cases/{caseId}/runs/{runId}` で個別取得。`run.status === "ready" | "error"` でジョブ終了。エラー時は `removeJob`（Run 削除済みと見なす）
+- **`xml_generation` jobs**: `GET /cases/{caseId}/runs/{runId}` で個別取得。`run.status === "ready" | "error"` でジョブ終了。終了時に `queryClient.invalidateQueries(["runs", caseId])` も呼び出すことで CaseDetailPage の Run 一覧を即時更新。エラー時は `removeJob`（Run 削除済みと見なす）
 
 ### Jobs Drawer (`src/components/layout/JobsDrawer.tsx`)
 - Status configs: uploading (cyan) · pending (yellow, 15%) · analyzing (blue, 60%) · ready-decimating (violet, 85%) · generating (blue, 50%, striped) · ready (green, 100%) · error (red, 100%)

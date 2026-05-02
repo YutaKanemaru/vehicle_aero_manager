@@ -245,9 +245,9 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
 - Jobs Drawer shows `stl_transform` type label as "STL Transform" (vs `stl_analysis` → "STL Analysis" for uploads)
 
 ### XML Generation Jobs (`src/stores/jobs.ts`)
-- `POST /generate` success → `addJob(run.id, run.name, "xml_generation", { caseId })` + `updateJob(run.id, "generating")`
+- `POST /generate` success → `addJob(run.id, run.name, "xml_generation", { caseId, initialStatus: "generating" })` — job registers directly with `"generating"` status (no separate `updateJob` call needed)
 - `generateAllMutation` uses `Promise.allSettled` — registers a separate `xml_generation` job for each fulfilled run
-- `useJobsPoller` polls `GET /cases/{caseId}/runs/{runId}` every 3 seconds until `status === "ready" | "error"`
+- `useJobsPoller` polls `GET /cases/{caseId}/runs/{runId}` every 3 seconds until `status === "ready" | "error"`; on completion calls `queryClient.invalidateQueries(["runs", caseId])` to refresh CaseDetailPage run list immediately
 - Job stores `caseId` on the `Job` object so AppLayout-level poller can poll without page context
 - Jobs Drawer shows `xml_generation` type label as "XML Generation"
 - Jobs persist to `localStorage` (24-hour TTL) — survive browser refresh
