@@ -627,6 +627,10 @@ def list_runs(db: Session, case_id: str) -> list[Run]:
     )
 
 
+def get_run(db: Session, case_id: str, run_id: str) -> Run:
+    return _get_run_or_404(db, case_id, run_id)
+
+
 def create_run(db: Session, case_id: str, data: RunCreate, current_user: User) -> Run:
     case = _get_case_or_404(db, case_id)
     # Validate that condition belongs to this case's map

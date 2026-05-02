@@ -319,6 +319,17 @@ def list_runs(
     return [configuration_service.enrich_run_response(db, r) for r in runs]
 
 
+@router.get("/cases/{case_id}/runs/{run_id}", response_model=RunResponse)
+def get_run(
+    case_id: str,
+    run_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    run = configuration_service.get_run(db, case_id, run_id)
+    return configuration_service.enrich_run_response(db, run)
+
+
 @router.post("/cases/{case_id}/runs/", response_model=RunResponse, status_code=201)
 def create_run(
     case_id: str,

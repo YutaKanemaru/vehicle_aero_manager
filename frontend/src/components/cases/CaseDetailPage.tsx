@@ -349,9 +349,11 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
   const generateMutation = useMutation({
     mutationFn: ({ runId, gOnly }: { runId: string; gOnly: boolean }) =>
       runsApi.generate(caseData.id, runId, gOnly),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
       notifications.show({ message: "XML generation started", color: "blue" });
+      addJob(result.id, result.name, "xml_generation", { caseId: caseData.id });
+      updateJob(result.id, "generating");
     },
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
@@ -361,13 +363,31 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
       const generatableRuns = runs.filter(
         (r) => (r.status === "pending" || r.status === "error") && (!r.needs_transform || r.transform_applied)
       );
-      for (const run of generatableRuns) {
-        await runsApi.generate(caseData.id, run.id, false);
-      }
+      const results = await Promise.allSettled(
+        generatableRuns.map((run) => runsApi.generate(caseData.id, run.id, false))
+      );
+      return { results, runs: generatableRuns };
     },
-    onSuccess: () => {
+    onSuccess: ({ results, runs: generatedRuns }) => {
       queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
-      notifications.show({ message: "XML generation started for all pending runs", color: "blue" });
+      let successCount = 0;
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") {
+          successCount++;
+          const result = r.value;
+          addJob(result.id, result.name, "xml_generation", { caseId: caseData.id });
+          updateJob(result.id, "generating");
+        } else {
+          const run = generatedRuns[i];
+          notifications.show({
+            message: `XML generation failed for run "${run.name}": ${r.reason?.message ?? r.reason}`,
+            color: "red",
+          });
+        }
+      });
+      if (successCount > 0) {
+        notifications.show({ message: `XML generation started for ${successCount} run(s)`, color: "blue" });
+      }
     },
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });

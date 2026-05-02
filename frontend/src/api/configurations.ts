@@ -160,8 +160,11 @@ export const runsApi = {
   update: (caseId: string, runId: string, data: RunUpdate): Promise<RunResponse> =>
     client.patch(`/cases/${caseId}/runs/${runId}`, data),
 
+  get: (caseId: string, runId: string): Promise<RunResponse> =>
+    client.get(`/cases/${caseId}/runs/${runId}`),
+
   generate: (caseId: string, runId: string, geometryOnly = false): Promise<RunResponse> =>
-    client.post(`/cases/${caseId}/runs/${runId}/generate?geometry_only=${geometryOnly}`, {}),
+    client.post(`/cases/${caseId}/runs/${runId}/generate?geometry_only=${geometryOnly}`, {}),  
 
   delete: (caseId: string, runId: string): Promise<void> =>
     client.delete(`/cases/${caseId}/runs/${runId}`),

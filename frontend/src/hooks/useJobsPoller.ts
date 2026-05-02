@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useInterval } from "@mantine/hooks";
 import { geometriesApi } from "../api/geometries";
+import { runsApi } from "../api/configurations";
 import { useJobsStore, type JobStatus } from "../stores/jobs";
 
 /**
@@ -16,19 +17,20 @@ export function useJobsPoller() {
   const removeJob = useJobsStore((s) => s.removeJob);
   const prevHasActive = useRef(false);
 
-  // Only poll when there are pending/analyzing/ready-decimating jobs (uploading is handled by XHR callbacks)
+  // Only poll when there are pending/analyzing/ready-decimating/generating jobs (uploading is handled by XHR callbacks)
   const hasActive = jobs.some(
-    (j) => j.status === "pending" || j.status === "analyzing" || j.status === "ready-decimating"
+    (j) => j.status === "pending" || j.status === "analyzing" || j.status === "ready-decimating" || j.status === "generating"
   );
 
   const interval = useInterval(async () => {
     const activeJobs = jobs.filter(
-      (j) => j.status === "pending" || j.status === "analyzing" || j.status === "ready-decimating"
+      (j) => j.status === "pending" || j.status === "analyzing" || j.status === "ready-decimating" || j.status === "generating"
     );
     if (activeJobs.length === 0) return;
 
     const analysisJobs = activeJobs.filter((j) => j.type === "stl_analysis");
     const transformJobs = activeJobs.filter((j) => j.type === "stl_transform");
+    const xmlJobs = activeJobs.filter((j) => j.type === "xml_generation");
 
     // ── stl_analysis: list API でまとめて更新 ──────────────────────────────
     if (analysisJobs.length > 0) {
@@ -64,6 +66,26 @@ export function useJobsPoller() {
             updateJob(g.id, g.status as JobStatus, g.error_message);
           } catch {
             // Geometry not found (deleted via reset/delete) → remove job from Drawer
+            removeJob(job.id);
+          }
+        })
+      );
+    }
+
+    // ── xml_generation: Run status ポーリング ────────────────────────────
+    if (xmlJobs.length > 0) {
+      await Promise.allSettled(
+        xmlJobs.map(async (job) => {
+          if (!job.caseId) return;
+          try {
+            const run = await runsApi.get(job.caseId, job.id);
+            // Map run status → job status
+            if (run.status === "ready" || run.status === "error") {
+              updateJob(run.id, run.status as JobStatus, run.error_message ?? null);
+            }
+            // "generating" stays as-is — keep polling
+          } catch {
+            // Run deleted → remove from Drawer
             removeJob(job.id);
           }
         })
