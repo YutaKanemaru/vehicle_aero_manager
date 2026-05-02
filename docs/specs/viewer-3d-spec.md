@@ -59,6 +59,7 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 | `GET` | `/geometries/{id}/glb?ratio=` | Decimated GLB (cache or generate); `ratio` optional — defaults to `geometry.decimation_ratio` if omitted |
 | `GET` | `/preview/overlay` | OverlayData for Template × Assembly |
 | `GET` | `/cases/{id}/runs/{rid}/axes-glb` | On-demand axes GLB |
+| `GET` | `/cases/{id}/runs/{rid}/belt-glb` | On-demand belt STL → GLB (no decimation); 404 if `belt_stl_path` not set |
 | `GET` | `/cases/{id}/runs/{rid}/overlay` | OverlayData from generated XML |
 
 ### Decimation Pipeline
@@ -95,7 +96,8 @@ rhRefVisible: boolean               // default false — ride height reference p
 ### Key Frontend Components
 
 **`SceneCanvas.tsx`**
-- Props: `geometries: GeometryResponse[]`, `overlayData?: OverlayData | null`, `vehicleBbox?`. **No `ratio` prop** — GLB is fetched with `getGlbBlobUrl(g.id, g.decimation_ratio)` per geometry
+- Props: `geometries: GeometryResponse[]`, `overlayData?: OverlayData | null`, `vehicleBbox?`, `axesGlbUrl?: string | null`, `landmarksGlbUrl?: string | null`, `beltGlbUrl?: string | null`. **No `ratio` prop** — GLB is fetched with `getGlbBlobUrl(g.id, g.decimation_ratio)` per geometry
+- `beltGlbUrl` renders the belt STL (when available on a Run) via `<AxesGLBModel>` inside the Canvas Suspense block
 - `<GLBModel>`: 3 separate `useEffect` hooks for flatShading, partStates, and glbLoaded detection
 - `<CameraFitter>`: fires after `glbLoaded=true`; iso position `center + maxDim×1.2`
 - `<CameraPresetController>`: `useFrame` + `getState()` — fires every frame for immediate response
@@ -122,6 +124,13 @@ rhRefVisible: boolean               // default false — ride height reference p
 - Per-part row: click name → `setSelectedPartName`; `IconFocusCentered` → `setFitToTarget`; eye toggle; `ColorSwatch` (96 swatches); opacity Popover
 - Toolbar: Toggle all filtered · Show Only · Invert · Show all
 - Search bar + `SegmentedControl` (Include / Exclude)
+
+**`RunViewer.tsx`** (embedded in `CaseDetailPage`, Runs tab)
+- Fetches overlay data via `GET /cases/{id}/runs/{rid}/overlay` → `OverlayData`
+- Fetches belt GLB via `GET /cases/{id}/runs/{rid}/belt-glb` when `run.belt_stl_path` is set; passes `beltGlbUrl` to `SceneCanvas`
+- Fetches axes GLB via `GET /cases/{id}/runs/{rid}/axes-glb` when run is ready; passes `axesGlbUrl` to `SceneCanvas`
+- Inline toolbar (top-right of canvas): Persp/Ortho toggle, Flat shading, Edges, Show Overlay, Show RH Ref (conditional on `overlayData?.ride_height_ref`)
+- Also renders `<OverlayPanel>` below the canvas and `<OverlayObjects>` inside the canvas
 
 **`TemplateBuilderPage.tsx`** (route: `/template-builder`)
 - 3-column layout: 275px ControlPanel | 255px PartListPanel | flex-1 SceneCanvas

@@ -127,6 +127,7 @@ Handles 5-belt STL generation for the `rotating_belt_5` ground mode.
 | `GET` | `/cases/{id}/runs/{rid}/download` | Download generated XML |
 | `GET` | `/cases/{id}/runs/{rid}/download-stl` | Download input STL |
 | `GET` | `/cases/{id}/runs/{rid}/axes-glb` | On-demand axis-visualisation GLB |
+| `GET` | `/cases/{id}/runs/{rid}/belt-glb` | On-demand belt STL → GLB (no decimation); 404 if `belt_stl_path` not set |
 | `GET` | `/cases/{id}/runs/{rid}/overlay` | OverlayData from generated XML |
 | `POST` | `/cases/{id}/duplicate` | Duplicate Case; sets `parent_case_id` |
 | `GET` | `/runs/diff?a={rid}&b={rid}` | Diff two runs' settings |
