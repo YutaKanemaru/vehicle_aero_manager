@@ -139,7 +139,9 @@ rhRefVisible: boolean               // default false — ride height reference p
 **`PartListPanel.tsx`**
 - Per-part row: click name → `setSelectedPartName`; `IconFocusCentered` → `setFitToTarget`; eye toggle; `ColorSwatch` (96 swatches); opacity Popover
 - Toolbar: Toggle all filtered · Show Only · Invert · Show all
-- Search bar + `SegmentedControl` (Include / Exclude)
+- Search bar + `SegmentedControl` (Include / Exclude); `matchesPattern()` matching rules:
+  - No `*` → **substring match** (case-insensitive) — `"wheel"` matches `_wheel`, `wheels_body`, `front_wheels_lh`
+  - With `*` → glob: `Body_*` = startsWith, `*_Body` = endsWith, `*_Body_*` = contains
 
 **`RunViewer.tsx`** (embedded in `CaseDetailPage`, Runs tab)
 - Fetches overlay data via `GET /cases/{id}/runs/{rid}/overlay` → `OverlayData`
