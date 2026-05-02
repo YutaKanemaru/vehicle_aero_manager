@@ -69,7 +69,7 @@ Key functions:
 - `delete_run()`: calls `_cleanup_run_transform()`; then deletes Run + output directory
 - `reset_run()`: deletes run output dir; calls `_cleanup_run_transform()` + clears `geometry_override_id`; sets `status="pending"`, clears `xml_path`/`stl_path`/`belt_stl_path`/`error_message`
 - `trigger_xml_generation()`: **guarded** — HTTP 400 when `ride_height.enabled || yaw_angle != 0` but `geometry_override_id` not set or geometry not `ready`
-- `transform_run()`: derives params from Run's Condition + Case; calls `ride_height_service.compute_transform()` + `create_system_and_geometry()`; **calls `db.commit()` internally**; **returns within milliseconds**
+- `transform_run()`: derives params from Run's Condition + Case; calls `ride_height_service.compute_transform(target_names=template_settings.target_names)` + `create_system_and_geometry()`; **calls `db.commit()` internally**; **returns within milliseconds**
   - Override Geometry files are written to `data/transformed/{id}/` (not `data/uploads/`) and stored with **absolute `file_path`**; excluded from `GET /geometries/` list
   - ⚠️ `transform_snapshot["verification"]["front_wheel_z_actual"]` is **absolute Z coordinate**, not ride height. RH = `actual_z − vehicle_bbox_z_min`
   - If `belt_stl_path` is set and `yaw_angle != 0`, applies Z-axis yaw rotation to the belt STL file in-place via `belt_service.rotate_belt_stl_yaw()`
@@ -93,7 +93,7 @@ Handles 5-belt STL generation for the `rotating_belt_5` ground mode.
 - `sync_runs_for_map()`: re-links kept runs, creates new pending runs, deletes orphan pending runs, preserves generated orphans
 - `compute_sync_preview()`: previews keep/add/orphan by `(name, inflow_velocity, yaw_angle)` matching
 - `get_axes_glb()`: Run → Condition → Assembly → `viewer_service.build_axes_glb()`
-- `get_run_overlay()`: `parse_ufx(xml_path)` → `extract_overlay_data()`
+- `get_run_overlay()`: `parse_ufx(xml_path)` → `extract_overlay_data(deck, template_settings, all_part_names, analysis_result=merged, target_names=template_settings.target_names)` — passes merged geometry analysis so wheel-axis Z/X coords are populated correctly
 
 ## API Endpoints (`app/api/v1/configurations.py`)
 

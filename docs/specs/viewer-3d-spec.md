@@ -41,8 +41,14 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 
 ### `preview_service.py`
 
-- `extract_overlay_data(deck: UfxSolverDeck, template_settings, all_part_names) -> OverlayData` — absolute coords; **reusable** for Case Viewer via `parse_ufx(xml_path)`
-- `compute_overlay_data(db, template_id, assembly_id) -> OverlayData` — loads from DB, calls `assemble_ufx_solver_deck()` in memory, then `extract_overlay_data()`
+- `extract_overlay_data(deck, template_settings, all_part_names, analysis_result=None, target_names=None) -> OverlayData` — converts assembled solver deck to absolute-coordinate viewer primitives. `target_names` enables `classify_wheels()`-based RH reference point detection (most accurate); falls back to `extract_wheel_reference_z()` when `None`.
+- `compute_overlay_data(db, template_id, assembly_id) -> OverlayData` — XML cache-through pipeline:
+  1. Assemble solver deck via `assemble_ufx_solver_deck()`
+  2. Serialise to `preview_cache_dir/{version_id}_{assembly_id}.xml` via `serialize_ufx()` (skip if cached)
+  3. Parse back via `parse_ufx()` — ensures overlay is derived from identical XML structure as real generation
+  4. Call `extract_overlay_data(..., analysis_result=merged, target_names=template_settings.target_names)`
+- `invalidate_preview_cache(version_id)` — deletes all `{version_id}_*.xml` files from `preview_cache_dir`; called by `template_service.update_version_settings()` on every in-place settings save
+- Cache path helper: `_preview_cache_path(version_id, assembly_id)` → `preview_cache_dir/{version_id}_{assembly_id}.xml`
 
 ### `app/schemas/overlay.py`
 
