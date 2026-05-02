@@ -118,16 +118,50 @@ function FloorRect({
 // ─── Arrow helper for wheel / porous axes ─────────────────────────────────────
 
 function AxisArrow({ item, dimmed }: { item: OverlayAxisItem; dimmed: boolean }) {
-  const arrow = useMemo(() => {
+  const { shaftGeo, coneGeo, rotation, shaftPos, conePos } = useMemo(() => {
     const dir = new THREE.Vector3(...(item.direction as [number, number, number])).normalize();
-    const origin = new THREE.Vector3(...(item.center as [number, number, number]));
-    const len = item.length;
-    const color = new THREE.Color(item.color);
-    const a = new THREE.ArrowHelper(dir, origin, len, color, len * 0.25, len * 0.1);
-    return a;
-  }, [item.direction, item.center, item.length, item.color]);
+    const len = item.length * 2;          // 2× length
+    const shaftR = len * 0.03;            // shaft radius (3× the former line-based 0.01)
+    const headLen = len * 0.25;
+    const headR = shaftR * 3;             // cone base radius (3× shaft)
+    const shaftLen = len - headLen;
 
-  return <primitive object={arrow} opacity={dimmed ? 0.2 : 1.0} />;
+    // Quaternion to rotate Y-axis cylinder to face `dir`
+    const yAxis = new THREE.Vector3(0, 1, 0);
+    const quat = new THREE.Quaternion().setFromUnitVectors(yAxis, dir);
+    const euler = new THREE.Euler().setFromQuaternion(quat);
+
+    const origin = new THREE.Vector3(...(item.center as [number, number, number]));
+
+    // Shaft center sits at origin + dir * shaftLen/2
+    const shaftCenter = origin.clone().addScaledVector(dir, shaftLen / 2);
+    // Cone center sits at origin + dir * (shaftLen + headLen/2)
+    const coneCenter = origin.clone().addScaledVector(dir, shaftLen + headLen / 2);
+
+    return {
+      shaftGeo: [shaftR, shaftR, shaftLen, 8] as [number, number, number, number],
+      coneGeo:  [headR, 0, headLen, 8]       as [number, number, number, number],
+      rotation: euler,
+      shaftPos: shaftCenter.toArray() as [number, number, number],
+      conePos:  coneCenter.toArray()  as [number, number, number],
+    };
+  }, [item.direction, item.center, item.length]);
+
+  const color = item.color;
+  const opacity = dimmed ? 0.25 : 1.0;
+
+  return (
+    <group>
+      <mesh position={shaftPos} rotation={rotation}>
+        <cylinderGeometry args={shaftGeo} />
+        <meshStandardMaterial color={color} transparent={dimmed} opacity={opacity} />
+      </mesh>
+      <mesh position={conePos} rotation={rotation}>
+        <coneGeometry args={coneGeo} />
+        <meshStandardMaterial color={color} transparent={dimmed} opacity={opacity} />
+      </mesh>
+    </group>
+  );
 }
 // ─── Main component ──────────────────────────────────────────────────────────
 

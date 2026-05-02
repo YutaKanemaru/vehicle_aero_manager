@@ -346,7 +346,7 @@ function AxisTab({ overlayData }: { overlayData: OverlayData }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <OverlaySwitch
                   label={ax.name}
-                  sub={`center (${ax.center[0].toFixed(3)}, ${ax.center[1].toFixed(3)}, ${ax.center[2].toFixed(3)}) m`}
+                  sub={`center (${ax.center[0].toFixed(3)}, ${ax.center[1].toFixed(3)}, ${ax.center[2].toFixed(3)}) m  |  axis [${ax.direction[0].toFixed(3)}, ${ax.direction[1].toFixed(3)}, ${ax.direction[2].toFixed(3)}]`}
                   visKey={`axis_${ax.name}`}
                 />
               </div>
@@ -365,7 +365,7 @@ function AxisTab({ overlayData }: { overlayData: OverlayData }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <OverlaySwitch
                   label={ax.name}
-                  sub={`center (${ax.center[0].toFixed(3)}, ${ax.center[1].toFixed(3)}, ${ax.center[2].toFixed(3)}) m`}
+                  sub={`center (${ax.center[0].toFixed(3)}, ${ax.center[1].toFixed(3)}, ${ax.center[2].toFixed(3)}) m  |  axis [${ax.direction[0].toFixed(3)}, ${ax.direction[1].toFixed(3)}, ${ax.direction[2].toFixed(3)}]`}
                   visKey={`axis_${ax.name}`}
                 />
               </div>
