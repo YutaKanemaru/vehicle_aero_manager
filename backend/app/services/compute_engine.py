@@ -1243,29 +1243,6 @@ def assemble_ufx_solver_deck(
         if belt_stl_path:
             belt_dpis = []
 
-    elif is_aero and gc.ground_mode == "rotating_belt_1" and moving_ground:
-        wall_instances.append(WallInstance(
-            name="Belt",
-            parts=["Belt"],
-            fluid_bc_settings=FluidBCMoving(
-                type="moving",
-                velocity=XYZDir(x_dir=vx, y_dir=vy, z_dir=0.0),
-            ),
-        ))
-        if no_slip_xmin is not None and vbbox:
-            b1 = gc.belt1
-            belt_dpis = [DomainPartInstance(
-                name="Belt",
-                location="z_min",
-                export_mesh=True,
-                bounding_range=BoundingRange(
-                    x_min=no_slip_xmin,
-                    x_max=vbbox["x_max"],
-                    y_min=-b1.belt_size.y / 2,
-                    y_max=b1.belt_size.y / 2,
-                ),
-            )]
-
     # 地面 wall BC
     if is_aero and gc.ground_mode == "full_moving":
         # full_moving: ドメイン床面全体を moving にする
