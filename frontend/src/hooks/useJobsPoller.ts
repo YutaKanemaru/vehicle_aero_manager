@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useInterval } from "@mantine/hooks";
+import { useQueryClient } from "@tanstack/react-query";
 import { geometriesApi } from "../api/geometries";
 import { runsApi } from "../api/configurations";
 import { useJobsStore, type JobStatus } from "../stores/jobs";
@@ -15,6 +16,7 @@ export function useJobsPoller() {
   const jobs = useJobsStore((s) => s.jobs);
   const updateJob = useJobsStore((s) => s.updateJob);
   const removeJob = useJobsStore((s) => s.removeJob);
+  const queryClient = useQueryClient();
   const prevHasActive = useRef(false);
 
   // Only poll when there are pending/analyzing/ready-decimating/generating jobs (uploading is handled by XHR callbacks)
@@ -82,6 +84,7 @@ export function useJobsPoller() {
             // Map run status → job status
             if (run.status === "ready" || run.status === "error") {
               updateJob(run.id, run.status as JobStatus, run.error_message ?? null);
+              queryClient.invalidateQueries({ queryKey: ["runs", job.caseId] });
             }
             // "generating" stays as-is — keep polling
           } catch {
