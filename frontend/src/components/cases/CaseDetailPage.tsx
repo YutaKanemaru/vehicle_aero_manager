@@ -352,8 +352,7 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["runs", caseData.id] });
       notifications.show({ message: "XML generation started", color: "blue" });
-      addJob(result.id, result.name, "xml_generation", { caseId: caseData.id });
-      updateJob(result.id, "generating");
+      addJob(result.id, result.name, "xml_generation", { caseId: caseData.id, initialStatus: "generating" });
     },
     onError: (e: Error) => notifications.show({ message: e.message, color: "red" }),
   });
@@ -375,8 +374,7 @@ function RunsViewerTab({ caseData }: { caseData: CaseResponse }) {
         if (r.status === "fulfilled") {
           successCount++;
           const result = r.value;
-          addJob(result.id, result.name, "xml_generation", { caseId: caseData.id });
-          updateJob(result.id, "generating");
+          addJob(result.id, result.name, "xml_generation", { caseId: caseData.id, initialStatus: "generating" });
         } else {
           const run = generatedRuns[i];
           notifications.show({

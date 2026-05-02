@@ -18,7 +18,7 @@ export interface Job {
 
 interface JobsState {
   jobs: Job[];
-  addJob: (id: string, name: string, type: JobType, extra?: { caseId?: string }) => void;
+  addJob: (id: string, name: string, type: JobType, extra?: { caseId?: string; initialStatus?: JobStatus }) => void;
   updateJob: (id: string, status: JobStatus, error_message?: string | null) => void;
   updateUploadProgress: (id: string, progress: number) => void;
   removeJob: (id: string) => void;
@@ -34,7 +34,15 @@ export const useJobsStore = create<JobsState>()(
         set((s) => ({
           jobs: [
             ...s.jobs.filter((j) => j.id !== id),
-            { id, name, type, status: "uploading", uploadProgress: 0, addedAt: Date.now(), ...extra },
+            {
+              id,
+              name,
+              type,
+              status: extra?.initialStatus ?? "uploading",
+              uploadProgress: extra?.initialStatus ? undefined : 0,
+              addedAt: Date.now(),
+              caseId: extra?.caseId,
+            },
           ],
         })),
 
