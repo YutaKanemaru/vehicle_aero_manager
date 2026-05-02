@@ -133,14 +133,15 @@ function AxisArrow({ item, dimmed }: { item: OverlayAxisItem; dimmed: boolean })
 
     const origin = new THREE.Vector3(...(item.center as [number, number, number]));
 
-    // Shaft center sits at origin + dir * shaftLen/2
-    const shaftCenter = origin.clone().addScaledVector(dir, shaftLen / 2);
+    // Shaft extends from (origin - dir*len) to (origin + dir*shaftLen) — bidirectional
+    const totalShaftLen = shaftLen + len;
+    const shaftCenter = origin.clone().addScaledVector(dir, (shaftLen - len) / 2);
     // Cone center sits at origin + dir * (shaftLen + headLen/2)
     const coneCenter = origin.clone().addScaledVector(dir, shaftLen + headLen / 2);
 
     return {
-      shaftGeo: [shaftR, shaftR, shaftLen, 8] as [number, number, number, number],
-      coneGeo:  [headR, 0, headLen, 8]       as [number, number, number, number],
+      shaftGeo: [shaftR, shaftR, totalShaftLen, 8] as [number, number, number, number],
+      coneGeo:  [headR, 0, headLen, 8]             as [number, number, number, number],
       rotation: euler,
       shaftPos: shaftCenter.toArray() as [number, number, number],
       conePos:  coneCenter.toArray()  as [number, number, number],
