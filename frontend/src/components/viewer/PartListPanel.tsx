@@ -49,7 +49,7 @@ const SWATCHES: string[] = (() => {
 })();
 // ─── Wildcard pattern matching (parity with backend _matches_pattern) ─────────
 // * present  → glob: Body_* = startsWith, *_Body = endsWith, *_Body_* = contains
-// * absent   → startsWith OR endsWith (case-insensitive)
+// * absent   → substring match (case-insensitive)
 function matchesPattern(partName: string, pattern: string): boolean {
   const name = partName.toLowerCase();
   const pat = pattern.toLowerCase();
@@ -59,7 +59,7 @@ function matchesPattern(partName: string, pattern: string): boolean {
     const escaped = pat.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
     return new RegExp(`^${escaped}$`).test(name);
   }
-  return name.startsWith(pat) || name.endsWith(pat);
+  return name.includes(pat);
 }
 
 export function PartListPanel({ parts, partInfo }: PartListPanelProps) {
