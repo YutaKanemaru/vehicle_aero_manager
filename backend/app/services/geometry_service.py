@@ -36,6 +36,7 @@ from app.config import settings
 from app.models.geometry import Geometry, GeometryAssembly, GeometryFolder, AssemblyFolder, assembly_geometry_link
 from app.models.user import User
 from app.models.configuration import Case
+from app.models.system import System
 from app.schemas.geometry import (
     AssemblyCreate, AssemblyUpdate,
     AssemblyFolderCreate, AssemblyFolderUpdate,
@@ -279,6 +280,28 @@ def delete_geometry(db: Session, geometry_id: str, current_user: User) -> None:
             detail=f"Cannot delete geometry: it is linked to {linked_count} assembly(ies). "
                    "Remove it from all assemblies first.",
         )
+
+    # System.source_geometry_id は NOT NULL のため削除不可。
+    source_system_count = db.scalar(
+        select(func.count()).select_from(System).where(
+            System.source_geometry_id == geometry_id
+        )
+    ) or 0
+    if source_system_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete geometry: it is used as source by {source_system_count} system(s). "
+                   "Delete those systems first.",
+        )
+
+    # System.result_geometry_id は nullable なので NULL に更新してブロックを回避。
+    result_systems = db.scalars(
+        select(System).where(System.result_geometry_id == geometry_id)
+    ).all()
+    for sys in result_systems:
+        sys.result_geometry_id = None
+    if result_systems:
+        db.flush()
 
     # アップロードファイルのみ削除。リンクの場合はリンク元ファイルは触れない。
     if not geometry.is_linked:
