@@ -14,7 +14,7 @@ import {
   Tooltip,
   SegmentedControl,
 } from "@mantine/core";
-import { IconSun, IconMoon, IconCamera, IconPackage, IconPlus, IconPencil, IconAxisX } from "@tabler/icons-react";
+import { IconSun, IconMoon, IconPackage, IconPlus, IconPencil, IconAxisX } from "@tabler/icons-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { assembliesApi, type AssemblyResponse, type GeometryResponse } from "../../api/geometries";
 import { templatesApi, type TemplateResponse } from "../../api/templates";
@@ -201,58 +201,39 @@ function ControlPanel({
 
 // ─── Floating camera controls (bottom-right of 3D view) ─────────────────────
 
+// Camera presets (shared definition)
+const CAMERA_PRESETS = [
+  { value: "iso",   label: "Iso" },
+  { value: "front", label: "Front" },
+  { value: "rear",  label: "Rear" },
+  { value: "side",  label: "Side" },
+  { value: "top",   label: "Top" },
+];
+
 function CameraOverlay() {
   const { setCameraPreset, viewerTheme, setViewerTheme, showOriginAxes, setShowOriginAxes } = useViewerStore();
   return (
-    <div
-      style={{
-        position: "absolute",
-        bottom: 8,
-        right: 4,
-        zIndex: 10,
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-        alignItems: "flex-end",
-        pointerEvents: "all",
-      }}
-    >
-      <Group gap={4} wrap="wrap" justify="flex-end">
-        {(["iso", "front", "rear", "side", "top"] as const).map((preset) => (
-          <Tooltip key={preset} label={`${preset} view`}>
-            <Button
-              size="xs"
-              variant="light"
-              style={{ background: "rgba(0,0,0,0.55)", borderColor: "rgba(255,255,255,0.15)" }}
-              leftSection={<IconCamera size={11} />}
-              onClick={() => setCameraPreset(preset)}
-            >
-              {preset}
-            </Button>
-          </Tooltip>
-        ))}
-      </Group>
-      <Tooltip label="Toggle background">
-        <ActionIcon
-          size="sm"
-          variant="light"
-          style={{ background: "rgba(0,0,0,0.55)", borderColor: "rgba(255,255,255,0.15)" }}
-          onClick={() => setViewerTheme(viewerTheme === "dark" ? "light" : "dark")}
-        >
-          {viewerTheme === "dark" ? <IconSun size={14} /> : <IconMoon size={14} />}
+    <div style={{ position: "absolute", bottom: 8, right: 4, zIndex: 10,
+      display: "flex", gap: 4, alignItems: "center",
+      background: "rgba(0,0,0,0.5)", padding: "4px 6px", borderRadius: 6, pointerEvents: "all" }}>
+      {CAMERA_PRESETS.map((p) => (
+        <Tooltip key={p.value} label={p.label}>
+          <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => setCameraPreset(p.value)}>
+            <Text size="xs" c="white">{p.label[0]}</Text>
+          </ActionIcon>
+        </Tooltip>
+      ))}
+      <Tooltip label="Toggle theme">
+        <ActionIcon size="xs" variant="subtle"
+          onClick={() => setViewerTheme(viewerTheme === "dark" ? "light" : "dark")}>
+          {viewerTheme === "dark" ? <IconSun size={12} color="white" /> : <IconMoon size={12} color="white" />}
         </ActionIcon>
       </Tooltip>
-      <Tooltip label={showOriginAxes ? "Hide origin axes" : "Show origin axes"}>
-        <ActionIcon
-          size="sm"
-          variant={showOriginAxes ? "filled" : "light"}
-          style={{
-            background: showOriginAxes ? "rgba(70,100,220,0.75)" : "rgba(0,0,0,0.55)",
-            borderColor: "rgba(255,255,255,0.15)",
-          }}
-          onClick={() => setShowOriginAxes(!showOriginAxes)}
-        >
-          <IconAxisX size={14} />
+      <Tooltip label="Origin axes">
+        <ActionIcon size="xs" variant={showOriginAxes ? "filled" : "subtle"}
+          color={showOriginAxes ? "blue" : "gray"}
+          onClick={() => setShowOriginAxes(!showOriginAxes)}>
+          <IconAxisX size={12} color="white" />
         </ActionIcon>
       </Tooltip>
     </div>
@@ -294,12 +275,14 @@ function ViewerToolbar({ overlayData }: { overlayData: OverlayData | null }) {
         label="Flat"
         checked={flatShading}
         onChange={(e) => setFlatShading(e.currentTarget.checked)}
+        styles={{ label: { color: "white" } }}
       />
       <Switch
         size="xs"
         label="Edges"
         checked={showEdges}
         onChange={(e) => setShowEdges(e.currentTarget.checked)}
+        styles={{ label: { color: "white" } }}
       />
       {hasRhRef && (
         <Switch
@@ -307,6 +290,7 @@ function ViewerToolbar({ overlayData }: { overlayData: OverlayData | null }) {
           label="RH Ref"
           checked={rhRefVisible}
           onChange={(e) => setRhRefVisible(e.currentTarget.checked)}
+          styles={{ label: { color: "white" } }}
         />
       )}
     </div>
