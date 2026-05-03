@@ -123,8 +123,10 @@ def transform_pca_axes_vertices(pca_axes: dict, transform_snapshot: dict) -> dic
       2. Pitch rotation about Y at rotation_pivot  (Rodrigues)
       3. Z translation
 
-    For adjust_body_wheel_separately runs the body transform is applied to all parts
-    (rim axis direction is insensitive to pitch since the wheel axis is ~Y).
+    When adjust_body_wheel_separately=True, transform_snapshot["wheel_transforms"]
+    contains per-corner transforms (fr_lh/fr_rh/rr_lh/rr_rh).  Rim vertices are
+    assigned to the correct corner using position-based classification (vertex centroid
+    XY vs the midpoint of all rim centroids) rather than name matching.
 
     Args:
         pca_axes: {"porous": {name: np.ndarray(N,3)}, "rim": {name: np.ndarray(N,3)}}
@@ -133,31 +135,40 @@ def transform_pca_axes_vertices(pca_axes: dict, transform_snapshot: dict) -> dic
     Returns:
         Same structure with vertex arrays moved to their post-transform positions.
     """
-    t = transform_snapshot.get("transform", {})
-    yaw_angle_deg  = float(t.get("yaw_angle_deg", 0.0))
-    yaw_center_xy  = t.get("yaw_center_xy", [0.0, 0.0])
-    pitch_angle_deg = float(t.get("pitch_angle_deg", 0.0))
-    rotation_pivot  = t.get("rotation_pivot", [0.0, 0.0, 0.0])
-    translation     = t.get("translation", [0.0, 0.0, 0.0])
+    body_tr = transform_snapshot.get("transform", {})
+    wheel_transforms: dict | None = transform_snapshot.get("wheel_transforms")
 
-    yaw_center_arr   = np.array(yaw_center_xy[:2], dtype=np.float64)
-    rotation_pivot_arr = np.array(rotation_pivot, dtype=np.float64)
-    translation_arr  = np.array(translation, dtype=np.float64)
-
-    def _apply(arr: "np.ndarray") -> "np.ndarray":
-        v = arr.astype(np.float64)
-        v = _rotate_z(v, yaw_angle_deg, yaw_center_arr)
-        v = _rodrigues_y(v, pitch_angle_deg, rotation_pivot_arr)
-        v = v + translation_arr
-        return v
-
+    # porous: always use body transform
     porous_out: dict = {}
     for name, verts in pca_axes.get("porous", {}).items():
-        porous_out[name] = _apply(verts)
+        porous_out[name] = transform_vertices(verts.astype(np.float64), body_tr)
 
+    # rim: use per-corner wheel_transforms when adjust_body_wheel_separately=True,
+    # otherwise fall back to body transform
+    rim_dict = pca_axes.get("rim", {})
     rim_out: dict = {}
-    for name, verts in pca_axes.get("rim", {}).items():
-        rim_out[name] = _apply(verts)
+
+    if wheel_transforms and rim_dict:
+        # Position-based corner classification:
+        # Compute each part's vertex centroid, then derive the vehicle mid-X/Y as the
+        # mean of all rim centroids (same heuristic as classify_wheels()).
+        all_centroids = [
+            verts.astype(np.float64).mean(axis=0)
+            for verts in rim_dict.values()
+        ]
+        mid_x = float(np.mean([c[0] for c in all_centroids]))
+        mid_y = float(np.mean([c[1] for c in all_centroids]))
+
+        for name, verts in rim_dict.items():
+            v = verts.astype(np.float64)
+            cx, cy = v.mean(axis=0)[:2]
+            front = "fr" if cx < mid_x else "rr"
+            side  = "lh" if cy < mid_y else "rh"
+            tr = wheel_transforms.get(f"{front}_{side}", body_tr)
+            rim_out[name] = transform_vertices(v, tr)
+    else:
+        for name, verts in rim_dict.items():
+            rim_out[name] = transform_vertices(verts.astype(np.float64), body_tr)
 
     return {"porous": porous_out, "rim": rim_out}
 
