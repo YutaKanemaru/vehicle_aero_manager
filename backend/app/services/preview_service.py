@@ -44,6 +44,7 @@ from app.services.compute_engine import (
     assemble_ufx_solver_deck,
     extract_pca_axes,
 )
+from app.services.ride_height_service import transform_pca_axes_vertices
 from app.services.configuration_service import _merge_analysis_results
 from app.ultrafluid.parser import parse_ufx
 from app.ultrafluid.serializer import serialize_ufx
@@ -531,6 +532,19 @@ def compute_overlay_data(
             porous_patterns = [pc.part_name for pc in template_settings.porous_coefficients]
             rim_patterns = list(template_settings.target_names.rim)
             pca_axes = extract_pca_axes(stl_paths, porous_patterns, rim_patterns) if stl_paths else None
+            # Apply yaw rotation to pca_axes so porous/rim axes match the yawed geometry.
+            # Pitch and Z-translation are zero for the template preview (no ride-height transform).
+            if pca_axes and sp.yaw_angle != 0.0:
+                _yaw_only_snap = {
+                    "transform": {
+                        "yaw_angle_deg": sp.yaw_angle,
+                        "yaw_center_xy": [0.0, 0.0],
+                        "pitch_angle_deg": 0.0,
+                        "rotation_pivot": [0.0, 0.0, 0.0],
+                        "translation": [0.0, 0.0, 0.0],
+                    }
+                }
+                pca_axes = transform_pca_axes_vertices(pca_axes, _yaw_only_snap)
             deck = assemble_ufx_solver_deck(
                 template_settings=template_settings,
                 analysis_result=merged,
