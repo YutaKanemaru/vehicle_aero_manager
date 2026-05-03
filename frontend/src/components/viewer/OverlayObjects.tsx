@@ -141,7 +141,7 @@ function AxisArrow({ item, dimmed }: { item: OverlayAxisItem; dimmed: boolean })
 
     return {
       shaftGeo: [shaftR, shaftR, totalShaftLen, 8] as [number, number, number, number],
-      coneGeo:  [headR, 0, headLen, 8]             as [number, number, number, number],
+      coneGeo:  [headR, headLen, 8]                as [number, number, number],
       rotation: euler,
       shaftPos: shaftCenter.toArray() as [number, number, number],
       conePos:  coneCenter.toArray()  as [number, number, number],
