@@ -14,7 +14,7 @@
 
 **Models** (`app/models/geometry.py`)
 - `GeometryFolder`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`; `geometries` one-to-many
-- `Geometry`: `id`, `name`, `description`, `folder_id` (nullable FK), `file_path`, `original_filename`, `file_size`, `is_linked: bool`, `status` (`pending`/`analyzing`/`ready`/`error`), `analysis_result` (JSON string), `error_message`, `decimation_ratio: float = 0.05` (persisted — set at upload time, inherited by transform-result geometries), `uploaded_by`, `created_at`, `updated_at`
+- `Geometry`: `id`, `name`, `description`, `folder_id` (nullable FK), `file_path`, `original_filename`, `file_size`, `is_linked: bool`, `status` (`pending`/`analyzing`/`ready`/`error`), `analysis_result` (JSON string), `error_message`, `decimation_ratio: float | None` (nullable — `None` means skip GLB; set at upload time, inherited by transform-result geometries), `uploaded_by`, `created_at`, `updated_at`
 - `AssemblyFolder`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`
 - `GeometryAssembly`: `id`, `name`, `description`, `folder_id`, `created_by`, `created_at`, `updated_at`; `geometries` many-to-many
 - `assembly_geometry_link`: association table (`assembly_id`, `geometry_id`)
@@ -23,9 +23,9 @@
 **Schemas** (`app/schemas/geometry.py`)
 - `PartInfo`: `centroid [x,y,z]`, `bbox dict`, `vertex_count`, `face_count`
 - `AnalysisResult`: `parts`, `vehicle_bbox`, `vehicle_dimensions`, `part_info dict`
-- `GeometryResponse`: full response including parsed `analysis_result`, `folder_id: str | None`, `is_linked: bool`, `decimation_ratio: float`
+- `GeometryResponse`: full response including parsed `analysis_result`, `folder_id: str | None`, `is_linked: bool`, `decimation_ratio: float | None`
 - `GeometryUpdate`: `name`, `description`, `folder_id` — uses `model_fields_set` to distinguish explicit null from field not sent
-- `GeometryLinkRequest`: `name`, `description`, `file_path` (server absolute path), `folder_id`, `decimation_ratio: float = 0.05`
+- `GeometryLinkRequest`: `name`, `description`, `file_path` (server absolute path), `folder_id`, `decimation_ratio: float | None = 0.05`, `skip_glb: bool = False` (when `True`, GLB generation is skipped regardless of `decimation_ratio`)
 
 **Compute Engine** (`app/services/compute_engine.py`)
 - `_detect_stl_format(file_path)`: reads 84 bytes — detects binary by magic bytes OR `80 + 4 + n*50 == file_size`
@@ -35,9 +35,9 @@
 - Multi-solid ASCII STL fully supported
 
 **Service** (`app/services/geometry_service.py`)
-- `upload_geometry()`: saves to `upload_dir/geometries/{id}/{filename}` via chunked `shutil.copyfileobj` (8MB), stores `decimation_ratio`, triggers background analysis
-- `link_geometry()`: creates `Geometry` row with `is_linked=True`, `decimation_ratio=data.decimation_ratio`, and absolute `file_path`; triggers background analysis
-- `run_analysis(db, geometry_id, decimation_ratio=0.05)`: `pending` → `analyzing` → `ready-decimating` → `ready`/`error`; if `ratio >= 1.0` skips GLB
+- `upload_geometry()`: saves to `upload_dir/geometries/{id}/{filename}` via chunked `shutil.copyfileobj` (8MB), stores `decimation_ratio` (`None` when `skip_glb=True`), triggers background analysis
+- `link_geometry()`: creates `Geometry` row with `is_linked=True`, `decimation_ratio=None if skip_glb else data.decimation_ratio`, and absolute `file_path`; triggers background analysis
+- `run_analysis(db, geometry_id, decimation_ratio: float | None = 0.05)`: `pending` → `analyzing` → `ready-decimating` → `ready`/`error`; if `decimation_ratio is None` skips GLB; if `ratio=1.0` generates full-resolution GLB without decimation (`QEMDecimator.simplify()` returns solid unchanged when `ratio >= 1.0`)
 - `list_geometries()`: excludes transform-result geometries (IDs present in `System.result_geometry_id`) — they are not user-owned files
 - `delete_geometry()`: `is_linked=False` のみファイル削除。`_rmtree_force()` ヘルパー (Windows read-only 属性対策)。`invalidate_cache(geometry.id)` も呼ぶ。**FK guards**: (1) geometry が `System.source_geometry_id` として参照される場合は HTTP 400 ("Delete those systems first"); (2) `System.result_geometry_id` として参照される場合は NULL に更新 (nullable なのでブロック不要) してから削除
 - `delete_assembly()`: raises HTTP 400 if any `Case.assembly_id` references this assembly
@@ -51,8 +51,8 @@
 | `PATCH` | `/geometries/folders/{folder_id}` | Update folder |
 | `DELETE` | `/geometries/folders/{folder_id}` | Delete folder (children → uncategorized) |
 | `GET` | `/geometries/` | List all geometries |
-| `POST` | `/geometries/` | Upload STL (multipart: `name`, `description`, `folder_id`, `file`, `decimation_ratio`) |
-| `POST` | `/geometries/link` | Link only (JSON: `GeometryLinkRequest`) |
+| `POST` | `/geometries/` | Upload STL (multipart: `name`, `description`, `folder_id`, `file`, `decimation_ratio`, `skip_glb`) |
+| `POST` | `/geometries/link` | Link only (JSON: `GeometryLinkRequest` — includes `skip_glb`) |
 | `GET` | `/geometries/{id}` | Get geometry with analysis result |
 | `PATCH` | `/geometries/{id}` | Update name/description/folder_id |
 | `DELETE` | `/geometries/{id}` | Delete + file cleanup |
@@ -82,12 +82,14 @@
 - `d4be3f102eac` — geometry_folders + folder_id FK (batch_alter_table)
 - `bd293b1f57fc` — assembly_folders
 - `b6662ad9ba21` — is_linked boolean column
+- `0c0f562f6ba5` — `decimation_ratio` column on `geometries`
+- `e2f3a4b5c6d7` — `decimation_ratio` nullable (None = skip GLB)
 
 ## Frontend
 
 **API layer** (`src/api/geometries.ts`)
-- `geometriesApi.upload(name, description, folderId, file, onProgress?, decimationRatio=0.05)` — uses `XMLHttpRequest` for `upload.onprogress`
-- `geometriesApi.link(data: GeometryLinkRequest)` — JSON POST
+- `geometriesApi.upload(name, description, folderId, file, onProgress?, decimationRatio=0.05, skipGlb=false)` — uses `XMLHttpRequest` for `upload.onprogress`; appends `skip_glb` to `FormData`
+- `geometriesApi.link(data: GeometryLinkRequest)` — JSON POST; `GeometryLinkRequest` type extended with `skip_glb?: boolean`
 - `geometriesApi.getGlbBlobUrl(id, ratio?)` — fetches GLB with auth → `createObjectURL()`; if `ratio` omitted the backend defaults to `geometry.decimation_ratio`
 - `assemblyFoldersApi`, `assembliesApi` — full CRUD
 
@@ -96,8 +98,8 @@
 | File | Description |
 |---|---|
 | `GeometryList.tsx` | Folder-hierarchy view; auto-refresh every 3s when `pending`/`analyzing`/`ready-decimating` |
-| `GeometryUploadModal.tsx` | Modal closes immediately; XHR continues in background; Decimation Ratio Slider (5%/25%/50%/Skip) |
-| `GeometryLinkModal.tsx` | JSON POST; same Decimation Ratio Slider |
+| `GeometryUploadModal.tsx` | Modal closes immediately; XHR continues in background; **Skip 3D Preview** `Switch` (default OFF, hides slider when ON); Decimation Ratio Slider (5%/25%/50%/No Decimation) |
+| `GeometryLinkModal.tsx` | JSON POST; same **Skip 3D Preview** `Switch` + Decimation Ratio Slider |
 | `AssemblyList.tsx` | Folder-hierarchy view; manage-geometries action per row |
 | `AssemblyGeometriesDrawer.tsx` | SegmentedControl: Current / Add geometries tabs; folder-grouped with select-all per folder |
 
