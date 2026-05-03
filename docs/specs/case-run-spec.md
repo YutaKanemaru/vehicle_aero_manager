@@ -20,7 +20,7 @@
 - `ConditionMap`: `id`, `name`, `description`, `created_by`, `created_at`, `updated_at`; `conditions` one-to-many (cascade delete)
 - `Condition`: `id`, `map_id` (FK), `name`, `inflow_velocity`, `yaw_angle`, `ride_height_json` (Text, nullable), `yaw_config_json` (Text, nullable), `created_by`, `created_at`, `updated_at`
 - `Case`: `id`, `case_number`, `name`, `description`, `template_id`, `assembly_id`, `map_id` (nullable), `folder_id` (nullable), `parent_case_id` (nullable self-FK, ondelete SET NULL), `created_by`, `created_at`, `updated_at`
-- `Run`: `id`, `run_number`, `name`, `case_id` (FK, CASCADE), `condition_id`, `xml_path`, `stl_path`, `belt_stl_path` (nullable Text — path to generated 5-belt STL file), `geometry_override_id` (nullable FK→geometries, ondelete SET NULL), `status` (`pending`/`generating`/`ready`/`error`), `error_message`, `created_by`, `created_at`, `updated_at`
+- `Run`: `id`, `run_number`, `name`, `case_id` (FK, CASCADE), `condition_id`, `xml_path`, `stl_path`, `belt_stl_path` (nullable Text — path to generated 5-belt STL file), `geometry_override_id` (nullable FK→geometries, ondelete SET NULL), `system_id` (nullable FK→systems, ondelete SET NULL — direct reference to the System created by `transform_run()`; used for reliable cleanup on delete/reset), `status` (`pending`/`generating`/`ready`/`error`), `error_message`, `created_by`, `created_at`, `updated_at`
 
 **`app/models/system.py`**
 - `System`: `id`, `name`, `source_geometry_id`, `result_geometry_id` (nullable), `condition_id` (nullable), `transform_snapshot` (Text/JSON), `created_by`, `created_at`
@@ -66,13 +66,14 @@ Key functions:
 - `delete_case()`: for each Run calls `_cleanup_run_transform()` (deletes System + override Geometry file + DB row) before cascade delete; then deletes `data/runs/{run_id}/` output directories
 - `get_run(db, case_id, run_id) -> Run`: single run lookup; raises 404 if not found
 - `create_run()`: auto-formats name when `data.name` is empty
-- `_cleanup_run_transform(db, run)`: private helper — deletes System record(s) by `result_geometry_id` + override Geometry file + DB row; no-op if `geometry_override_id` is None; does **not** commit or clear `run.geometry_override_id`
+- `_cleanup_run_transform(db, run)`: private helper — deletes System record(s) + override Geometry file + DB row + viewer cache; primary lookup via `run.system_id` (direct, reliable even if geometry was already deleted); falls back to `result_geometry_id` search for legacy rows without `system_id`; calls `invalidate_cache(override_geom_id)`; no-op if neither `geometry_override_id` nor `system_id` is set; does **not** commit or clear `run.geometry_override_id`/`run.system_id`
 - `delete_run()`: calls `_cleanup_run_transform()`; then deletes Run + output directory
-- `reset_run()`: deletes run output dir; calls `_cleanup_run_transform()` + clears `geometry_override_id`; sets `status="pending"`, clears `xml_path`/`stl_path`/`belt_stl_path`/`error_message`
+- `reset_run()`: deletes run output dir; calls `_cleanup_run_transform()` + clears `geometry_override_id` and `system_id`; sets `status="pending"`, clears `xml_path`/`stl_path`/`belt_stl_path`/`error_message`
 - `trigger_xml_generation()`: **guarded** — HTTP 400 when `ride_height.enabled || yaw_angle != 0` but `geometry_override_id` not set or geometry not `ready`
 - `transform_run()`: derives params from Run's Condition + Case; calls `ride_height_service.compute_transform(target_names=template_settings.target_names)` + `create_system_and_geometry()`; **calls `db.commit()` internally**; **returns within milliseconds**
   - Override Geometry files are written to `data/transformed/{id}/` (not `data/uploads/`) and stored with **absolute `file_path`**; excluded from `GET /geometries/` list
   - ⚠️ `transform_snapshot["verification"]["front_wheel_z_actual"]` is **absolute Z coordinate**, not ride height. RH = `actual_z − vehicle_bbox_z_min`
+  - Sets `run.system_id = system.id` immediately after `create_system_and_geometry()` so the System is reachable for cleanup even if the intermediate Geometry is later removed
   - If `belt_stl_path` is set and `yaw_angle != 0`, applies Z-axis yaw rotation to the belt STL file in-place via `belt_service.rotate_belt_stl_yaw()`
 - `_generate_xml_task(run_id, geometry_only=False)`: background task; `geometry_only=True` + `parent_case_id` set → finds parent's ready Run, swaps STL only; passes `run.belt_stl_path` to `assemble_ufx_solver_deck()`; if belt STL exists, copies it into the run output directory alongside the XML. `source_file` in the generated XML is `"{safe_run_name}.stl"` (single geometry / override) or a list including `"{safe_run_name}.stl"` + `"{safe_run_name}_5belts.stl"` when belt is present — both names derived via `safe_filename(run.name)` from `app/utils/filename.py`, matching the filenames served by the download endpoints. **PCA optimisation for Transform runs**: when `geometry_override_id` is set, PCA axes are extracted from the original assembly STL paths (not the transformed STL) then mathematically transformed via `transform_pca_axes_vertices(pca_axes, transform_snapshot)` — avoids re-scanning the large transformed STL file.
 - `_check_needs_belt_generation(db, run)`: private helper — reads active template version settings dict; returns `True` when `ground_mode == "rotating_belt_5"` and `run.belt_stl_path is None`
@@ -275,3 +276,4 @@ adjust_ride_height → per-Run via POST /transform (not a compute flag)
 - `100503ac21a7` — `parent_case_id` self-FK on `cases` (batch_alter_table)
 - `0c0f562f6ba5` — `decimation_ratio` column on `geometries`
 - `c3b4d5e6f7a8` — `belt_stl_path` column on `runs`
+- `d1e2f3a4b5c6` — `system_id` FK column on `runs` (batch_alter_table)

@@ -44,10 +44,11 @@ ready-decimating  → violet badge "Building 3D…"  ← GLB pre-generation (ski
 - `extract_overlay_data(deck, template_settings, all_part_names, analysis_result=None, target_names=None) -> OverlayData` — converts assembled solver deck to absolute-coordinate viewer primitives. `target_names` enables `classify_wheels()`-based RH reference point detection (most accurate); falls back to `extract_wheel_reference_z()` when `None`. Also extracts `axes` from the deck: wheel rotation axes from `FluidBCRotating.axis/center` (per wall instance with `type=="rotating"`; corner detected via name substring `fr_lh`/`fr_rh`/`rr_lh`/`rr_rh`; length from part bbox y-span/2) and porous flow axes from `PorousInstance.porous_axis` (center from `analysis_result` part centroid; length = max bbox span × 0.5).
 - `compute_overlay_data(db, template_id, assembly_id) -> OverlayData` — XML cache-through pipeline:
   1. Build `stl_paths` from assembly ready geometries; call `extract_pca_axes(stl_paths, porous_patterns, rim_patterns)` for accurate wheel center (rim vertex centroid) and porous axis
-  2. Assemble solver deck via `assemble_ufx_solver_deck(..., pca_axes=pca_axes)`
-  3. Serialise to `preview_cache_dir/{version_id}_{assembly_id}.xml` via `serialize_ufx()` (skip if cached)
-  4. Parse back via `parse_ufx()` — ensures overlay is derived from identical XML structure as real generation
-  5. Call `extract_overlay_data(..., analysis_result=merged, target_names=template_settings.target_names)` — Axis tab is populated; Template Builder shows wheel rotation axes and porous flow axes
+  2. If `yaw_angle != 0`, apply yaw-only rotation to `pca_axes` via `transform_pca_axes_vertices(pca_axes, yaw_only_snap)` so porous axis direction matches the yawed geometry (pitch=0, translation=0); otherwise porous axis would remain in original vehicle frame
+  3. Assemble solver deck via `assemble_ufx_solver_deck(..., pca_axes=pca_axes)`
+  4. Serialise to `preview_cache_dir/{version_id}_{assembly_id}.xml` via `serialize_ufx()` (skip if cached)
+  5. Parse back via `parse_ufx()` — ensures overlay is derived from identical XML structure as real generation
+  6. Call `extract_overlay_data(..., analysis_result=merged, target_names=template_settings.target_names)` — Axis tab is populated; Template Builder shows wheel rotation axes and porous flow axes
 - `invalidate_preview_cache(version_id)` — deletes all `{version_id}_*.xml` files from `preview_cache_dir`; called by `template_service.update_version_settings()` on every in-place settings save
 - Cache path helper: `_preview_cache_path(version_id, assembly_id)` → `preview_cache_dir/{version_id}_{assembly_id}.xml`
 
@@ -162,6 +163,7 @@ Store action semantics:
 - `TemplateVersionEditModal` opened via `IconPencil` ActionIcon (gated on `editTemplateOpen`); **invalidates `["preview", "overlay"]` query on save** so viewer refreshes
 - `TemplateVersionsDrawer`: **invalidates `["preview", "overlay"]` query on version activate**
 - `CreateCaseFromBuilderModal` opened via `IconPlus` button
+- `CameraOverlay` (top-right of canvas): horizontal row of `ActionIcon` buttons (`C`/`T`/`F`/`B`/`L`/`R`/`I`) unified with RunViewer style — each uses `ActionIcon` + single-char `Text` with descriptive `Tooltip`; **Toggle theme** (`ActionIcon` + moon/sun icon) and **Origin axes** (`Switch`) also in the same overlay row with white label styles
 - `ViewerToolbar`: floating overlay (top-right of canvas); accepts `overlayData: OverlayData | null`; controls Persp/Ortho `SegmentedControl`, Flat shading Switch, Edges Switch; shows **RH Ref Switch** (reads/sets `rhRefVisible` from `viewerStore`) only when `overlayData.ride_height_ref` is present
 
 ### API Client

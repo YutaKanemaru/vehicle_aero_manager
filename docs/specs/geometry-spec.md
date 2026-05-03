@@ -39,7 +39,7 @@
 - `link_geometry()`: creates `Geometry` row with `is_linked=True`, `decimation_ratio=data.decimation_ratio`, and absolute `file_path`; triggers background analysis
 - `run_analysis(db, geometry_id, decimation_ratio=0.05)`: `pending` → `analyzing` → `ready-decimating` → `ready`/`error`; if `ratio >= 1.0` skips GLB
 - `list_geometries()`: excludes transform-result geometries (IDs present in `System.result_geometry_id`) — they are not user-owned files
-- `delete_geometry()`: `is_linked=False` のみファイル削除。`_rmtree_force()` ヘルパー (Windows read-only 属性対策)。`invalidate_cache(geometry.id)` も呼ぶ
+- `delete_geometry()`: `is_linked=False` のみファイル削除。`_rmtree_force()` ヘルパー (Windows read-only 属性対策)。`invalidate_cache(geometry.id)` も呼ぶ。**FK guards**: (1) geometry が `System.source_geometry_id` として参照される場合は HTTP 400 ("Delete those systems first"); (2) `System.result_geometry_id` として参照される場合は NULL に更新 (nullable なのでブロック不要) してから削除
 - `delete_assembly()`: raises HTTP 400 if any `Case.assembly_id` references this assembly
 
 **API Endpoints** (`app/api/v1/geometries.py`)
