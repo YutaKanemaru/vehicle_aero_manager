@@ -667,34 +667,56 @@ def create_run(db: Session, case_id: str, data: RunCreate, current_user: User) -
 def _cleanup_run_transform(db: Session, run: Run) -> None:
     """Delete System record(s) + override Geometry file + DB row for a transform-applied Run.
 
-    Does NOT clear run.geometry_override_id or call db.commit() — callers own those.
-    No-op if run.geometry_override_id is None.
+    Uses run.system_id for direct lookup (reliable even if geometry was already deleted).
+    Falls back to result_geometry_id search for legacy rows without system_id set.
+    Does NOT clear run.geometry_override_id / run.system_id or call db.commit() — callers own those.
+    No-op if neither geometry_override_id nor system_id is set.
     """
-    if not run.geometry_override_id:
+    if not run.geometry_override_id and not run.system_id:
         return
     from app.models.geometry import Geometry as GeometryModel
     from app.models.system import System
     from app.services.geometry_service import _rmtree_force
 
     override_geom_id = run.geometry_override_id
-    systems = db.scalars(
-        select(System).where(System.result_geometry_id == override_geom_id)
-    ).all()
-    for system in systems:
-        db.delete(system)
-        logger.info("Deleted system %s (result_geometry_id=%s)", system.id, override_geom_id)
-    override_geom = db.get(GeometryModel, override_geom_id)
-    if override_geom:
+
+    # --- Delete System record(s) ---
+    # Primary path: direct lookup via run.system_id (avoids dependency on geometry still existing)
+    deleted_system_ids: set[str] = set()
+    if run.system_id:
+        system = db.get(System, run.system_id)
+        if system:
+            db.delete(system)
+            deleted_system_ids.add(system.id)
+            logger.info("Deleted system %s (via run.system_id)", system.id)
+    # Fallback / legacy: search by result_geometry_id in case system_id not set
+    if override_geom_id:
+        for system in db.scalars(
+            select(System).where(System.result_geometry_id == override_geom_id)
+        ).all():
+            if system.id not in deleted_system_ids:
+                db.delete(system)
+                logger.info("Deleted system %s (via result_geometry_id=%s)", system.id, override_geom_id)
+
+    # --- Delete override Geometry (file + DB row) and invalidate viewer cache ---
+    if override_geom_id:
         try:
-            fp = Path(override_geom.file_path)
-            resolved = fp if fp.is_absolute() else settings.upload_dir / fp
-            upload_subdir = resolved.parent
-            if upload_subdir.exists() and upload_subdir != settings.upload_dir:
-                _rmtree_force(upload_subdir)
-                logger.info("Deleted override geometry files: %s", upload_subdir)
-        except Exception as e:
-            logger.warning("Failed to delete override geometry files: %s", e)
-        db.delete(override_geom)
+            from app.services.viewer_service import invalidate_cache
+            invalidate_cache(override_geom_id)
+        except Exception:
+            pass
+        override_geom = db.get(GeometryModel, override_geom_id)
+        if override_geom:
+            try:
+                fp = Path(override_geom.file_path)
+                resolved = fp if fp.is_absolute() else settings.upload_dir / fp
+                upload_subdir = resolved.parent
+                if upload_subdir.exists() and upload_subdir != settings.upload_dir:
+                    _rmtree_force(upload_subdir)
+                    logger.info("Deleted override geometry files: %s", upload_subdir)
+            except Exception as e:
+                logger.warning("Failed to delete override geometry files: %s", e)
+            db.delete(override_geom)
 
 
 def delete_run(db: Session, case_id: str, run_id: str, current_user: User) -> None:
@@ -739,6 +761,8 @@ def reset_run(db: Session, case_id: str, run_id: str, current_user: User) -> Run
     _cleanup_run_transform(db, run)
     if run.geometry_override_id:
         run.geometry_override_id = None
+    if run.system_id:
+        run.system_id = None
 
     run.xml_path = None
     run.stl_path = None
@@ -903,8 +927,9 @@ def transform_run(
         background_tasks=background_tasks,
     )
 
-    # Patch geometry_override_id on the Run
+    # Patch geometry_override_id and system_id on the Run
     run.geometry_override_id = result_geom.id
+    run.system_id = system.id
 
     # Apply yaw rotation to belt STL if it exists and yaw != 0
     if run.belt_stl_path and abs(yaw_angle_deg) > 1e-9:
