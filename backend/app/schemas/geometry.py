@@ -33,7 +33,7 @@ class GeometryResponse(BaseModel):
     file_size: int
     is_linked: bool = False
     status: str
-    decimation_ratio: float = 0.05
+    decimation_ratio: float | None = None
     analysis_result: AnalysisResult | None = None
     error_message: str | None
     uploaded_by: str
@@ -61,7 +61,8 @@ class GeometryLinkRequest(BaseModel):
     description: str | None = None
     file_path: str          # サーバー上の絶対パス（バックエンドから読める必要あり）
     folder_id: str | None = None
-    decimation_ratio: float = 0.05  # GLB変換時の保持率 (1.0 以上 = 変換しない)
+    decimation_ratio: float | None = 0.05  # GLB変換時の保持率; None = GLB生成をスキップ
+    skip_glb: bool = False  # True のとき GLB を生成しない（decimation_ratio は無視される）
 
 
 # ─── GeometryFolder ─────────────────────────────────────────────────────

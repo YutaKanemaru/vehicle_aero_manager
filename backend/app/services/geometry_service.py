@@ -184,13 +184,14 @@ def link_geometry(
     return geometry
 
 
-def run_analysis(db: Session, geometry_id: str, decimation_ratio: float = 0.05) -> None:
+def run_analysis(db: Session, geometry_id: str, decimation_ratio: float | None = 0.05) -> None:
     """
     バックグラウンドタスクとして呼ばれる。
     STL を解析して analysis_result を更新する。
     - is_linked=False: file_path は upload_dir 相対パス
     - is_linked=True:  file_path はリンク先の絶対パス
-    - decimation_ratio >= 1.0 の場合は GLB 変換をスキップ
+    - decimation_ratio=None の場合は GLB 変換をスキップ（skip_glb モード）
+    - decimation_ratio=1.0 の場合は Decimation なしで GLB を生成
     """
     geometry = db.get(Geometry, geometry_id)
     if not geometry:
@@ -215,8 +216,8 @@ def run_analysis(db: Session, geometry_id: str, decimation_ratio: float = 0.05) 
         db.commit()
         return
 
-    # decimation_ratio >= 1.0 の場合は GLB 変換をスキップ
-    if decimation_ratio >= 1.0:
+    # decimation_ratio=None の場合は GLB 変換をスキップ（skip_glb モード）
+    if decimation_ratio is None:
         geometry.status = "ready"
         db.commit()
         return

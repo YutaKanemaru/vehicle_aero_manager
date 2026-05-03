@@ -70,8 +70,8 @@ class Geometry(Base):
     analysis_result: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # GLB decimation ratio used when generating the 3D preview
-    decimation_ratio: Mapped[float] = mapped_column(Float, default=0.05, server_default="0.05")
+    # GLB decimation ratio used when generating the 3D preview; None = skip GLB generation
+    decimation_ratio: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
 
     # 所有者
     uploaded_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"))

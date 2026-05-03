@@ -36,6 +36,7 @@ export type GeometryFolderUpdate =
 export type GeometryLinkRequest =
   paths["/api/v1/geometries/link"]["post"]["requestBody"]["content"]["application/json"] & {
     decimation_ratio?: number;
+    skip_glb?: boolean;
   };
 
 // ─── Assembly Folder API ─────────────────────────────────────────────────────
@@ -87,6 +88,7 @@ export const geometriesApi = {
     file: File,
     onProgress?: (pct: number) => void,
     decimationRatio: number = 0.05,
+    skipGlb: boolean = false,
   ): Promise<GeometryResponse> => {
     return new Promise((resolve, reject) => {
       const form = new FormData();
@@ -94,6 +96,7 @@ export const geometriesApi = {
       if (description) form.append("description", description);
       if (folderId) form.append("folder_id", folderId);
       form.append("decimation_ratio", decimationRatio.toString());
+      form.append("skip_glb", skipGlb ? "true" : "false");
       form.append("file", file);
 
       const token = localStorage.getItem("vam_token");

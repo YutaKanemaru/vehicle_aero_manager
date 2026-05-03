@@ -10,6 +10,7 @@ import {
   List,
   ThemeIcon,
   Slider,
+  Switch,
   Box,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
@@ -51,7 +52,7 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
   ];
 
   const form = useForm({
-    initialValues: { description: "", folderId: "", decimationRatio: 0.05 },
+    initialValues: { description: "", folderId: "", decimationRatio: 0.05, skipGlb: false },
   });
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -167,10 +168,18 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
           />
 
           <Stack gap={6}>
+            <Switch
+              label="Skip 3D Preview"
+              description="No GLB will be generated. The geometry cannot be viewed in the 3D viewer."
+              checked={form.values.skipGlb}
+              onChange={(e) => form.setFieldValue("skipGlb", e.currentTarget.checked)}
+            />
+            {!form.values.skipGlb && (
+              <>
             <Group justify="space-between" align="center">
               <Text size="sm" fw={500}>3D Preview Quality</Text>
               {form.values.decimationRatio >= 1.0 ? (
-                <Badge color="yellow" variant="light">Skip — no 3D preview</Badge>
+                <Badge color="blue" variant="light">Full resolution — no decimation</Badge>
               ) : (
                 <Badge color="blue" variant="light">
                   Keep {Math.round(form.values.decimationRatio * 100)}% of faces
@@ -188,15 +197,17 @@ export function GeometryUploadModal({ opened, onClose }: Props) {
                   { value: 0.05, label: "5%" },
                   { value: 0.25, label: "25%" },
                   { value: 0.5, label: "50%" },
-                  { value: 1.0, label: "Skip" },
+                  { value: 1.0, label: "No Decimation" },
                 ]}
-                label={(v) => v >= 1.0 ? "Skip" : `${Math.round(v * 100)}%`}
+                label={(v) => v >= 1.0 ? "No Decimation" : `${Math.round(v * 100)}%`}
               />
             </Box>
             {form.values.decimationRatio >= 1.0 && (
-              <Text size="xs" c="orange">
-                3D preview will not be generated. The geometry cannot be viewed in the 3D viewer.
+              <Text size="xs" c="dimmed">
+                GLB will be generated at full resolution. May take longer and produce a larger file.
               </Text>
+            )}
+              </>
             )}
           </Stack>
 

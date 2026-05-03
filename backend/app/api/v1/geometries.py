@@ -73,16 +73,18 @@ def upload_geometry(
     description: str | None = Form(None),
     folder_id: str | None = Form(None),
     decimation_ratio: float = Form(0.05),
+    skip_glb: bool = Form(False),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """STL ファイルをアップロードする。解析はバックグラウンドで自動実行。"""
+    effective_ratio: float | None = None if skip_glb else decimation_ratio
     geometry = geometry_service.upload_geometry(
         db, name, description, file, current_user, folder_id=folder_id,
-        decimation_ratio=decimation_ratio,
+        decimation_ratio=effective_ratio,
     )
-    background_tasks.add_task(geometry_service.run_analysis, db, geometry.id, decimation_ratio)
+    background_tasks.add_task(geometry_service.run_analysis, db, geometry.id, effective_ratio)
     return geometry
 
 
@@ -99,7 +101,8 @@ def link_geometry(
     解析はアップロード時と同様に自動実行。
     """
     geometry = geometry_service.link_geometry(db, data, current_user)
-    background_tasks.add_task(geometry_service.run_analysis, db, geometry.id, data.decimation_ratio)
+    effective_ratio: float | None = None if data.skip_glb else data.decimation_ratio
+    background_tasks.add_task(geometry_service.run_analysis, db, geometry.id, effective_ratio)
     return geometry
 
 
@@ -165,8 +168,8 @@ def get_geometry_glb(
     if geometry.status != "ready":
         raise HTTPException(status_code=400, detail="Geometry analysis not complete")
 
-    # ratio 未指定の場合は geometry に保存された値を使用
-    effective_ratio = ratio if ratio is not None else geometry.decimation_ratio
+    # ratio 未指定の場合は geometry に保存された値を使用（None=skip の場合はデフォルト 0.05 でオンデマンド生成）
+    effective_ratio = ratio if ratio is not None else (geometry.decimation_ratio or 0.05)
 
     # キャッシュ確認
     cached = viewer_service.get_cached_glb(geometry_id, effective_ratio)

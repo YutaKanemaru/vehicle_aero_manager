@@ -822,7 +822,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get Run */
+        get: operations["get_run_api_v1_cases__case_id__runs__run_id__get"];
         put?: never;
         post?: never;
         /** Delete Run */
@@ -1388,6 +1389,11 @@ export interface components {
              * @default 0.05
              */
             decimation_ratio: number;
+            /**
+             * Skip Glb
+             * @default false
+             */
+            skip_glb: boolean;
             /** File */
             file: string;
         };
@@ -1899,7 +1905,12 @@ export interface components {
              * Decimation Ratio
              * @default 0.05
              */
-            decimation_ratio: number;
+            decimation_ratio: number | null;
+            /**
+             * Skip Glb
+             * @default false
+             */
+            skip_glb: boolean;
         };
         /** GeometryResponse */
         GeometryResponse: {
@@ -1922,11 +1933,8 @@ export interface components {
             is_linked: boolean;
             /** Status */
             status: string;
-            /**
-             * Decimation Ratio
-             * @default 0.05
-             */
-            decimation_ratio: number;
+            /** Decimation Ratio */
+            decimation_ratio?: number | null;
             analysis_result?: components["schemas"]["AnalysisResult"] | null;
             /** Error Message */
             error_message: string | null;
@@ -6233,6 +6241,38 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_api_v1_cases__case_id__runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
