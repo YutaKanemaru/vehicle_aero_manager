@@ -221,20 +221,24 @@ def run_analysis(db: Session, geometry_id: str, decimation_ratio: float = 0.05) 
         return
 
     # GLBキャッシュを事前生成
+    import logging
+    from app.services.viewer_service import build_viewer_glb
     try:
-        from app.services.viewer_service import build_viewer_glb
-        try:
-            build_viewer_glb(geometry, ratio=decimation_ratio)
-        except Exception as exc:
-            # GLB生成失敗は解析成功に影響させない
-            import logging
-            logging.getLogger(__name__).warning(
-                "GLB pre-build failed for geometry=%s ratio=%.3f: %s",
-                geometry.id, decimation_ratio, exc,
-            )
-    finally:
-        geometry.status = "ready"
+        build_viewer_glb(geometry, ratio=decimation_ratio)
+    except Exception as exc:
+        logging.getLogger(__name__).error(
+            "GLB pre-build failed for geometry=%s ratio=%.3f: %s",
+            geometry.id, decimation_ratio, exc,
+            exc_info=True,
+        )
+        geometry.status = "error"
+        geometry.error_message = f"GLB generation failed (ratio={decimation_ratio:.3f}): {exc}"
         db.commit()
+        return
+
+    geometry.status = "ready"
+    geometry.error_message = None
+    db.commit()
 
 
 def update_geometry(
