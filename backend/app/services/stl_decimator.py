@@ -222,8 +222,9 @@ class QEMDecimator:
             det = np.linalg.det(A)
             if abs(det) > 1e-10:
                 v_opt = np.linalg.solve(A, b)
-                cost  = QEMDecimator._vertex_error(Q, v_opt)
-                return v_opt, max(0.0, cost)
+                if np.all(np.isfinite(v_opt)):
+                    cost  = QEMDecimator._vertex_error(Q, v_opt)
+                    return v_opt, max(0.0, cost)
         except np.linalg.LinAlgError:
             pass
         # Fallback: test midpoint and both endpoints, pick minimum
@@ -481,6 +482,21 @@ class GLBExporter:
             # Non-indexed: expand verts per face for flat shading
             flat_verts = verts[faces.ravel()].astype(np.float32)         # (M*3, 3)
             flat_norms = compute_normals(verts, faces)                    # (M*3, 3)
+
+            # Safety: remove any face rows that contain NaN/Inf (ill-conditioned QEM output)
+            n_tris = len(faces)
+            face_valid = np.isfinite(flat_verts).all(axis=1).reshape(n_tris, 3).all(axis=1)
+            if not face_valid.all():
+                n_bad = int((~face_valid).sum())
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "GLBExporter: dropping %d NaN/Inf face(s) from solid '%s'",
+                    n_bad, solid.name,
+                )
+                face_mask = np.repeat(face_valid, 3)
+                flat_verts = flat_verts[face_mask]
+                flat_norms = flat_norms[face_mask]
+
             flat_idx   = np.arange(len(flat_verts), dtype=np.uint32)     # (M*3,)
 
             # GLTF ELEMENT_ARRAY_BUFFER = 34963, ARRAY_BUFFER = 34962
